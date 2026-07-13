@@ -18,3 +18,5 @@ After the GitHub repository is published, report vulnerabilities through a priva
 - Use a unique bearer token per host and rotate it if exposure is suspected.
 - Restrict working-directory roots and inherited environment variables.
 - Never pass passwords, API keys, or private keys as command arguments.
+- Treat <code>COMMAND_BRIDGE_ALLOWED_ROOTS</code> as a working-directory restriction, not a filesystem sandbox; command arguments can still name other paths that the service account can read.
+- Do not add the service account to <code>sudo</code>, <code>docker</code>, <code>adm</code>, or <code>systemd-journal</code> groups. Add narrowly scoped privileged helpers later if a specific administrative action is required.

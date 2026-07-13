@@ -4,7 +4,7 @@ Cross-platform Model Context Protocol server for policy-controlled command execu
 
 CommandBridge MCP is designed for machines that cannot or should not be managed through SSH. Install the server on the target host, connect through local stdio or a private Streamable HTTP endpoint, and let an MCP client run bounded commands.
 
-> Status: early 0.1.0 implementation. Use on test machines before production.
+> Status: early 0.2.0 implementation. Use on test machines before production.
 
 ## Design goals
 
@@ -24,7 +24,7 @@ flowchart LR
     POLICY --> HOST["Linux bash/sh or Windows PowerShell/cmd"]
 ~~~
 
-Version 0.1 runs one MCP endpoint per host. A future gateway mode will let host agents initiate outbound connections to one central control plane.
+Version 0.2 runs one MCP endpoint per host. A future gateway mode will let host agents initiate outbound connections to one central control plane.
 
 ## MCP tools
 
@@ -37,14 +37,43 @@ The command tool is annotated as destructive because unrestricted commands can c
 
 ## Requirements
 
-- Node.js 20 or newer
-- npm
+- Manual installation: Node.js 20 or newer and npm
+- One-command Linux installation: a systemd host on x86_64 or arm64 with Linux 4.18+, glibc 2.28+, and libstdc++ 6.0.25+
 - At least one supported shell:
   - Linux: <code>bash</code> or <code>sh</code>
   - Windows: Windows PowerShell or <code>cmd.exe</code>
   - PowerShell 7 on Linux is supported through <code>pwsh</code>
 
-## Install and build
+## One-command Linux systemd install
+
+The pinned v0.2.0 installer deploys CommandBridge under <code>/opt/command-bridge-mcp-server</code>, installs a private Node.js 24.18.0 runtime after verifying the official SHA-256 checksum, creates a low-privilege service account, and enables the service at boot:
+
+~~~bash
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
+~~~
+
+The secure defaults are:
+
+- Service: <code>command-bridge-mcp-server.service</code>, enabled and started immediately.
+- Account: dedicated <code>command-bridge</code> user with no login, sudo, Docker, or extra groups.
+- Endpoint: <code>http://127.0.0.1:8800/mcp</code> with a generated 64-character bearer token.
+- Policy: Linux allowlist mode with <code>bash</code> and diagnostic commands only.
+- Writable command root: <code>/var/lib/command-bridge-mcp-server/work</code>.
+- Configuration: <code>/etc/command-bridge-mcp-server/command-bridge.env</code>, owned by root with mode <code>0600</code>.
+
+Check the installed service:
+
+~~~bash
+sudo systemctl status command-bridge-mcp-server
+curl -fsS http://127.0.0.1:8800/health
+sudo journalctl -u command-bridge-mcp-server -f
+~~~
+
+The installer preserves the existing configuration and token when rerun. It uses versioned release directories and rolls the <code>current</code> symlink back if the new service fails its health check.
+
+See [Linux systemd installation](docs/linux-systemd.md) for prerequisites, directory layout, remote access, configuration, and upgrade behavior.
+
+## Manual install and build
 
 ~~~powershell
 cd command-bridge-mcp-server
@@ -184,10 +213,11 @@ This builds the TypeScript project and runs the command-policy unit tests.
 ## Roadmap
 
 - Background jobs with polling and cancellation
-- Installers for Linux systemd and Windows services
+- Windows service installer
 - Structured audit logs with secret redaction
 - Central gateway with agent-initiated outbound connections
 - OAuth 2.1 for remote MCP clients
 - Signed host enrollment and per-host authorization scopes
+- Signed, prebuilt Linux release artifacts for offline installation
 
 See [SECURITY.md](SECURITY.md) before deploying outside a development environment.

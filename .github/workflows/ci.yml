@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Build and test
+        run: npm test
+
+      - name: Check installer syntax
+        if: runner.os == 'Linux'
+        run: bash -n install.sh
+
+      - name: Prepare systemd verification paths
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo groupadd --system command-bridge
+          sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
+          sudo install -d -m 0555 /var/empty/command-bridge
+          sudo install -d -m 0755 /opt/command-bridge-mcp-server/runtime/current/bin
+          sudo install -d -m 0755 /opt/command-bridge-mcp-server/current/dist
+          sudo install -d -m 0700 /etc/command-bridge-mcp-server
+          sudo install -d -m 0750 -o command-bridge -g command-bridge /var/lib/command-bridge-mcp-server/work
+          sudo ln -s "$(command -v node)" /opt/command-bridge-mcp-server/runtime/current/bin/node
+          sudo install -m 0600 /dev/null /etc/command-bridge-mcp-server/command-bridge.env
+          sudo install -m 0644 /dev/null /opt/command-bridge-mcp-server/current/dist/index.js
+
+      - name: Verify systemd unit
+        if: runner.os == 'Linux'
+        run: sudo systemd-analyze verify packaging/systemd/command-bridge-mcp-server.service
