@@ -1,214 +1,378 @@
 # CommandBridge MCP
 
-Cross-platform Model Context Protocol server for policy-controlled command execution on Linux and Windows.
+[![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/HsinPu/command-bridge-mcp-server?label=version)](https://github.com/HsinPu/command-bridge-mcp-server/tags)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
+[![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)](#supported-environments)
 
-CommandBridge MCP is designed for machines that cannot or should not be managed through SSH. Install the server on the target host, connect through local stdio or a private Streamable HTTP endpoint, and let an MCP client run bounded commands.
+**Languages:** English | [繁體中文](README.zh-TW.md)
 
-> Status: early 0.2.0 implementation. Use on test machines before production.
+**Policy-controlled command execution for Linux and Windows through the Model Context Protocol.**
 
-## Design goals
+CommandBridge MCP lets Codex and other MCP clients inspect a host and run bounded commands without requiring SSH. It supports local stdio connections and authenticated Streamable HTTP connections for private remote access.
 
-- Linux and Windows support from one TypeScript codebase.
-- No SSH dependency.
-- Safe allowlist mode by default.
-- Explicit opt-in for unrestricted shell execution.
-- Bounded time, output size, working directories, environment variables, and parallelism.
-- Structured MCP results for both host information and command execution.
+> [!IMPORTANT]
+> CommandBridge MCP is currently pre-1.0. Version `v0.2.0` is suitable for evaluation and controlled environments. Review the [security policy](SECURITY.md) before using it on an important host.
+
+## Table of contents
+
+- [Why CommandBridge](#why-commandbridge)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick start: Linux systemd](#quick-start-linux-systemd)
+- [Connect from Codex](#connect-from-codex)
+- [MCP tools](#mcp-tools)
+- [Supported environments](#supported-environments)
+- [Manual installation](#manual-installation)
+- [Configuration](#configuration)
+- [Execution policy](#execution-policy)
+- [Security](#security)
+- [Development](#development)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+
+## Why CommandBridge
+
+CommandBridge is designed for hosts where SSH is unavailable, undesirable, or too broad for the task.
+
+- **No SSH dependency** — connect through local stdio or a private HTTP route.
+- **Cross-platform** — use the same TypeScript server on Linux and Windows.
+- **Allowlist-first** — simple diagnostic commands are allowed by default.
+- **Explicit privilege boundary** — the Linux service runs without login, sudo, Docker, or extra groups.
+- **Bounded execution** — control shells, commands, working directories, timeouts, output, inherited environment variables, and concurrency.
+- **Structured results** — receive exit code, stdout, stderr, duration, timeout, and truncation state as MCP structured content.
+
+## Features
+
+| Capability | Behavior |
+|---|---|
+| Transports | Local stdio and authenticated Streamable HTTP |
+| Authentication | Bearer token required for HTTP mode |
+| Linux shells | `bash`, `sh`, and optional `pwsh` |
+| Windows shells | Windows PowerShell and `cmd.exe` |
+| Execution modes | Safe `allowlist` default and explicit `unrestricted` opt-in |
+| Host protection | Shell, command, working-directory, timeout, output, environment, and concurrency limits |
+| Linux deployment | Versioned `/opt` installation with a hardened systemd service |
+| Upgrade safety | Existing configuration is preserved and failed health checks trigger rollback |
 
 ## Architecture
 
-~~~mermaid
+```mermaid
 flowchart LR
-    AI["ChatGPT / Codex / MCP client"] -->|"stdio or private Streamable HTTP"| MCP["CommandBridge MCP"]
-    MCP --> POLICY["Shell, command, path and limit policy"]
-    POLICY --> HOST["Linux bash/sh or Windows PowerShell/cmd"]
-~~~
+    CLIENT["Codex or MCP client"]
+    TRANSPORT{"Transport"}
+    STDIO["Local stdio"]
+    HTTP["Private Streamable HTTP"]
+    AUTH["Bearer token and Host validation"]
+    POLICY["Command policy and limits"]
+    EXECUTOR["Command executor"]
+    HOST["Linux or Windows host"]
 
-Version 0.2 runs one MCP endpoint per host. A future gateway mode will let host agents initiate outbound connections to one central control plane.
+    CLIENT --> TRANSPORT
+    TRANSPORT --> STDIO
+    TRANSPORT --> HTTP
+    HTTP --> AUTH
+    STDIO --> POLICY
+    AUTH --> POLICY
+    POLICY --> EXECUTOR
+    EXECUTOR --> HOST
+```
+
+Version `v0.2.0` runs one MCP endpoint per host. A future gateway mode is planned for managing multiple outbound-connected host agents.
+
+## Quick start: Linux systemd
+
+The one-command installer supports regular glibc-based Linux distributions using systemd on `x86_64` or `arm64`.
+
+```bash
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
+```
+
+The installer:
+
+1. Validates the operating system, architecture, systemd, and required tools.
+2. Downloads the pinned Node.js runtime and verifies its SHA-256 checksum.
+3. Builds and tests the pinned CommandBridge release with a temporary low-privilege account.
+4. Installs the application under `/opt/command-bridge-mcp-server`.
+5. Creates the dedicated `command-bridge` service account.
+6. Creates and enables `command-bridge-mcp-server.service`.
+7. Starts the service and verifies `GET /health`.
+
+Verify the installation:
+
+```bash
+sudo systemctl is-enabled command-bridge-mcp-server
+sudo systemctl status command-bridge-mcp-server --no-pager
+curl -fsS http://127.0.0.1:8800/health
+```
+
+Follow the service logs:
+
+```bash
+sudo journalctl -u command-bridge-mcp-server -f
+```
+
+Installed locations:
+
+| Purpose | Path |
+|---|---|
+| Application and private Node.js runtime | `/opt/command-bridge-mcp-server` |
+| Root-owned configuration | `/etc/command-bridge-mcp-server/command-bridge.env` |
+| Writable command workspace | `/var/lib/command-bridge-mcp-server/work` |
+| systemd unit | `/etc/systemd/system/command-bridge-mcp-server.service` |
+
+See the [Linux systemd installation guide](docs/linux-systemd.md) for prerequisites, review-first installation, remote access, upgrades, and rollback behavior.
+
+> [!NOTE]
+> Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package instead.
+
+## Connect from Codex
+
+The Linux installer binds CommandBridge to `127.0.0.1` by default. A Codex client on another machine therefore needs a private route such as Tailscale, Cloudflare Tunnel, or an authenticated TLS reverse proxy.
+
+> [!WARNING]
+> Do not expose the built-in HTTP server directly to the public internet. It does not provide TLS.
+
+### 1. Read the generated token on Linux
+
+```bash
+sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "=") + 1) }' /etc/command-bridge-mcp-server/command-bridge.env
+```
+
+Store the token in an environment variable on the Codex client:
+
+```text
+COMMAND_BRIDGE_BEARER_TOKEN=<generated-token>
+```
+
+### 2. Add the server to Codex
+
+Add the following to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.command_bridge]
+enabled = true
+url = "https://command-bridge.example.com/mcp"
+bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"
+startup_timeout_sec = 20.0
+tool_timeout_sec = 60.0
+```
+
+Restart Codex, open `/mcp`, and confirm that `command_bridge` is connected.
+
+Try these prompts:
+
+```text
+Use command_bridge_get_system_info to show the Linux host policy.
+```
+
+```text
+Use command_bridge_run_command to run hostname on the Linux host.
+```
 
 ## MCP tools
 
-| Tool | Purpose |
-|---|---|
-| <code>command_bridge_get_system_info</code> | Return OS information and the effective execution policy. |
-| <code>command_bridge_run_command</code> | Execute one bounded command and return exit code, stdout, stderr, timeout and truncation state. |
+### `command_bridge_get_system_info`
 
-The command tool is annotated as destructive because unrestricted commands can change host state.
+Returns operating-system information and the effective CommandBridge policy.
 
-## Requirements
+Key output fields include:
 
-- Manual installation: Node.js 20 or newer and npm
-- One-command Linux installation: a systemd host on x86_64 or arm64 with Linux 4.18+, glibc 2.28+, and libstdc++ 6.0.25+
-- At least one supported shell:
-  - Linux: <code>bash</code> or <code>sh</code>
-  - Windows: Windows PowerShell or <code>cmd.exe</code>
-  - PowerShell 7 on Linux is supported through <code>pwsh</code>
+- Hostname, platform, release, and architecture
+- Uptime, CPU count, and memory
+- Execution mode
+- Allowed shells, commands, and working roots
+- Maximum parallel command count
 
-## One-command Linux systemd install
+This tool is read-only and idempotent.
 
-The pinned v0.2.0 installer deploys CommandBridge under <code>/opt/command-bridge-mcp-server</code>, installs a private Node.js 24.18.0 runtime after verifying the official SHA-256 checksum, creates a low-privilege service account, and enables the service at boot:
+### `command_bridge_run_command`
 
-~~~bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
-~~~
+Runs one command within the configured policy.
 
-The secure defaults are:
+| Input | Required | Description |
+|---|:---:|---|
+| `command` | Yes | Command text to execute |
+| `shell` | No | `bash`, `sh`, `powershell`, or `cmd` |
+| `cwd` | No | Working directory under an allowed root |
+| `timeoutMs` | No | Requested timeout in milliseconds |
 
-- Service: <code>command-bridge-mcp-server.service</code>, enabled and started immediately.
-- Account: dedicated <code>command-bridge</code> user with no login, sudo, Docker, or extra groups.
-- Endpoint: <code>http://127.0.0.1:8800/mcp</code> with a generated 64-character bearer token.
-- Policy: Linux allowlist mode with <code>bash</code> and diagnostic commands only.
-- Writable command root: <code>/var/lib/command-bridge-mcp-server/work</code>.
-- Configuration: <code>/etc/command-bridge-mcp-server/command-bridge.env</code>, owned by root with mode <code>0600</code>.
+Example input:
 
-Check the installed service:
-
-~~~bash
-sudo systemctl status command-bridge-mcp-server
-curl -fsS http://127.0.0.1:8800/health
-sudo journalctl -u command-bridge-mcp-server -f
-~~~
-
-The installer preserves the existing configuration and token when rerun. It uses versioned release directories and rolls the <code>current</code> symlink back if the new service fails its health check.
-
-See [Linux systemd installation](docs/linux-systemd.md) for prerequisites, directory layout, remote access, configuration, and upgrade behavior.
-
-## Manual install and build
-
-~~~powershell
-cd command-bridge-mcp-server
-npm.cmd install
-npm.cmd run build
-~~~
-
-## Local stdio usage
-
-stdio is the default transport. An MCP client launches the process on the same host:
-
-~~~json
+```json
 {
-  "mcpServers": {
-    "command-bridge": {
-      "command": "node",
-      "args": [
-        "C:\\path\\to\\command-bridge-mcp-server\\dist\\index.js"
-      ],
-      "env": {
-        "COMMAND_BRIDGE_EXECUTION_MODE": "allowlist"
-      }
-    }
-  }
+  "command": "hostname",
+  "shell": "bash",
+  "cwd": "/var/lib/command-bridge-mcp-server/work",
+  "timeoutMs": 15000
 }
-~~~
+```
 
-## Remote HTTP usage without SSH
+The response includes `ok`, `exitCode`, `stdout`, `stderr`, `durationMs`, `timedOut`, and `truncated`.
 
-Create an environment file on the target host:
+The tool is marked as potentially destructive because unrestricted commands can change host state.
 
-~~~dotenv
-COMMAND_BRIDGE_TRANSPORT=http
-COMMAND_BRIDGE_BEARER_TOKEN=replace-with-at-least-32-random-characters
-COMMAND_BRIDGE_HTTP_HOST=0.0.0.0
-COMMAND_BRIDGE_HTTP_PORT=8800
-COMMAND_BRIDGE_ALLOWED_HOSTS=100.92.1.7,command-bridge.internal
-COMMAND_BRIDGE_EXECUTION_MODE=allowlist
-~~~
+## Supported environments
 
-Then start the built server:
+| Environment | Support |
+|---|---|
+| Linux runtime | `bash`, `sh`, and optional PowerShell 7 through `pwsh` |
+| Windows runtime | Windows PowerShell and `cmd.exe` |
+| Manual installation | Node.js 20 or newer and npm |
+| Linux one-command installer | systemd, glibc, `x86_64` or `arm64`, Linux 4.18+ |
+| Alpine and musl Linux | Not currently supported by the systemd installer |
 
-~~~powershell
-npm.cmd start
-~~~
+The systemd installer also requires at least 400 MB free under `/opt` and outbound HTTPS access to GitHub, Node.js, and the npm registry.
 
-The endpoint is <code>POST /mcp</code>. Every MCP request must include:
+## Manual installation
 
-~~~http
-Authorization: Bearer your-token
-~~~
+Clone and build the project:
 
-The unauthenticated <code>GET /health</code> endpoint returns only a basic health state.
+```bash
+git clone https://github.com/HsinPu/command-bridge-mcp-server.git
+cd command-bridge-mcp-server
+npm ci
+npm run build
+```
 
-Do not expose port 8800 directly to the public internet. Put it on a private network such as Tailscale, or behind an authenticated TLS reverse proxy. The built-in bearer token is an initial deployment control, not a replacement for network isolation and TLS.
+On Windows PowerShell, use `npm.cmd` if the PowerShell execution policy blocks `npm.ps1`:
+
+```powershell
+git clone https://github.com/HsinPu/command-bridge-mcp-server.git
+Set-Location command-bridge-mcp-server
+npm.cmd ci
+npm.cmd run build
+```
+
+Copy `.env.example` to `.env`, adjust the policy, and start the server:
+
+```bash
+cp .env.example .env
+npm start
+```
+
+The default transport is stdio. Set `COMMAND_BRIDGE_TRANSPORT=http` and provide a bearer token of at least 32 characters to use Streamable HTTP.
 
 ## Configuration
 
-| Variable | Default | Meaning |
-|---|---:|---|
-| <code>COMMAND_BRIDGE_TRANSPORT</code> | <code>stdio</code> | <code>stdio</code> or <code>http</code>. |
-| <code>COMMAND_BRIDGE_BEARER_TOKEN</code> | none | Required in HTTP mode; minimum 32 characters. |
-| <code>COMMAND_BRIDGE_HTTP_HOST</code> | <code>127.0.0.1</code> | HTTP bind address. |
-| <code>COMMAND_BRIDGE_HTTP_PORT</code> | <code>8800</code> | HTTP port. |
-| <code>COMMAND_BRIDGE_ALLOWED_HOSTS</code> | none | Comma-separated Host header values; required for non-loopback binds. |
-| <code>COMMAND_BRIDGE_EXECUTION_MODE</code> | <code>allowlist</code> | <code>allowlist</code> or <code>unrestricted</code>. |
-| <code>COMMAND_BRIDGE_ALLOWED_SHELLS</code> | OS defaults | Comma-separated shell names. |
-| <code>COMMAND_BRIDGE_ALLOWED_COMMANDS</code> | OS defaults | Comma-separated command names used in allowlist mode. |
-| <code>COMMAND_BRIDGE_ALLOWED_ROOTS</code> | startup directory | Working-directory roots separated by the OS path delimiter. |
-| <code>COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS</code> | <code>15000</code> | Default command timeout. |
-| <code>COMMAND_BRIDGE_MAX_TIMEOUT_MS</code> | <code>60000</code> | Maximum requested timeout. |
-| <code>COMMAND_BRIDGE_MAX_OUTPUT_CHARS</code> | <code>50000</code> | Combined stdout and stderr limit. |
-| <code>COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS</code> | <code>2</code> | Per-process concurrency limit. |
-| <code>COMMAND_BRIDGE_PASSTHROUGH_ENV</code> | none | Additional environment variable names inherited by child commands. |
+CommandBridge reads configuration from environment variables and supports `.env` during manual development.
 
-Linux root lists use a colon:
+| Variable | Default | Description |
+|---|---|---|
+| `COMMAND_BRIDGE_TRANSPORT` | `stdio` | `stdio` or `http` |
+| `COMMAND_BRIDGE_BEARER_TOKEN` | None | Required in HTTP mode; minimum 32 characters |
+| `COMMAND_BRIDGE_HTTP_HOST` | `127.0.0.1` | HTTP bind address |
+| `COMMAND_BRIDGE_HTTP_PORT` | `8800` | HTTP port |
+| `COMMAND_BRIDGE_ALLOWED_HOSTS` | None | Required Host header values for non-loopback binds |
+| `COMMAND_BRIDGE_EXECUTION_MODE` | `allowlist` | `allowlist` or `unrestricted` |
+| `COMMAND_BRIDGE_ALLOWED_SHELLS` | OS defaults | Comma-separated shell names |
+| `COMMAND_BRIDGE_ALLOWED_COMMANDS` | OS defaults | Comma-separated commands allowed in allowlist mode |
+| `COMMAND_BRIDGE_ALLOWED_ROOTS` | Startup directory | Working-directory roots separated by the OS path delimiter |
+| `COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS` | `15000` | Default command timeout |
+| `COMMAND_BRIDGE_MAX_TIMEOUT_MS` | `60000` | Maximum requested timeout |
+| `COMMAND_BRIDGE_MAX_OUTPUT_CHARS` | `50000` | Combined stdout and stderr limit |
+| `COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS` | `2` | Per-process concurrency limit |
+| `COMMAND_BRIDGE_PASSTHROUGH_ENV` | None | Additional environment variable names inherited by commands |
 
-~~~dotenv
-COMMAND_BRIDGE_ALLOWED_ROOTS=/opt/apps:/var/log/myapp
-~~~
-
-Windows root lists use a semicolon:
-
-~~~dotenv
-COMMAND_BRIDGE_ALLOWED_ROOTS=C:\Apps;D:\Logs
-~~~
+See [.env.example](.env.example) for a copyable configuration template.
 
 ## Execution policy
 
-Allowlist mode:
+### Allowlist mode
+
+Allowlist mode is the default:
+
+```dotenv
+COMMAND_BRIDGE_EXECUTION_MODE=allowlist
+```
+
+It:
 
 - Accepts one simple command at a time.
 - Rejects pipes, redirects, chaining, command substitution, and newlines.
-- Requires the first command name to be configured.
-- Still enforces allowed shells, working roots, timeout, output and concurrency limits.
+- Requires the first command name to appear in `COMMAND_BRIDGE_ALLOWED_COMMANDS`.
+- Enforces allowed shells, working roots, timeout, output, environment, and concurrency limits.
 
-Unrestricted mode:
+Default Linux commands:
 
-~~~dotenv
+```text
+uname, hostname, whoami, uptime, date, df, free, ps, pwd
+```
+
+Default Windows commands:
+
+```text
+Get-Date, Get-ComputerInfo, Get-Process, Get-Service, Get-CimInstance,
+hostname, whoami, systeminfo, tasklist
+```
+
+### Unrestricted mode
+
+```dotenv
 COMMAND_BRIDGE_EXECUTION_MODE=unrestricted
-~~~
+```
 
-This permits arbitrary shell syntax and can provide full control available to the operating-system account running CommandBridge. Use a dedicated low-privilege account and require human confirmation in the MCP client.
+> [!CAUTION]
+> Unrestricted mode permits arbitrary shell syntax and can provide all permissions available to the operating-system account running CommandBridge. Use a dedicated low-privilege account, private networking, and human confirmation in the MCP client.
 
-Child processes inherit only a small baseline environment plus explicitly named variables. The MCP bearer token is not inherited by commands.
+## Security
 
-## Installing when SSH is unavailable
+Command execution is a sensitive capability. The application policy is only one layer of protection.
 
-You still need one initial management path to place and start CommandBridge:
+- Keep `allowlist` mode unless unrestricted execution is explicitly required.
+- Run CommandBridge as a dedicated non-administrator account.
+- Use a unique bearer token for every host.
+- Keep HTTP access on a private network or behind authenticated TLS.
+- Restrict allowed roots and inherited environment variables.
+- Never include passwords, API keys, or private keys in command arguments.
+- Do not add the Linux service account to `sudo`, `docker`, `adm`, or `systemd-journal`.
 
-- Synology DSM Container Manager or another container UI
-- A cloud provider browser console
-- Windows RDP, Task Scheduler, Intune, SCCM, or another software deployment system
-- A hosting control panel with application deployment
+`COMMAND_BRIDGE_ALLOWED_ROOTS` restricts the command working directory; it is not a complete filesystem sandbox. An allowed command can still name another path that the operating-system account can read.
 
-A container controls only what is visible inside that container. Avoid mounting the host root or Docker socket unless that level of access is intentional.
+Report vulnerabilities through a private [GitHub Security Advisory](https://github.com/HsinPu/command-bridge-mcp-server/security/advisories/new). Do not include secrets or host details in public issues.
 
-## Similar GitHub projects
+Read [SECURITY.md](SECURITY.md) before deploying outside a development environment.
 
-| Project | Approach | Difference from CommandBridge MCP |
-|---|---|---|
-| [girishsahu008/mcpshellserver](https://github.com/girishsahu008/mcpshellserver) | Local PowerShell plus remote Linux over SSH. | CommandBridge does not require SSH and applies bounded policies to both operating systems. |
-| [CrazyMan28/vm-agent-mcp](https://github.com/CrazyMan28/vm-agent-mcp) | Cross-platform remote control over Tailscale, including desktop input and administrator access. | CommandBridge starts with command execution only and low-privilege, allowlist-first defaults. |
-| [usepowershell/PoshMcp](https://github.com/usepowershell/PoshMcp) | Dynamically exposes PowerShell cmdlets and modules as MCP tools. | CommandBridge uses a small stable tool surface and also targets Linux shells. |
-| [Areso/safe-ssh-mcp](https://github.com/Areso/safe-ssh-mcp) | Safety-oriented remote command execution through SSH. | CommandBridge targets environments where SSH is unavailable. |
+## Development
 
-The plain name CommandBridge is already used by unrelated GitHub projects, so this project should always be published and displayed as **CommandBridge MCP**. The intended repository name is **command-bridge-mcp-server**.
+Install dependencies:
 
-## Verification
+```bash
+npm ci
+```
 
-~~~powershell
-npm.cmd test
-~~~
+Run the development server:
 
-This builds the TypeScript project and runs the command-policy unit tests.
+```bash
+npm run dev
+```
+
+Build:
+
+```bash
+npm run build
+```
+
+Build and test:
+
+```bash
+npm test
+```
+
+The test command compiles the TypeScript project and runs the command-policy and Linux installer asset tests.
+
+Project layout:
+
+```text
+src/
+├── config/          Environment parsing and validation
+├── services/        Command policy, execution, and host information
+├── tools/           MCP tool registration
+└── transport/       Streamable HTTP transport
+docs/                Deployment documentation
+packaging/systemd/   Hardened Linux systemd unit
+install.sh           Version-pinned Linux installer
+```
 
 ## Roadmap
 
@@ -218,6 +382,22 @@ This builds the TypeScript project and runs the command-policy unit tests.
 - Central gateway with agent-initiated outbound connections
 - OAuth 2.1 for remote MCP clients
 - Signed host enrollment and per-host authorization scopes
-- Signed, prebuilt Linux release artifacts for offline installation
+- Signed prebuilt Linux release artifacts for offline installation
 
-See [SECURITY.md](SECURITY.md) before deploying outside a development environment.
+## Contributing
+
+Issues and pull requests are welcome.
+
+1. Open an [issue](https://github.com/HsinPu/command-bridge-mcp-server/issues) for significant behavior or security-boundary changes.
+2. Create a focused branch.
+3. Run `npm test`.
+4. Open a pull request with the motivation, behavior change, and verification evidence.
+
+Use a private [GitHub Security Advisory](https://github.com/HsinPu/command-bridge-mcp-server/security/advisories/new) for vulnerabilities.
+
+---
+
+- [Linux installation guide](docs/linux-systemd.md)
+- [Security policy](SECURITY.md)
+- [GitHub Actions](https://github.com/HsinPu/command-bridge-mcp-server/actions)
+- [Tags](https://github.com/HsinPu/command-bridge-mcp-server/tags)
