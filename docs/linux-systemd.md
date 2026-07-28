@@ -19,15 +19,26 @@ Synology DSM is not a systemd host. Use Container Manager or a DSM-specific pack
 One command:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
 ```
+
+This command asks for the private HTTPS MCP URL ending in `/mcp`. After a successful installation, it prints a marked block containing the URL, generated or preserved bearer token, and exact instructions to paste into a trusted Codex task. Press Enter at the URL prompt to use a placeholder when the private route is not ready.
+
+To skip the prompt:
+
+```bash
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+```
+
+> [!CAUTION]
+> `--print-codex-setup` deliberately prints the bearer token. Paste the block only into a trusted Codex task and delete temporary copies after configuration.
 
 For a review-first installation:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o command-bridge-install.sh
 less command-bridge-install.sh
-sudo bash command-bridge-install.sh
+sudo bash command-bridge-install.sh --print-codex-setup
 ```
 
 The installer performs these steps:
@@ -41,6 +52,7 @@ The installer performs these steps:
 7. Creates the low-privilege `command-bridge` service account and root-only environment file.
 8. Enables and starts `command-bridge-mcp-server.service`.
 9. Checks `/health`; an upgrade switches back to the previous release if the check fails.
+10. When explicitly requested, prints the copy-ready Codex configuration block.
 
 ## Installed layout
 
@@ -66,7 +78,7 @@ The application and Node.js runtime are owned by root. The service account can w
 
 ## Default configuration
 
-The installer generates `/etc/command-bridge-mcp-server/command-bridge.env` only when it does not already exist. It never prints or replaces an existing bearer token.
+The installer generates `/etc/command-bridge-mcp-server/command-bridge.env` only when it does not already exist, and it never replaces an existing bearer token. It prints the token only when `--print-codex-setup` or `--codex-url` is explicitly supplied.
 
 ```dotenv
 COMMAND_BRIDGE_TRANSPORT=http
@@ -90,6 +102,17 @@ Read the token locally as root:
 ```bash
 sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "=") + 1) }' /etc/command-bridge-mcp-server/command-bridge.env
 ```
+
+## Copy-ready Codex setup
+
+The output between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` is a prompt, not a shell script. Copy the entire block into a trusted Codex task on the client machine. It tells Codex to:
+
+1. Persist `COMMAND_BRIDGE_BEARER_TOKEN` as a user environment variable appropriate for the client operating system.
+2. Add or update `[mcp_servers.command_bridge]` in the user-level `~/.codex/config.toml`.
+3. Reference the token through `bearer_token_env_var` instead of placing the secret in TOML.
+4. Preserve unrelated settings, report restart requirements, and verify the MCP connection after restart.
+
+`--codex-url` accepts only an HTTPS URL ending in `/mcp`, without embedded credentials, a query, or a fragment. The built-in CommandBridge listener remains plain HTTP on loopback; the HTTPS URL must therefore come from a private route such as Tailscale Serve, Cloudflare Tunnel, or an authenticated TLS reverse proxy.
 
 After editing the environment file, restart the service:
 

@@ -24,6 +24,7 @@ readonly SOURCE_ARCHIVE_URL="https://github.com/HsinPu/command-bridge-mcp-server
 readonly SYSTEMD_UNIT_SHA256="d47ff15aaee7b283e6297854499990c750e21e52f39aa7a48b85d8a1b1509de9"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
+readonly CODEX_SETUP_URL_PLACEHOLDER="https://REPLACE_WITH_PRIVATE_HOSTNAME/mcp"
 
 TEMP_DIR=""
 PREVIOUS_RELEASE=""
@@ -35,9 +36,23 @@ UNIT_WAS_PRESENT=0
 BUILD_UID=""
 BUILD_ACCOUNT_ACTIVE=0
 BUILT_PACKAGE_VERSION=""
+PRINT_CODEX_SETUP=0
+CODEX_SETUP_URL=""
 
 log() {
   printf '[CommandBridge] %s\n' "$*"
+}
+
+usage() {
+  printf '%s\n' \
+    'Usage: sudo bash install.sh [options]' \
+    '' \
+    'Options:' \
+    '  --print-codex-setup       Print a copy-ready Codex setup block after installation.' \
+    '                            The block contains the bearer token.' \
+    '  --codex-url URL           Use this private HTTPS MCP URL in the setup block.' \
+    '                            The URL must end in /mcp. Implies --print-codex-setup.' \
+    '  -h, --help                Show this help and exit.'
 }
 
 fail() {
@@ -46,6 +61,60 @@ fail() {
     rollback_activation || true
   fi
   exit 1
+}
+
+parse_arguments() {
+  while (( $# > 0 )); do
+    case "$1" in
+      --print-codex-setup)
+        PRINT_CODEX_SETUP=1
+        ;;
+      --codex-url)
+        (( $# >= 2 )) || fail "--codex-url requires a URL."
+        CODEX_SETUP_URL=$2
+        PRINT_CODEX_SETUP=1
+        shift
+        ;;
+      --codex-url=*)
+        CODEX_SETUP_URL=${1#*=}
+        [[ -n "${CODEX_SETUP_URL}" ]] || fail "--codex-url requires a URL."
+        PRINT_CODEX_SETUP=1
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        usage >&2
+        fail "Unknown option: $1"
+        ;;
+    esac
+    shift
+  done
+}
+
+validate_codex_setup_url() {
+  local url=$1
+
+  [[ "${url}" =~ ^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?(/[A-Za-z0-9._~:@%+-]+)*/mcp/?$ ]] || \
+    fail "--codex-url must be a private HTTPS URL ending in /mcp, without credentials, a query, or a fragment."
+}
+
+collect_codex_setup_url() {
+  [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return
+
+  if [[ -z "${CODEX_SETUP_URL}" && -t 0 ]]; then
+    printf '\n'
+    printf 'Private HTTPS MCP URL used by Codex (must end in /mcp).\n'
+    printf 'Press Enter to print a placeholder instead: '
+    IFS= read -r CODEX_SETUP_URL || true
+  fi
+
+  if [[ -n "${CODEX_SETUP_URL}" ]]; then
+    validate_codex_setup_url "${CODEX_SETUP_URL}"
+  else
+    CODEX_SETUP_URL="${CODEX_SETUP_URL_PLACEHOLDER}"
+  fi
 }
 
 cleanup() {
@@ -585,13 +654,69 @@ print_summary() {
   printf '  sudo journalctl -u %s -f\n' "${SERVICE_NAME}"
   printf '  sudo systemctl restart %s\n' "${SERVICE_NAME}"
   printf '\n'
-  printf 'The bearer token was not printed. Read it as root from:\n'
-  printf '  %s\n' "${CONFIG_FILE}"
+  if [[ "${PRINT_CODEX_SETUP}" == "1" ]]; then
+    printf 'A copy-ready Codex setup block containing the bearer token follows.\n'
+  else
+    printf 'The bearer token was not printed. Read it as root from:\n'
+    printf '  %s\n' "${CONFIG_FILE}"
+  fi
+}
+
+print_codex_setup() {
+  local token
+
+  [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return
+  token=$(read_config_value COMMAND_BRIDGE_BEARER_TOKEN)
+  if [[ ! "${token}" =~ ^[A-Za-z0-9._~-]{32,}$ ]]; then
+    printf '[CommandBridge] WARNING: The bearer token is missing or unsafe to print; the Codex setup block was not printed.\n' >&2
+    return
+  fi
+
+  printf '\n'
+  printf '%s\n' \
+    'SECURITY WARNING: The block below contains a bearer token.' \
+    'Copy it only into a trusted Codex task. Delete copied notes after setup.' \
+    '' \
+    '========== BEGIN COPY FOR CODEX ==========' \
+    'Configure a user-scoped MCP server named command_bridge on this Codex client.' \
+    '' \
+    'Connection details:' \
+    "MCP URL: ${CODEX_SETUP_URL}" \
+    "Bearer token (secret): ${token}" \
+    ''
+
+  if [[ "${CODEX_SETUP_URL}" == "${CODEX_SETUP_URL_PLACEHOLDER}" ]]; then
+    printf '%s\n' \
+      'The MCP URL above is a placeholder. Before changing any files, ask me for the' \
+      'private HTTPS URL that reaches this server and ends in /mcp.' \
+      ''
+  fi
+
+  printf '%s\n' \
+    'Complete these steps:' \
+    '1. Detect the local operating system. Store the bearer token in the persistent' \
+    '   user environment variable COMMAND_BRIDGE_BEARER_TOKEN. Do not store it in' \
+    '   the repository or write it directly into config.toml.' \
+    '2. Add or update this user-level Codex configuration in ~/.codex/config.toml:' \
+    '' \
+    '[mcp_servers.command_bridge]' \
+    'enabled = true' \
+    "url = \"${CODEX_SETUP_URL}\"" \
+    'bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"' \
+    'startup_timeout_sec = 20.0' \
+    'tool_timeout_sec = 60.0' \
+    '' \
+    '3. Preserve every unrelated Codex setting. Tell me exactly what changed and' \
+    '   whether Codex must be restarted for the new environment variable.' \
+    '4. After restart, use /mcp to verify that command_bridge is connected.' \
+    '5. Do not repeat the bearer token in your final response.' \
+    '========== END COPY FOR CODEX =========='
 }
 
 main() {
   local node_arch available_kb
 
+  parse_arguments "$@"
   require_root_systemd_linux
   for command_name in \
     awk chown chmod cp curl df env flock getent grep groupadd groupdel gzip id install \
@@ -599,6 +724,8 @@ main() {
     unlink useradd userdel; do
     require_command "${command_name}"
   done
+
+  collect_codex_setup_url
 
   install -d -m 0700 -o root -g root "${LOCK_DIR}"
   exec 9>"${LOCK_DIR}/install.lock"
@@ -622,6 +749,7 @@ main() {
   install_configuration
   install_and_start_service
   print_summary
+  print_codex_setup
 }
 
 main "$@"

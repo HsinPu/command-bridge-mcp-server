@@ -1,63 +1,119 @@
-# CommandBridge MCP
+<h1 align="center">CommandBridge MCP</h1>
 
-[![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/tag/HsinPu/command-bridge-mcp-server?label=version)](https://github.com/HsinPu/command-bridge-mcp-server/tags)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
-[![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)](#supported-environments)
+<p align="center">
+  Policy-controlled Linux and Windows command execution for Codex and other MCP clients.
+</p>
 
-**Languages:** English | [繁體中文](README.zh-TW.md)
+<p align="center">
+  <a href="https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml"><img src="https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/protocol-MCP-7f52ff" alt="Model Context Protocol"></a>
+  <a href="#supported-environments"><img src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-2563EB" alt="Linux and Windows"></a>
+  <a href="#project-status"><img src="https://img.shields.io/badge/status-pre--1.0-F59E0B" alt="Pre-1.0 status"></a>
+</p>
 
-**Policy-controlled command execution for Linux and Windows through the Model Context Protocol.**
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#connect-codex">Connect Codex</a> ·
+  <a href="#mcp-tools">Tools</a> ·
+  <a href="docs/linux-systemd.md">Linux guide</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="README.zh-TW.md">繁體中文</a>
+</p>
 
-CommandBridge MCP lets Codex and other MCP clients inspect a host and run bounded commands without requiring SSH. It supports local stdio connections and authenticated Streamable HTTP connections for private remote access.
+---
 
-> [!IMPORTANT]
-> CommandBridge MCP is currently pre-1.0. Version `v0.3.0` is suitable for evaluation and controlled environments. Review the [security policy](SECURITY.md) before using it on an important host.
+## Project status
 
-## Table of contents
+CommandBridge MCP is pre-1.0 and intended for evaluation and controlled environments. It can execute operating-system commands, so review the [security policy](SECURITY.md) before deploying it to an important host.
 
-- [Why CommandBridge](#why-commandbridge)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Quick start: Linux systemd](#quick-start-linux-systemd)
-- [One-command uninstall](#one-command-uninstall)
-- [Connect from Codex](#connect-from-codex)
-- [MCP tools](#mcp-tools)
-- [Supported environments](#supported-environments)
-- [Manual installation](#manual-installation)
-- [Configuration](#configuration)
-- [Execution policy](#execution-policy)
-- [Security](#security)
-- [Development](#development)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
+## What is CommandBridge?
 
-## Why CommandBridge
+CommandBridge is a cross-platform [Model Context Protocol](https://modelcontextprotocol.io/) server that lets an MCP client inspect a host and run policy-bounded commands without requiring SSH.
 
-CommandBridge is designed for hosts where SSH is unavailable, undesirable, or too broad for the task.
+It supports local `stdio` connections and private Streamable HTTP connections with bearer-token authentication. The same server runs on Linux and Windows; its execution policy controls shells, command names, working directories, timeouts, output size, inherited environment variables, and concurrent commands.
 
-- **No SSH dependency** — connect through local stdio or a private HTTP route.
-- **Cross-platform** — use the same TypeScript server on Linux and Windows.
-- **Allowlist-first** — simple diagnostic commands are allowed by default.
-- **Explicit privilege boundary** — the Linux service runs without login, sudo, Docker, or extra groups.
-- **Bounded execution** — control shells, commands, working directories, timeouts, output, inherited environment variables, and concurrency.
-- **Structured results** — receive exit code, stdout, stderr, duration, timeout, and truncation state as MCP structured content.
+## Why use it?
 
-## Features
-
-| Capability | Behavior |
+| Need | CommandBridge approach |
 |---|---|
-| Transports | Local stdio and authenticated Streamable HTTP |
-| Authentication | Bearer token required for HTTP mode |
-| Linux shells | `bash`, `sh`, and optional `pwsh` |
-| Windows shells | Windows PowerShell and `cmd.exe` |
-| Execution modes | Safe `allowlist` default and explicit `unrestricted` opt-in |
-| Host protection | Shell, command, working-directory, timeout, output, environment, and concurrency limits |
-| Linux deployment | Versioned `/opt` installation with a hardened systemd service |
-| Upgrade safety | Existing configuration is preserved and failed health checks trigger rollback |
-| Removal safety | Default uninstall preserves configuration and data; full purge is explicit |
+| No SSH access | Connect through local `stdio` or a private HTTPS route. |
+| Safer day-one operations | Start in `allowlist` mode with simple diagnostic commands only. |
+| Linux and Windows hosts | Use the same MCP tools with platform-appropriate shells. |
+| Controlled remote access | Require a bearer token for HTTP and keep the service behind private networking or authenticated TLS. |
+| Predictable automation | Return structured command results, including exit code, output, duration, timeout, and truncation state. |
 
-## Architecture
+## Quick start
+
+### Linux systemd
+
+The one-command installer supports common glibc-based Linux distributions that use systemd on `x86_64` or `arm64`.
+
+```bash
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
+```
+
+The installer asks for the private HTTPS MCP URL that Codex will use. After the service passes its health check, it prints a marked setup block that can be copied into a trusted Codex task.
+
+If the private route is already known, avoid the interactive prompt:
+
+```bash
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+```
+
+> [!CAUTION]
+> `--print-codex-setup` prints the bearer token. Copy the output only into a trusted Codex task. Do not save it in a repository, ticket, or shared note.
+
+Verify a completed installation:
+
+```bash
+sudo systemctl is-enabled command-bridge-mcp-server
+sudo systemctl status command-bridge-mcp-server --no-pager
+curl -fsS http://127.0.0.1:8800/health
+```
+
+For prerequisites, upgrades, rollback behavior, and service operations, see the [Linux systemd installation guide](docs/linux-systemd.md).
+
+> [!NOTE]
+> Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package instead.
+
+## Connect Codex
+
+The default Linux service binds to `127.0.0.1`. A Codex client on another machine therefore needs a private route such as Tailscale Serve, Cloudflare Tunnel, or an authenticated TLS reverse proxy.
+
+> [!WARNING]
+> The built-in HTTP listener does not provide TLS. Never expose port `8800` directly to the public internet.
+
+### Recommended: copy the installer output
+
+Run the installer with `--print-codex-setup`, then copy everything between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` into a trusted Codex task. The block tells Codex to:
+
+1. Store the token as the persistent user environment variable `COMMAND_BRIDGE_BEARER_TOKEN`.
+2. Add or update the `command_bridge` entry in `~/.codex/config.toml`.
+3. Preserve unrelated Codex settings and report whether a restart is required.
+4. Verify the connection through `/mcp` after restarting Codex.
+
+### Manual configuration
+
+If you did not request the copy-ready output, read the token on the Linux host:
+
+```bash
+sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "=") + 1) }' /etc/command-bridge-mcp-server/command-bridge.env
+```
+
+Store it as `COMMAND_BRIDGE_BEARER_TOKEN` on the Codex client, then add this user-level configuration:
+
+```toml
+[mcp_servers.command_bridge]
+enabled = true
+url = "https://command-bridge.example.com/mcp"
+bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"
+startup_timeout_sec = 20.0
+tool_timeout_sec = 60.0
+```
+
+Restart Codex, open `/mcp`, and confirm that `command_bridge` is connected.
+
+## How it works
 
 ```mermaid
 flowchart LR
@@ -80,151 +136,16 @@ flowchart LR
     EXECUTOR --> HOST
 ```
 
-Version `v0.3.0` runs one MCP endpoint per host. A future gateway mode is planned for managing multiple outbound-connected host agents.
-
-## Quick start: Linux systemd
-
-The one-command installer supports regular glibc-based Linux distributions using systemd on `x86_64` or `arm64`.
-
-```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
-```
-
-The installer:
-
-1. Validates the operating system, architecture, systemd, and required tools.
-2. Downloads the pinned Node.js runtime and verifies its SHA-256 checksum.
-3. Builds and tests the pinned CommandBridge release with a temporary low-privilege account.
-4. Installs the application under `/opt/command-bridge-mcp-server`.
-5. Creates the dedicated `command-bridge` service account.
-6. Creates and enables `command-bridge-mcp-server.service`.
-7. Starts the service and verifies `GET /health`.
-
-Verify the installation:
-
-```bash
-sudo systemctl is-enabled command-bridge-mcp-server
-sudo systemctl status command-bridge-mcp-server --no-pager
-curl -fsS http://127.0.0.1:8800/health
-```
-
-Follow the service logs:
-
-```bash
-sudo journalctl -u command-bridge-mcp-server -f
-```
-
-Installed locations:
-
-| Purpose | Path |
-|---|---|
-| Application and private Node.js runtime | `/opt/command-bridge-mcp-server` |
-| Root-owned configuration | `/etc/command-bridge-mcp-server/command-bridge.env` |
-| Writable command workspace | `/var/lib/command-bridge-mcp-server/work` |
-| systemd unit | `/etc/systemd/system/command-bridge-mcp-server.service` |
-
-See the [Linux systemd installation guide](docs/linux-systemd.md) for prerequisites, review-first installation, uninstallation, remote access, upgrades, and rollback behavior.
-
-> [!NOTE]
-> Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package instead.
-
-## One-command uninstall
-
-The default uninstaller stops and disables the service, removes its systemd unit, and deletes the application and private Node.js runtime under `/opt`. It deliberately preserves the root-owned configuration, bearer token, work data, and low-privilege service identity so a future reinstall can reuse them.
-
-```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
-```
-
-Preview the exact actions without changing the host:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
-less command-bridge-uninstall.sh
-sudo bash command-bridge-uninstall.sh --dry-run
-```
-
-> [!CAUTION]
-> A full purge permanently deletes `/etc/command-bridge-mcp-server`, `/var/lib/command-bridge-mcp-server`, the bearer token, all CommandBridge work data, and the dedicated service account and group.
-
-```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
-```
-
-The uninstaller shares the installer's operation lock, checks the expected systemd unit and service identity before removal, and is safe to run again when resources are already absent.
-
-## Connect from Codex
-
-The Linux installer binds CommandBridge to `127.0.0.1` by default. A Codex client on another machine therefore needs a private route such as Tailscale, Cloudflare Tunnel, or an authenticated TLS reverse proxy.
-
-> [!WARNING]
-> Do not expose the built-in HTTP server directly to the public internet. It does not provide TLS.
-
-### 1. Read the generated token on Linux
-
-```bash
-sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "=") + 1) }' /etc/command-bridge-mcp-server/command-bridge.env
-```
-
-Store the token in an environment variable on the Codex client:
-
-```text
-COMMAND_BRIDGE_BEARER_TOKEN=<generated-token>
-```
-
-### 2. Add the server to Codex
-
-Add the following to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.command_bridge]
-enabled = true
-url = "https://command-bridge.example.com/mcp"
-bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"
-startup_timeout_sec = 20.0
-tool_timeout_sec = 60.0
-```
-
-Restart Codex, open `/mcp`, and confirm that `command_bridge` is connected.
-
-Try these prompts:
-
-```text
-Use command_bridge_get_system_info to show the Linux host policy.
-```
-
-```text
-Use command_bridge_run_command to run hostname on the Linux host.
-```
+Each deployed host runs one MCP endpoint. A future gateway mode is planned for managing multiple outbound-connected host agents.
 
 ## MCP tools
 
-### `command_bridge_get_system_info`
+| Tool | Purpose | Safety behavior |
+|---|---|---|
+| `command_bridge_get_system_info` | Returns host information and the effective CommandBridge policy. | Read-only and idempotent. |
+| `command_bridge_run_command` | Runs one command using the selected shell and working directory. | Enforces the configured policy; may change host state in `unrestricted` mode. |
 
-Returns operating-system information and the effective CommandBridge policy.
-
-Key output fields include:
-
-- Hostname, platform, release, and architecture
-- Uptime, CPU count, and memory
-- Execution mode
-- Allowed shells, commands, and working roots
-- Maximum parallel command count
-
-This tool is read-only and idempotent.
-
-### `command_bridge_run_command`
-
-Runs one command within the configured policy.
-
-| Input | Required | Description |
-|---|:---:|---|
-| `command` | Yes | Command text to execute |
-| `shell` | No | `bash`, `sh`, `powershell`, or `cmd` |
-| `cwd` | No | Working directory under an allowed root |
-| `timeoutMs` | No | Requested timeout in milliseconds |
-
-Example input:
+Example tool input:
 
 ```json
 {
@@ -235,34 +156,22 @@ Example input:
 }
 ```
 
-The response includes `ok`, `exitCode`, `stdout`, `stderr`, `durationMs`, `timedOut`, and `truncated`.
+Command results include `ok`, `exitCode`, `stdout`, `stderr`, `durationMs`, `timedOut`, and `truncated`.
 
-The tool is marked as potentially destructive because unrestricted commands can change host state.
+## Installation options
 
-## Supported environments
-
-| Environment | Support |
-|---|---|
-| Linux runtime | `bash`, `sh`, and optional PowerShell 7 through `pwsh` |
-| Windows runtime | Windows PowerShell and `cmd.exe` |
-| Manual installation | Node.js 20 or newer and npm |
-| Linux one-command installer | systemd, glibc, `x86_64` or `arm64`, Linux 4.18+ |
-| Alpine and musl Linux | Not currently supported by the systemd installer |
-
-The systemd installer also requires at least 400 MB free under `/opt` and outbound HTTPS access to GitHub, Node.js, and the npm registry.
-
-## Manual installation
-
-Clone and build the project:
+### Manual development installation
 
 ```bash
 git clone https://github.com/HsinPu/command-bridge-mcp-server.git
 cd command-bridge-mcp-server
 npm ci
 npm run build
+cp .env.example .env
+npm start
 ```
 
-On Windows PowerShell, use `npm.cmd` if the PowerShell execution policy blocks `npm.ps1`:
+On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`:
 
 ```powershell
 git clone https://github.com/HsinPu/command-bridge-mcp-server.git
@@ -271,54 +180,55 @@ npm.cmd ci
 npm.cmd run build
 ```
 
-Copy `.env.example` to `.env`, adjust the policy, and start the server:
+The default transport is `stdio`. To use Streamable HTTP, set `COMMAND_BRIDGE_TRANSPORT=http` and provide a bearer token with at least 32 characters.
+
+### Uninstall the Linux service
+
+The standard uninstall preserves the root-owned configuration, bearer token, work data, and low-privilege service account so a later reinstall can reuse them.
 
 ```bash
-cp .env.example .env
-npm start
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
 ```
 
-The default transport is stdio. Set `COMMAND_BRIDGE_TRANSPORT=http` and provide a bearer token of at least 32 characters to use Streamable HTTP.
+Preview its actions without changing the host:
 
-## Configuration
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
+less command-bridge-uninstall.sh
+sudo bash command-bridge-uninstall.sh --dry-run
+```
 
-CommandBridge reads configuration from environment variables and supports `.env` during manual development.
+> [!CAUTION]
+> A full purge permanently removes the configuration, bearer token, work data, and service identity.
 
-| Variable | Default | Description |
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+```
+
+## Configuration and execution policy
+
+CommandBridge reads environment variables and also supports `.env` during manual development. See [.env.example](.env.example) for a copyable template.
+
+| Variable | Default | Purpose |
 |---|---|---|
-| `COMMAND_BRIDGE_TRANSPORT` | `stdio` | `stdio` or `http` |
-| `COMMAND_BRIDGE_BEARER_TOKEN` | None | Required in HTTP mode; minimum 32 characters |
-| `COMMAND_BRIDGE_HTTP_HOST` | `127.0.0.1` | HTTP bind address |
-| `COMMAND_BRIDGE_HTTP_PORT` | `8800` | HTTP port |
-| `COMMAND_BRIDGE_ALLOWED_HOSTS` | None | Required Host header values for non-loopback binds |
-| `COMMAND_BRIDGE_EXECUTION_MODE` | `allowlist` | `allowlist` or `unrestricted` |
-| `COMMAND_BRIDGE_ALLOWED_SHELLS` | OS defaults | Comma-separated shell names |
-| `COMMAND_BRIDGE_ALLOWED_COMMANDS` | OS defaults | Comma-separated commands allowed in allowlist mode |
-| `COMMAND_BRIDGE_ALLOWED_ROOTS` | Startup directory | Working-directory roots separated by the OS path delimiter |
-| `COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS` | `15000` | Default command timeout |
-| `COMMAND_BRIDGE_MAX_TIMEOUT_MS` | `60000` | Maximum requested timeout |
-| `COMMAND_BRIDGE_MAX_OUTPUT_CHARS` | `50000` | Combined stdout and stderr limit |
-| `COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS` | `2` | Per-process concurrency limit |
-| `COMMAND_BRIDGE_PASSTHROUGH_ENV` | None | Additional environment variable names inherited by commands |
+| `COMMAND_BRIDGE_TRANSPORT` | `stdio` | Selects `stdio` or `http`. |
+| `COMMAND_BRIDGE_BEARER_TOKEN` | None | Required by HTTP mode; minimum 32 characters. |
+| `COMMAND_BRIDGE_HTTP_HOST` | `127.0.0.1` | HTTP bind address. |
+| `COMMAND_BRIDGE_HTTP_PORT` | `8800` | HTTP port. |
+| `COMMAND_BRIDGE_ALLOWED_HOSTS` | None | Required Host values for a non-loopback HTTP bind. |
+| `COMMAND_BRIDGE_EXECUTION_MODE` | `allowlist` | Selects `allowlist` or `unrestricted`. |
+| `COMMAND_BRIDGE_ALLOWED_SHELLS` | OS defaults | Comma-separated shell names. |
+| `COMMAND_BRIDGE_ALLOWED_COMMANDS` | OS defaults | Commands permitted in allowlist mode. |
+| `COMMAND_BRIDGE_ALLOWED_ROOTS` | Startup directory | Working-directory roots. |
+| `COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS` | `15000` | Default timeout. |
+| `COMMAND_BRIDGE_MAX_TIMEOUT_MS` | `60000` | Maximum requested timeout. |
+| `COMMAND_BRIDGE_MAX_OUTPUT_CHARS` | `50000` | Combined stdout and stderr limit. |
+| `COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS` | `2` | Per-process command concurrency. |
+| `COMMAND_BRIDGE_PASSTHROUGH_ENV` | None | Additional inherited environment variable names. |
 
-See [.env.example](.env.example) for a copyable configuration template.
+### Allowlist mode (default)
 
-## Execution policy
-
-### Allowlist mode
-
-Allowlist mode is the default:
-
-```dotenv
-COMMAND_BRIDGE_EXECUTION_MODE=allowlist
-```
-
-It:
-
-- Accepts one simple command at a time.
-- Rejects pipes, redirects, chaining, command substitution, and newlines.
-- Requires the first command name to appear in `COMMAND_BRIDGE_ALLOWED_COMMANDS`.
-- Enforces allowed shells, working roots, timeout, output, environment, and concurrency limits.
+Allowlist mode permits one simple configured command at a time. It rejects pipes, redirects, chaining, command substitution, and newlines. It also enforces shell, working-directory, timeout, output, environment, and concurrency limits.
 
 Default Linux commands:
 
@@ -340,55 +250,45 @@ COMMAND_BRIDGE_EXECUTION_MODE=unrestricted
 ```
 
 > [!CAUTION]
-> Unrestricted mode permits arbitrary shell syntax and can provide all permissions available to the operating-system account running CommandBridge. Use a dedicated low-privilege account, private networking, and human confirmation in the MCP client.
+> Unrestricted mode permits arbitrary shell syntax and receives every permission of the operating-system account running CommandBridge. Use a dedicated low-privilege account, private networking, and human confirmation in the MCP client.
 
-## Security
+## Supported environments
 
-Command execution is a sensitive capability. The application policy is only one layer of protection.
+| Environment | Support |
+|---|---|
+| Linux runtime | `bash`, `sh`, and optional PowerShell 7 through `pwsh` |
+| Windows runtime | Windows PowerShell and `cmd.exe` |
+| Manual installation | Node.js 20 or newer and npm |
+| Linux one-command installer | systemd, glibc, `x86_64` or `arm64`, Linux 4.18+ |
+| Alpine and musl Linux | Not supported by the systemd installer |
+
+The Linux installer needs at least 400 MB free under `/opt` and outbound HTTPS access to GitHub, Node.js, and the npm registry.
+
+## Security model
+
+Command execution is a sensitive capability. Application policy is only one layer of protection.
 
 - Keep `allowlist` mode unless unrestricted execution is explicitly required.
 - Run CommandBridge as a dedicated non-administrator account.
-- Use a unique bearer token for every host.
-- Keep HTTP access on a private network or behind authenticated TLS.
+- Use a unique bearer token for every host and rotate it if exposure is suspected.
+- Keep HTTP private or behind authenticated TLS.
 - Restrict allowed roots and inherited environment variables.
-- Never include passwords, API keys, or private keys in command arguments.
+- Never place passwords, API keys, or private keys in command arguments.
 - Do not add the Linux service account to `sudo`, `docker`, `adm`, or `systemd-journal`.
 
-`COMMAND_BRIDGE_ALLOWED_ROOTS` restricts the command working directory; it is not a complete filesystem sandbox. An allowed command can still name another path that the operating-system account can read.
+`COMMAND_BRIDGE_ALLOWED_ROOTS` restricts the working directory; it is not a complete filesystem sandbox. An allowed command can still name paths that the service account can read.
 
-Report vulnerabilities through a private [GitHub Security Advisory](https://github.com/HsinPu/command-bridge-mcp-server/security/advisories/new). Do not include secrets or host details in public issues.
-
-Read [SECURITY.md](SECURITY.md) before deploying outside a development environment.
+Report vulnerabilities through a private [GitHub Security Advisory](https://github.com/HsinPu/command-bridge-mcp-server/security/advisories/new). Do not include secrets, command output, or host details in public issues.
 
 ## Development
 
-Install dependencies:
-
 ```bash
 npm ci
-```
-
-Run the development server:
-
-```bash
 npm run dev
-```
-
-Build:
-
-```bash
-npm run build
-```
-
-Build and test:
-
-```bash
 npm test
 ```
 
-The test command compiles the TypeScript project and runs the command-policy, Linux installer, and uninstaller asset tests.
-
-Project layout:
+`npm test` compiles the TypeScript project, then runs command-policy, installer-asset, and uninstaller-asset tests.
 
 ```text
 src/
@@ -416,16 +316,17 @@ uninstall.sh         Safe Linux systemd uninstaller
 
 Issues and pull requests are welcome.
 
-1. Open an [issue](https://github.com/HsinPu/command-bridge-mcp-server/issues) for significant behavior or security-boundary changes.
+1. Open an [issue](https://github.com/HsinPu/command-bridge-mcp-server/issues) before a significant behavior or security-boundary change.
 2. Create a focused branch.
 3. Run `npm test`.
-4. Open a pull request with the motivation, behavior change, and verification evidence.
+4. Open a pull request that explains the motivation, behavior change, and verification evidence.
 
 Use a private [GitHub Security Advisory](https://github.com/HsinPu/command-bridge-mcp-server/security/advisories/new) for vulnerabilities.
 
----
+## Links
 
-- [Linux installation guide](docs/linux-systemd.md)
+- [Linux systemd installation guide](docs/linux-systemd.md)
 - [Security policy](SECURITY.md)
 - [GitHub Actions](https://github.com/HsinPu/command-bridge-mcp-server/actions)
+- [Issues](https://github.com/HsinPu/command-bridge-mcp-server/issues)
 - [Tags](https://github.com/HsinPu/command-bridge-mcp-server/tags)
