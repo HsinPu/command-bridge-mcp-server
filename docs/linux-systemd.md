@@ -10,22 +10,22 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 - systemd running as PID 1
 - At least 400 MB free under `/opt`
 - Outbound HTTPS access to `nodejs.org`, `github.com`, and the npm registry
-- Standard administration tools including `curl`, `tar`, `gzip`, `sha256sum`, `flock`, `useradd`, and `runuser`
+- Standard administration tools including `curl`, `tar`, `gzip`, `sha256sum`, `flock`, `useradd`, `userdel`, `groupdel`, `pgrep`, and `runuser`
 
 Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package there instead.
 
-## Install v0.2.0
+## Install v0.3.0
 
 One command:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
 ```
 
 For a review-first installation:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o command-bridge-install.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o command-bridge-install.sh
 less command-bridge-install.sh
 sudo bash command-bridge-install.sh
 ```
@@ -35,7 +35,7 @@ The installer performs these steps:
 1. Rejects non-Linux, non-systemd, musl, and unsupported CPU environments.
 2. Takes an installation lock so two upgrades cannot run at the same time.
 3. Downloads pinned Node.js 24.18.0 and verifies its official SHA-256 checksum.
-4. Downloads the pinned CommandBridge MCP v0.2.0 source.
+4. Downloads the pinned CommandBridge MCP v0.3.0 source.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
 7. Creates the low-privilege `command-bridge` service account and root-only environment file.
@@ -46,8 +46,8 @@ The installer performs these steps:
 
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v0.2.0
-├── releases/v0.2.0/
+├── current -> releases/v0.3.0
+├── releases/v0.3.0/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -110,6 +110,40 @@ sudo journalctl -u command-bridge-mcp-server -f
 curl -fsS http://127.0.0.1:8800/health
 ```
 
+## Uninstall
+
+The default one-command uninstall stops and disables the service, removes `/etc/systemd/system/command-bridge-mcp-server.service`, reloads systemd, and deletes `/opt/command-bridge-mcp-server`:
+
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+```
+
+It preserves these resources for a future reinstall:
+
+- `/etc/command-bridge-mcp-server`, including the bearer token
+- `/var/lib/command-bridge-mcp-server`, including all work data
+- The `command-bridge` account, group, and `/var/empty/command-bridge` home
+
+For review and a no-change preview:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
+less command-bridge-uninstall.sh
+sudo bash command-bridge-uninstall.sh --dry-run
+sudo bash command-bridge-uninstall.sh --yes
+```
+
+For a permanent full purge:
+
+> [!CAUTION]
+> This deletes the bearer token, configuration, all work data, and the dedicated service identity. The uninstaller refuses to delete an identity whose home, shell, group membership, or running processes do not match the expected low-privilege service account.
+
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+```
+
+Both modes use the same lock as the installer, accept only the fixed CommandBridge paths, verify that the service is inactive and disabled before deleting application files, and can be run repeatedly.
+
 ## Remote access
 
 The default endpoint listens only on loopback. Keep that setting when a same-host TLS reverse proxy, Cloudflare Tunnel, or Tailscale Serve forwards requests to CommandBridge.
@@ -133,7 +167,7 @@ If a future workflow needs one privileged operation, add a purpose-built helper 
 
 ## Reinstall and upgrade behavior
 
-Running the v0.2.0 installer again is idempotent: it reuses the pinned runtime and release, preserves configuration, reloads the unit, and rechecks service health.
+Running the v0.3.0 installer again is idempotent: it reuses the pinned runtime and release, preserves configuration, reloads the unit, and rechecks service health.
 
 Future versions will use their own versioned release directory. The installer records the current application and runtime symlinks before activation. If the new process cannot become active and pass `/health`, the symlinks are restored and the previous service is restarted.
 

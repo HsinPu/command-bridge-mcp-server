@@ -9,7 +9,7 @@ export function createCommandBridgeServer(
 ): McpServer {
   const server = new McpServer({
     name: "command-bridge-mcp-server",
-    version: "0.2.0"
+    version: "0.3.0"
   });
 
   registerCommandBridgeTools(server, config, executor);

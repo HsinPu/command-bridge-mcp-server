@@ -12,7 +12,7 @@
 CommandBridge MCP 讓 Codex 與其他 MCP 用戶端不需 SSH，即可檢查主機並執行受限制的指令。它支援本機 stdio 連線，以及使用 Bearer Token 驗證的 Streamable HTTP 私有遠端連線。
 
 > [!IMPORTANT]
-> CommandBridge MCP 目前仍是 pre-1.0 專案。`v0.2.0` 適合用於評估與受控環境。在重要主機上使用前，請先閱讀[安全政策](SECURITY.md)。
+> CommandBridge MCP 目前仍是 pre-1.0 專案。`v0.3.0` 適合用於評估與受控環境。在重要主機上使用前，請先閱讀[安全政策](SECURITY.md)。
 
 ## 目錄
 
@@ -20,6 +20,7 @@ CommandBridge MCP 讓 Codex 與其他 MCP 用戶端不需 SSH，即可檢查主�
 - [功能](#功能)
 - [架構](#架構)
 - [快速開始：Linux systemd](#快速開始linux-systemd)
+- [一鍵解除安裝](#一鍵解除安裝)
 - [從 Codex 連線](#從-codex-連線)
 - [MCP 工具](#mcp-工具)
 - [支援環境](#支援環境)
@@ -54,6 +55,7 @@ CommandBridge 專為無法使用 SSH、不希望使用 SSH，或 SSH 權限範�
 | 主機保護 | 限制 Shell、指令、工作目錄、逾時、輸出、環境變數與並行數量 |
 | Linux 部署 | 安裝至版本化的 `/opt` 目錄，並使用強化的 systemd 服務 |
 | 升級安全性 | 保留既有設定；健康檢查失敗時回復上一版本 |
+| 移除安全性 | 預設保留設定與資料；完整清除必須明確指定 |
 
 ## 架構
 
@@ -78,14 +80,14 @@ flowchart LR
     EXECUTOR --> HOST
 ```
 
-`v0.2.0` 會在每一台主機上執行一個 MCP Endpoint。未來規劃加入中央 Gateway 模式，管理主動向外連線的多台主機 Agent。
+`v0.3.0` 會在每一台主機上執行一個 MCP Endpoint。未來規劃加入中央 Gateway 模式，管理主動向外連線的多台主機 Agent。
 
 ## 快速開始：Linux systemd
 
 一鍵安裝器支援使用 systemd、以 glibc 為基礎的常見 Linux 發行版，CPU 架構可為 `x86_64` 或 `arm64`。
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
 ```
 
 安裝器會：
@@ -121,10 +123,35 @@ sudo journalctl -u command-bridge-mcp-server -f
 | 可寫入的指令工作目錄 | `/var/lib/command-bridge-mcp-server/work` |
 | systemd Unit | `/etc/systemd/system/command-bridge-mcp-server.service` |
 
-完整的前置需求、安裝前檢查、遠端存取、升級與回復方式，請參考 [Linux systemd 安裝指南](docs/linux-systemd.md)。
+完整的前置需求、安裝前檢查、解除安裝、遠端存取、升級與回復方式，請參考 [Linux systemd 安裝指南](docs/linux-systemd.md)。
 
 > [!NOTE]
 > Synology DSM 不是 systemd 主機，請改用 Container Manager 或 DSM 專用套件。
+
+## 一鍵解除安裝
+
+預設解除安裝器會停止並停用服務、移除 systemd Unit，以及刪除 `/opt` 下的應用程式與私有 Node.js Runtime。它會刻意保留 root 擁有的設定、Bearer Token、工作資料與低權限服務帳號，讓日後重新安裝時可以沿用。
+
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+```
+
+先查看腳本並預覽所有動作，不變更主機：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
+less command-bridge-uninstall.sh
+sudo bash command-bridge-uninstall.sh --dry-run
+```
+
+> [!CAUTION]
+> 完整清除會永久刪除 `/etc/command-bridge-mcp-server`、`/var/lib/command-bridge-mcp-server`、Bearer Token、所有 CommandBridge 工作資料，以及專用服務帳號與群組。
+
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+```
+
+解除安裝器會與安裝器共用操作鎖，在刪除前檢查預期的 systemd Unit 與服務帳號；即使資源已經不存在，也可以再次執行。
 
 ## 從 Codex 連線
 
@@ -359,7 +386,7 @@ npm run build
 npm test
 ```
 
-測試指令會編譯 TypeScript 專案，然後執行指令政策與 Linux 安裝器資產測試。
+測試指令會編譯 TypeScript 專案，然後執行指令政策、Linux 安裝器與解除安裝器資產測試。
 
 專案結構：
 
@@ -372,6 +399,7 @@ src/
 docs/                部署文件
 packaging/systemd/   強化的 Linux systemd Unit
 install.sh           鎖定版本的 Linux 安裝器
+uninstall.sh         安全的 Linux systemd 解除安裝器
 ```
 
 ## 開發藍圖

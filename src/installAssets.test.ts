@@ -26,6 +26,16 @@ test("installer source ref matches the npm package version", () => {
   assert.equal(sourceRef, `v${packageJson.version}`);
 });
 
+test("MCP server version matches the npm package version", () => {
+  const packageJson = JSON.parse(
+    readFileSync(resolve(projectRoot, "package.json"), "utf8")
+  ) as { version: string };
+  const serverSource = readFileSync(resolve(projectRoot, "src/server.ts"), "utf8");
+  const serverVersion = /version: "([^"]+)"/.exec(serverSource)?.[1];
+
+  assert.equal(serverVersion, packageJson.version);
+});
+
 test("systemd unit uses the versioned application and runtime symlinks", () => {
   const unitText = unit.toString("utf8");
 

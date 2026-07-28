@@ -17,7 +17,7 @@ readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly STATE_DIR="/var/lib/command-bridge-mcp-server"
 readonly WORK_DIR_PATH="${STATE_DIR}/work"
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
-readonly SOURCE_REF="v0.2.0"
+readonly SOURCE_REF="v0.3.0"
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
 readonly SOURCE_ARCHIVE_URL="https://github.com/HsinPu/command-bridge-mcp-server/archive/refs/tags/${SOURCE_REF}.tar.gz"
@@ -276,7 +276,8 @@ build_source() {
       PATH="${node_root}/bin:/usr/bin:/bin" \
       "${node_root}/bin/node" --test \
         "${source_dir}/dist/services/commandPolicy.test.js" \
-        "${source_dir}/dist/installAssets.test.js"
+        "${source_dir}/dist/installAssets.test.js" \
+        "${source_dir}/dist/uninstallAssets.test.js"
 
     runuser -u "${BUILD_USER}" -- env -i \
       HOME="${build_home}" \

@@ -12,7 +12,7 @@
 CommandBridge MCP lets Codex and other MCP clients inspect a host and run bounded commands without requiring SSH. It supports local stdio connections and authenticated Streamable HTTP connections for private remote access.
 
 > [!IMPORTANT]
-> CommandBridge MCP is currently pre-1.0. Version `v0.2.0` is suitable for evaluation and controlled environments. Review the [security policy](SECURITY.md) before using it on an important host.
+> CommandBridge MCP is currently pre-1.0. Version `v0.3.0` is suitable for evaluation and controlled environments. Review the [security policy](SECURITY.md) before using it on an important host.
 
 ## Table of contents
 
@@ -20,6 +20,7 @@ CommandBridge MCP lets Codex and other MCP clients inspect a host and run bounde
 - [Features](#features)
 - [Architecture](#architecture)
 - [Quick start: Linux systemd](#quick-start-linux-systemd)
+- [One-command uninstall](#one-command-uninstall)
 - [Connect from Codex](#connect-from-codex)
 - [MCP tools](#mcp-tools)
 - [Supported environments](#supported-environments)
@@ -54,6 +55,7 @@ CommandBridge is designed for hosts where SSH is unavailable, undesirable, or to
 | Host protection | Shell, command, working-directory, timeout, output, environment, and concurrency limits |
 | Linux deployment | Versioned `/opt` installation with a hardened systemd service |
 | Upgrade safety | Existing configuration is preserved and failed health checks trigger rollback |
+| Removal safety | Default uninstall preserves configuration and data; full purge is explicit |
 
 ## Architecture
 
@@ -78,14 +80,14 @@ flowchart LR
     EXECUTOR --> HOST
 ```
 
-Version `v0.2.0` runs one MCP endpoint per host. A future gateway mode is planned for managing multiple outbound-connected host agents.
+Version `v0.3.0` runs one MCP endpoint per host. A future gateway mode is planned for managing multiple outbound-connected host agents.
 
 ## Quick start: Linux systemd
 
 The one-command installer supports regular glibc-based Linux distributions using systemd on `x86_64` or `arm64`.
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.2.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" && rm -f "${installer}"
 ```
 
 The installer:
@@ -121,10 +123,35 @@ Installed locations:
 | Writable command workspace | `/var/lib/command-bridge-mcp-server/work` |
 | systemd unit | `/etc/systemd/system/command-bridge-mcp-server.service` |
 
-See the [Linux systemd installation guide](docs/linux-systemd.md) for prerequisites, review-first installation, remote access, upgrades, and rollback behavior.
+See the [Linux systemd installation guide](docs/linux-systemd.md) for prerequisites, review-first installation, uninstallation, remote access, upgrades, and rollback behavior.
 
 > [!NOTE]
 > Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package instead.
+
+## One-command uninstall
+
+The default uninstaller stops and disables the service, removes its systemd unit, and deletes the application and private Node.js runtime under `/opt`. It deliberately preserves the root-owned configuration, bearer token, work data, and low-privilege service identity so a future reinstall can reuse them.
+
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+```
+
+Preview the exact actions without changing the host:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
+less command-bridge-uninstall.sh
+sudo bash command-bridge-uninstall.sh --dry-run
+```
+
+> [!CAUTION]
+> A full purge permanently deletes `/etc/command-bridge-mcp-server`, `/var/lib/command-bridge-mcp-server`, the bearer token, all CommandBridge work data, and the dedicated service account and group.
+
+```bash
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+```
+
+The uninstaller shares the installer's operation lock, checks the expected systemd unit and service identity before removal, and is safe to run again when resources are already absent.
 
 ## Connect from Codex
 
@@ -359,7 +386,7 @@ Build and test:
 npm test
 ```
 
-The test command compiles the TypeScript project and runs the command-policy and Linux installer asset tests.
+The test command compiles the TypeScript project and runs the command-policy, Linux installer, and uninstaller asset tests.
 
 Project layout:
 
@@ -372,6 +399,7 @@ src/
 docs/                Deployment documentation
 packaging/systemd/   Hardened Linux systemd unit
 install.sh           Version-pinned Linux installer
+uninstall.sh         Safe Linux systemd uninstaller
 ```
 
 ## Roadmap

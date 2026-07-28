@@ -33,9 +33,9 @@ jobs:
       - name: Build and test
         run: npm test
 
-      - name: Check installer syntax
+      - name: Check Linux script syntax
         if: runner.os == 'Linux'
-        run: bash -n install.sh
+        run: bash -n install.sh uninstall.sh
 
       - name: Prepare systemd verification paths
         if: runner.os == 'Linux'
