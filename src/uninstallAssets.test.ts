@@ -4,8 +4,14 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 const projectRoot = process.cwd();
-const installer = readFileSync(resolve(projectRoot, "install.sh"), "utf8");
-const uninstaller = readFileSync(resolve(projectRoot, "uninstall.sh"), "utf8");
+const installer = readFileSync(
+  resolve(projectRoot, "scripts/linux-systemd/install.sh"),
+  "utf8"
+);
+const uninstaller = readFileSync(
+  resolve(projectRoot, "scripts/linux-systemd/uninstall.sh"),
+  "utf8"
+);
 const packageJson = JSON.parse(
   readFileSync(resolve(projectRoot, "package.json"), "utf8")
 ) as {
@@ -110,7 +116,7 @@ test("release documentation pins uninstall commands to the package version", () 
     assert.match(
       document,
       new RegExp(
-        `https://raw\\.githubusercontent\\.com/HsinPu/command-bridge-mcp-server/v${packageJson.version}/uninstall\\.sh`
+        `https://raw\\.githubusercontent\\.com/HsinPu/command-bridge-mcp-server/v${packageJson.version}/scripts/linux-systemd/uninstall\\.sh`
       )
     );
     assert.match(document, /--purge --yes/);
@@ -119,5 +125,8 @@ test("release documentation pins uninstall commands to the package version", () 
 
 test("test and CI commands include the uninstall assets", () => {
   assert.match(packageJson.scripts.test, /dist\/uninstallAssets\.test\.js/);
-  assert.match(ciWorkflow, /bash -n install\.sh uninstall\.sh/);
+  assert.match(
+    ciWorkflow,
+    /bash -n scripts\/linux-systemd\/install\.sh scripts\/linux-systemd\/uninstall\.sh/
+  );
 });

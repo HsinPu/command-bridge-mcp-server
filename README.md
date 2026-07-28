@@ -49,7 +49,7 @@ It supports local `stdio` connections and private Streamable HTTP connections wi
 The one-command installer supports common glibc-based Linux distributions that use systemd on `x86_64` or `arm64`.
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
 ```
 
 The installer asks for the private HTTPS MCP URL that Codex will use. After the service passes its health check, it prints a marked setup block that can be copied into a trusted Codex task.
@@ -57,7 +57,7 @@ The installer asks for the private HTTPS MCP URL that Codex will use. After the 
 If the private route is already known, avoid the interactive prompt:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
 ```
 
 > [!CAUTION]
@@ -187,13 +187,13 @@ The default transport is `stdio`. To use Streamable HTTP, set `COMMAND_BRIDGE_TR
 The standard uninstall preserves the root-owned configuration, bearer token, work data, and low-privilege service account so a later reinstall can reuse them.
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
 ```
 
 Preview its actions without changing the host:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o command-bridge-uninstall.sh
 less command-bridge-uninstall.sh
 sudo bash command-bridge-uninstall.sh --dry-run
 ```
@@ -202,7 +202,7 @@ sudo bash command-bridge-uninstall.sh --dry-run
 > A full purge permanently removes the configuration, bearer token, work data, and service identity.
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
 ```
 
 ## Configuration and execution policy
@@ -297,9 +297,10 @@ src/
 ├── tools/           MCP tool registration
 └── transport/       Streamable HTTP transport
 docs/                Deployment documentation
-packaging/systemd/   Hardened Linux systemd unit
-install.sh           Version-pinned Linux installer
-uninstall.sh         Safe Linux systemd uninstaller
+packaging/systemd/             Hardened Linux systemd unit
+scripts/linux-systemd/
+├── install.sh                 Version-pinned Linux installer
+└── uninstall.sh               Safe Linux systemd uninstaller
 ```
 
 ## Roadmap

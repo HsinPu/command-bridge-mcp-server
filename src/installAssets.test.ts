@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 const projectRoot = process.cwd();
-const installer = readFileSync(resolve(projectRoot, "install.sh"), "utf8");
+const installer = readFileSync(
+  resolve(projectRoot, "scripts/linux-systemd/install.sh"),
+  "utf8"
+);
 const unit = readFileSync(
   resolve(projectRoot, "packaging/systemd/command-bridge-mcp-server.service")
 );
@@ -29,6 +32,18 @@ test("installer source ref matches the npm package version", () => {
   const sourceRef = /readonly SOURCE_REF="([^"]+)"/.exec(installer)?.[1];
 
   assert.equal(sourceRef, `v${packageJson.version}`);
+});
+
+test("nested installer can locate a checked-out project root", () => {
+  assert.match(
+    installer,
+    /for candidate in "\$\{script_dir\}" "\$\{script_dir\}\/\.\.\/\.\."; do/
+  );
+  assert.match(
+    installer,
+    /if \[\[ -f "\$\{candidate\}\/package\.json" && -d "\$\{candidate\}\/src" \]\]; then/
+  );
+  assert.match(installer, /if \[\[ "\$\{BASH_SOURCE\[0\]\}" == "\$0" \]\]; then/);
 });
 
 test("MCP server version matches the npm package version", () => {

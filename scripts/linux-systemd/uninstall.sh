@@ -34,7 +34,7 @@ fail() {
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo bash uninstall.sh [options]' \
+    'Usage: sudo bash scripts/linux-systemd/uninstall.sh [options]' \
     '' \
     'Remove CommandBridge MCP from a systemd-based Linux host.' \
     '' \
@@ -91,7 +91,7 @@ require_command() {
 
 require_root_systemd_linux() {
   [[ "${EUID}" -eq 0 ]] || \
-    fail "Run this uninstaller as root, for example: sudo bash uninstall.sh"
+    fail "Run this uninstaller as root, for example: sudo bash scripts/linux-systemd/uninstall.sh"
   [[ "$(uname -s)" == "Linux" ]] || fail "This uninstaller supports Linux only."
 
   require_command systemctl

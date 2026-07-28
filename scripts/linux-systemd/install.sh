@@ -45,7 +45,7 @@ log() {
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo bash install.sh [options]' \
+    'Usage: sudo bash scripts/linux-systemd/install.sh [options]' \
     '' \
     'Options:' \
     '  --print-codex-setup       Print a copy-ready Codex setup block after installation.' \
@@ -199,7 +199,7 @@ require_command() {
 }
 
 require_root_systemd_linux() {
-  [[ "${EUID}" -eq 0 ]] || fail "Run this installer as root, for example: sudo bash install.sh"
+  [[ "${EUID}" -eq 0 ]] || fail "Run this installer as root, for example: sudo bash scripts/linux-systemd/install.sh"
   [[ "$(uname -s)" == "Linux" ]] || fail "This installer supports Linux only."
 
   require_command systemctl
@@ -234,12 +234,20 @@ download_https() {
 
 find_local_source() {
   local script_path=${BASH_SOURCE[0]:-}
-  local script_dir
+  local script_dir candidate
 
   [[ -n "${script_path}" && -f "${script_path}" ]] || return 1
   script_dir=$(cd "$(dirname "${script_path}")" && pwd -P)
-  [[ -f "${script_dir}/package.json" && -d "${script_dir}/src" ]] || return 1
-  printf '%s\n' "${script_dir}"
+
+  for candidate in "${script_dir}" "${script_dir}/../.."; do
+    candidate=$(cd "${candidate}" 2>/dev/null && pwd -P) || continue
+    if [[ -f "${candidate}/package.json" && -d "${candidate}/src" ]]; then
+      printf '%s\n' "${candidate}"
+      return
+    fi
+  done
+
+  return 1
 }
 
 prepare_node_runtime() {
@@ -752,4 +760,6 @@ main() {
   print_codex_setup
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

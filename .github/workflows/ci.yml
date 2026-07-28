@@ -35,7 +35,7 @@ jobs:
 
       - name: Check Linux script syntax
         if: runner.os == 'Linux'
-        run: bash -n install.sh uninstall.sh
+        run: bash -n scripts/linux-systemd/install.sh scripts/linux-systemd/uninstall.sh
 
       - name: Prepare systemd verification paths
         if: runner.os == 'Linux'

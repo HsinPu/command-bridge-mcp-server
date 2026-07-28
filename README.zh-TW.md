@@ -49,7 +49,7 @@ CommandBridge 是一個跨平台的 [Model Context Protocol](https://modelcontex
 一鍵安裝器支援常見、使用 systemd 的 glibc Linux 發行版，以及 `x86_64` 或 `arm64` CPU 架構。
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
 ```
 
 安裝器會詢問 Codex 要使用的私人 HTTPS MCP 網址。服務通過健康檢查後，會印出一段有明確標記的設定區塊，可直接複製到受信任的 Codex 工作中。
@@ -57,7 +57,7 @@ installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/com
 若已知道私人路由網址，可略過互動式詢問：
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
 ```
 
 > [!CAUTION]
@@ -187,13 +187,13 @@ npm.cmd run build
 標準解除安裝會保留 root 擁有的設定、Bearer Token、工作資料與低權限服務帳號，讓後續重新安裝可以沿用。
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
 ```
 
 不變更主機、只預覽操作：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o command-bridge-uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o command-bridge-uninstall.sh
 less command-bridge-uninstall.sh
 sudo bash command-bridge-uninstall.sh --dry-run
 ```
@@ -202,7 +202,7 @@ sudo bash command-bridge-uninstall.sh --dry-run
 > 完整清除會永久刪除設定、Bearer Token、工作資料與服務帳號。
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
 ```
 
 ## 設定與執行政策
@@ -297,9 +297,10 @@ src/
 ├── tools/           MCP 工具註冊
 └── transport/       Streamable HTTP 傳輸
 docs/                部署文件
-packaging/systemd/   強化的 Linux systemd Unit
-install.sh           版本固定的 Linux 安裝器
-uninstall.sh         安全的 Linux systemd 解除安裝器
+packaging/systemd/             強化的 Linux systemd Unit
+scripts/linux-systemd/
+├── install.sh                 版本固定的 Linux 安裝器
+└── uninstall.sh               安全的 Linux systemd 解除安裝器
 ```
 
 ## 開發藍圖
