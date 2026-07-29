@@ -16,12 +16,16 @@ readonly CONFIG_FILE="${CONFIG_DIR}/command-bridge.env"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly STATE_DIR="/var/lib/command-bridge-mcp-server"
 readonly WORK_DIR_PATH="${STATE_DIR}/work"
+readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
+readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
+readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
 readonly SOURCE_REF="v0.3.0"
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
 readonly SOURCE_ARCHIVE_URL="https://github.com/HsinPu/command-bridge-mcp-server/archive/refs/tags/${SOURCE_REF}.tar.gz"
-readonly SYSTEMD_UNIT_SHA256="d47ff15aaee7b283e6297854499990c750e21e52f39aa7a48b85d8a1b1509de9"
+readonly SYSTEMD_UNIT_SHA256="39faaea6008bbabcba0c6133a1936cc34273f91df0e1cb5c1da43c1ab0a46014"
+readonly AUDIT_READER_SHA256="3c5542591db8ffe3a75f14448d3c57be0f4f8a0d85ac68a355ae59906536acf7"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 readonly CODEX_SETUP_URL_PLACEHOLDER="https://REPLACE_WITH_PRIVATE_HOSTNAME/mcp"
@@ -33,6 +37,12 @@ ACTIVATION_STARTED=0
 ROLLBACK_IN_PROGRESS=0
 PREVIOUS_UNIT_BACKUP=""
 UNIT_WAS_PRESENT=0
+PREVIOUS_AUDIT_READER_BACKUP=""
+AUDIT_READER_WAS_PRESENT=0
+PREVIOUS_AUDIT_SUDOERS_BACKUP=""
+AUDIT_SUDOERS_WAS_PRESENT=0
+AUDIT_READER_DIR_WAS_PRESENT=0
+AUDIT_ACCESS_INSTALLED=0
 BUILD_UID=""
 BUILD_ACCOUNT_ACTIVE=0
 BUILT_PACKAGE_VERSION=""
@@ -203,6 +213,10 @@ require_root_systemd_linux() {
   [[ "$(uname -s)" == "Linux" ]] || fail "This installer supports Linux only."
 
   require_command systemctl
+  require_command visudo
+  [[ -x /usr/bin/sudo ]] || fail "Expected sudo at /usr/bin/sudo for the fixed audit reader."
+  [[ -x /usr/bin/journalctl ]] || \
+    fail "Expected journalctl at /usr/bin/journalctl for the fixed audit reader."
   [[ -d /run/systemd/system ]] || fail "systemd is not running as PID 1 on this host."
 
   if ldd --version 2>&1 | grep -qi musl; then
@@ -281,7 +295,7 @@ prepare_node_runtime() {
 prepare_source() {
   local source_dir="${TEMP_DIR}/source"
   local local_source=""
-  local unit_hash
+  local unit_hash audit_reader_hash
 
   install -d -m 0755 "${source_dir}"
 
@@ -306,14 +320,22 @@ prepare_source() {
   [[ -f "${source_dir}/src/index.ts" ]] || fail "Downloaded source is missing src/index.ts."
   [[ -f "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" ]] || \
     fail "Downloaded source is missing the systemd unit."
+  [[ -f "${source_dir}/packaging/linux/audit-reader" ]] || \
+    fail "Downloaded source is missing the audit reader."
 
   unit_hash=$(sha256sum "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" | awk '{ print $1 }')
   [[ "${unit_hash}" == "${SYSTEMD_UNIT_SHA256}" ]] || \
     fail "The systemd unit does not match the installer-pinned SHA-256 digest."
+  audit_reader_hash=$(sha256sum "${source_dir}/packaging/linux/audit-reader" | awk '{ print $1 }')
+  [[ "${audit_reader_hash}" == "${AUDIT_READER_SHA256}" ]] || \
+    fail "The audit reader does not match the installer-pinned SHA-256 digest."
 
   install -m 0600 \
     "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" \
     "${TEMP_DIR}/${SERVICE_NAME}.service"
+  install -m 0755 \
+    "${source_dir}/packaging/linux/audit-reader" \
+    "${TEMP_DIR}/audit-reader"
 }
 
 build_source() {
@@ -353,6 +375,9 @@ build_source() {
       PATH="${node_root}/bin:/usr/bin:/bin" \
       "${node_root}/bin/node" --test \
         "${source_dir}/dist/services/commandPolicy.test.js" \
+        "${source_dir}/dist/services/auditLog.test.js" \
+        "${source_dir}/dist/services/commandExecutor.test.js" \
+        "${source_dir}/dist/tools/commandBridgeTools.test.js" \
         "${source_dir}/dist/installAssets.test.js" \
         "${source_dir}/dist/uninstallAssets.test.js"
 
@@ -411,6 +436,77 @@ ensure_service_account() {
   install -d -m 0555 -o root -g root "${SERVICE_HOME}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${STATE_DIR}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${WORK_DIR_PATH}"
+}
+
+backup_audit_access() {
+  if [[ -e "${AUDIT_READER_DIR}" || -L "${AUDIT_READER_DIR}" ]]; then
+    [[ -d "${AUDIT_READER_DIR}" && ! -L "${AUDIT_READER_DIR}" ]] || \
+      fail "Audit reader directory is not a regular directory: ${AUDIT_READER_DIR}"
+    AUDIT_READER_DIR_WAS_PRESENT=1
+  fi
+
+  if [[ -e "${AUDIT_READER_PATH}" || -L "${AUDIT_READER_PATH}" ]]; then
+    [[ -f "${AUDIT_READER_PATH}" && ! -L "${AUDIT_READER_PATH}" ]] || \
+      fail "Existing audit reader is not a regular file."
+    PREVIOUS_AUDIT_READER_BACKUP="${TEMP_DIR}/previous-audit-reader"
+    install -m 0600 "${AUDIT_READER_PATH}" "${PREVIOUS_AUDIT_READER_BACKUP}"
+    AUDIT_READER_WAS_PRESENT=1
+  fi
+
+  if [[ -e "${AUDIT_SUDOERS_FILE}" || -L "${AUDIT_SUDOERS_FILE}" ]]; then
+    [[ -f "${AUDIT_SUDOERS_FILE}" && ! -L "${AUDIT_SUDOERS_FILE}" ]] || \
+      fail "Existing audit sudoers entry is not a regular file."
+    PREVIOUS_AUDIT_SUDOERS_BACKUP="${TEMP_DIR}/previous-audit-reader.sudoers"
+    install -m 0600 "${AUDIT_SUDOERS_FILE}" "${PREVIOUS_AUDIT_SUDOERS_BACKUP}"
+    AUDIT_SUDOERS_WAS_PRESENT=1
+  fi
+}
+
+install_audit_access() {
+  local sudoers_staging
+
+  backup_audit_access
+  AUDIT_ACCESS_INSTALLED=1
+  install -d -m 0755 -o root -g root "${AUDIT_READER_DIR}"
+  install -m 0755 -o root -g root "${TEMP_DIR}/audit-reader" "${AUDIT_READER_PATH}"
+
+  sudoers_staging="${TEMP_DIR}/audit-reader.sudoers"
+  printf '%s ALL=(root) NOPASSWD: %s ""\n' \
+    "${SERVICE_USER}" "${AUDIT_READER_PATH}" > "${sudoers_staging}"
+  chmod 0440 "${sudoers_staging}"
+  visudo -cf "${sudoers_staging}" >/dev/null
+  install -m 0440 -o root -g root "${sudoers_staging}" "${AUDIT_SUDOERS_FILE}"
+  visudo -cf "${AUDIT_SUDOERS_FILE}" >/dev/null
+
+  [[ "$(stat -c '%U:%G:%a' "${AUDIT_READER_PATH}")" == "root:root:755" ]] || \
+    fail "Audit reader ownership or mode verification failed."
+  [[ "$(stat -c '%U:%G:%a' "${AUDIT_SUDOERS_FILE}")" == "root:root:440" ]] || \
+    fail "Audit sudoers ownership or mode verification failed."
+
+  runuser -u "${SERVICE_USER}" -- /usr/bin/sudo -n "${AUDIT_READER_PATH}" >/dev/null
+}
+
+rollback_audit_access() {
+  [[ "${AUDIT_ACCESS_INSTALLED}" == "1" ]] || return
+
+  if [[ "${AUDIT_SUDOERS_WAS_PRESENT}" == "1" && -f "${PREVIOUS_AUDIT_SUDOERS_BACKUP}" ]]; then
+    install -m 0440 -o root -g root \
+      "${PREVIOUS_AUDIT_SUDOERS_BACKUP}" "${AUDIT_SUDOERS_FILE}" || true
+  else
+    rm -f -- "${AUDIT_SUDOERS_FILE}" || true
+  fi
+
+  if [[ "${AUDIT_READER_WAS_PRESENT}" == "1" && -f "${PREVIOUS_AUDIT_READER_BACKUP}" ]]; then
+    install -m 0755 -o root -g root \
+      "${PREVIOUS_AUDIT_READER_BACKUP}" "${AUDIT_READER_PATH}" || true
+  else
+    rm -f -- "${AUDIT_READER_PATH}" || true
+  fi
+
+  if [[ "${AUDIT_READER_DIR_WAS_PRESENT}" == "0" ]]; then
+    rmdir "${AUDIT_READER_DIR}" >/dev/null 2>&1 || true
+  fi
+  AUDIT_ACCESS_INSTALLED=0
 }
 
 install_runtime_and_release() {
@@ -581,6 +677,7 @@ rollback_activation() {
   ROLLBACK_IN_PROGRESS=1
   log "Rolling back the activated release..."
 
+  rollback_audit_access
   if [[ -z "${PREVIOUS_RELEASE}" ]]; then
     systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
   fi
@@ -728,8 +825,8 @@ main() {
   require_root_systemd_linux
   for command_name in \
     awk chown chmod cp curl df env flock getent grep groupadd groupdel gzip id install \
-    ldd ln mktemp mv od pgrep pkill readlink runuser sha256sum sleep tar tr uname \
-    unlink useradd userdel; do
+    journalctl ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
+    tr uname unlink useradd userdel visudo; do
     require_command "${command_name}"
   done
 
@@ -755,6 +852,7 @@ main() {
   ensure_service_account
   install_runtime_and_release "${node_arch}"
   install_configuration
+  install_audit_access
   install_and_start_service
   print_summary
   print_codex_setup

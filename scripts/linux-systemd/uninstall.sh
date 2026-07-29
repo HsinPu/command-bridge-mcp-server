@@ -11,6 +11,9 @@ readonly INSTALL_ROOT="/opt/command-bridge-mcp-server"
 readonly CONFIG_DIR="/etc/command-bridge-mcp-server"
 readonly STATE_DIR="/var/lib/command-bridge-mcp-server"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
+readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
+readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
 readonly LOCK_FILE="${LOCK_DIR}/install.lock"
 
@@ -126,6 +129,8 @@ print_plan() {
   log "Planned removal:"
   printf '  Service and unit: %s.service\n' "${SERVICE_NAME}"
   printf '  Application: %s\n' "${INSTALL_ROOT}"
+  printf '  Audit reader: %s\n' "${AUDIT_READER_PATH}"
+  printf '  Audit sudoers rule: %s\n' "${AUDIT_SUDOERS_FILE}"
 
   if [[ "${PURGE}" == "1" ]]; then
     printf '  Configuration: %s\n' "${CONFIG_DIR}"
@@ -258,6 +263,32 @@ stop_disable_and_remove_service() {
   fi
 }
 
+remove_audit_access() {
+  local path
+
+  for path in "${AUDIT_SUDOERS_FILE}" "${AUDIT_READER_PATH}"; do
+    if [[ -e "${path}" || -L "${path}" ]]; then
+      [[ -f "${path}" && ! -L "${path}" ]] || \
+        fail "Expected a regular audit access file at ${path}; inspect it manually."
+      run_command rm -f -- "${path}"
+    else
+      log "Already absent: ${path}"
+    fi
+  done
+
+  if [[ -e "${AUDIT_READER_DIR}" || -L "${AUDIT_READER_DIR}" ]]; then
+    [[ -d "${AUDIT_READER_DIR}" && ! -L "${AUDIT_READER_DIR}" ]] || \
+      fail "Expected a regular audit reader directory at ${AUDIT_READER_DIR}; inspect it manually."
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      run_command rmdir -- "${AUDIT_READER_DIR}"
+    elif rmdir -- "${AUDIT_READER_DIR}" >/dev/null 2>&1; then
+      log "Removed empty audit reader directory: ${AUDIT_READER_DIR}"
+    else
+      warn "Kept non-empty audit reader directory: ${AUDIT_READER_DIR}"
+    fi
+  fi
+}
+
 validate_service_identity_for_purge() {
   local account_entry account_name account_uid account_gid account_home account_shell
   local primary_group all_groups group_entry group_name group_gid group_members member
@@ -349,6 +380,7 @@ print_summary() {
   printf '\n'
   printf '  Removed service: %s.service\n' "${SERVICE_NAME}"
   printf '  Removed application: %s\n' "${INSTALL_ROOT}"
+  printf '  Removed audit reader and restricted sudoers rule\n'
 
   if [[ "${PURGE}" == "1" ]]; then
     printf '  Purged configuration: %s\n' "${CONFIG_DIR}"
@@ -373,7 +405,7 @@ main() {
   fi
 
   require_root_systemd_linux
-  for command_name in chmod flock install rm systemctl uname; do
+  for command_name in chmod flock install rm rmdir systemctl uname; do
     require_command "${command_name}"
   done
   if [[ "${PURGE}" == "1" ]]; then
@@ -394,6 +426,7 @@ main() {
   fi
 
   stop_disable_and_remove_service
+  remove_audit_access
   if [[ "${PURGE}" == "1" ]]; then
     validate_service_identity_for_purge
   fi

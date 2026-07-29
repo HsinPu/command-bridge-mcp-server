@@ -49,6 +49,36 @@ test("uninstaller is restricted to the installed CommandBridge resources", () =>
   assert.doesNotMatch(uninstaller, /\beval\b/);
 });
 
+test("uninstaller removes the restricted audit reader and sudoers entry", () => {
+  assert.match(
+    uninstaller,
+    /readonly AUDIT_READER_DIR="\/usr\/local\/libexec\/command-bridge-mcp-server"/
+  );
+  assert.match(
+    uninstaller,
+    /readonly AUDIT_READER_PATH="\$\{AUDIT_READER_DIR\}\/audit-reader"/
+  );
+  assert.match(
+    uninstaller,
+    /readonly AUDIT_SUDOERS_FILE="\/etc\/sudoers\.d\/command-bridge-mcp-server-audit-reader"/
+  );
+  assert.match(uninstaller, /remove_audit_access\(\)/);
+  assert.match(
+    uninstaller,
+    /for path in "\$\{AUDIT_SUDOERS_FILE\}" "\$\{AUDIT_READER_PATH\}"; do/
+  );
+  assert.match(uninstaller, /run_command rm -f -- "\$\{path\}"/);
+  assert.match(uninstaller, /rmdir -- "\$\{AUDIT_READER_DIR\}"/);
+
+  const main = uninstaller.slice(uninstaller.indexOf("main() {"));
+  const serviceRemovalIndex = main.indexOf("stop_disable_and_remove_service");
+  const auditRemovalIndex = main.indexOf("remove_audit_access");
+  const applicationRemovalIndex = main.indexOf('remove_tree "${INSTALL_ROOT}"');
+
+  assert.ok(serviceRemovalIndex < auditRemovalIndex);
+  assert.ok(auditRemovalIndex < applicationRemovalIndex);
+});
+
 test("default uninstall preserves configuration data and service identity", () => {
   assert.match(uninstaller, /^PURGE=0$/m);
   assert.match(
@@ -127,6 +157,7 @@ test("test and CI commands include the uninstall assets", () => {
   assert.match(packageJson.scripts.test, /dist\/uninstallAssets\.test\.js/);
   assert.match(
     ciWorkflow,
-    /bash -n scripts\/linux-systemd\/install\.sh scripts\/linux-systemd\/uninstall\.sh/
+    /bash -n scripts\/linux-systemd\/install\.sh scripts\/linux-systemd\/uninstall\.sh packaging\/linux\/audit-reader/
   );
+  assert.match(ciWorkflow, /Check Windows installer assets/);
 });

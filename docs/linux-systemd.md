@@ -11,6 +11,7 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 - At least 400 MB free under `/opt`
 - Outbound HTTPS access to `nodejs.org`, `github.com`, and the npm registry
 - Standard administration tools including `curl`, `tar`, `gzip`, `sha256sum`, `flock`, `useradd`, `userdel`, `groupdel`, `pgrep`, and `runuser`
+- <code>sudo</code>, <code>visudo</code>, <code>journalctl</code>, <code>stat</code>, and <code>rmdir</code> at their normal system paths; the fixed audit reader uses <code>/usr/bin/sudo</code> and <code>/usr/bin/journalctl</code>
 
 Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package there instead.
 
@@ -49,10 +50,11 @@ The installer performs these steps:
 4. Downloads the pinned CommandBridge MCP v0.3.0 source.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
-7. Creates the low-privilege `command-bridge` service account and root-only environment file.
-8. Enables and starts `command-bridge-mcp-server.service`.
-9. Checks `/health`; an upgrade switches back to the previous release if the check fails.
-10. When explicitly requested, prints the copy-ready Codex configuration block.
+7. Creates the low-privilege <code>command-bridge</code> service account and root-only environment file.
+8. Verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
+9. Enables and starts <code>command-bridge-mcp-server.service</code>.
+10. Checks <code>/health</code>; an upgrade switches back to the previous release and prior audit-reader assets if the check fails.
+11. When explicitly requested, prints the copy-ready Codex configuration block.
 
 ## Installed layout
 
@@ -75,6 +77,13 @@ The installer performs these steps:
 ```
 
 The application and Node.js runtime are owned by root. The service account can write only to its state directory and private temporary directory under the default systemd policy.
+
+The installer also creates these root-owned audit access assets:
+
+- <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that runs only <code>/usr/bin/journalctl --unit command-bridge-mcp-server.service --output=cat --grep='^{"schemaVersion":1,"event":"command_bridge.audit",' --lines=1000</code>, so it emits only CommandBridge Audit JSON rather than arbitrary service logs
+- <code>/etc/sudoers.d/command-bridge-mcp-server-audit-reader</code> (<code>root:root 0440</code>), which permits <code>command-bridge ALL=(root) NOPASSWD: /usr/local/libexec/command-bridge-mcp-server/audit-reader ""</code> and nothing else
+
+The service account is not added to <code>sudo</code> or <code>systemd-journal</code> groups.
 
 ## Default configuration
 
@@ -133,9 +142,26 @@ sudo journalctl -u command-bridge-mcp-server -f
 curl -fsS http://127.0.0.1:8800/health
 ```
 
+## Audit log
+
+For every <code>command_bridge_run_command</code> request, CommandBridge writes compact JSON to standard error before process start and after the terminal outcome. The systemd unit routes standard error to the service journal.
+
+Host administrators can inspect the records with:
+
+~~~bash
+sudo journalctl --unit command-bridge-mcp-server.service --output=json --no-pager --lines 1000
+sudo journalctl --unit command-bridge-mcp-server.service --no-pager --lines 100
+~~~
+
+Codex can call the read-only <code>command_bridge_list_audit_events</code> MCP tool with a <code>limit</code> from 1 through 100. The server invokes only the installed fixed reader through non-interactive sudo; it cannot pass journal units, query strings, paths, or other arguments from the MCP client.
+
+Each accepted event is redacted again before it is returned. Events contain audit ID, timestamp, phase, redacted command, shell, working directory, mode, source, exit code, duration, timeout/truncation, and error code. They never contain command output, bearer tokens, environment values, or raw secrets. The redactor cannot be disabled.
+
+Journald retention is a host policy. This installer does not change global journal retention. The log is operational evidence, not a signed, immutable, or tamper-evident audit ledger.
+
 ## Uninstall
 
-The default one-command uninstall stops and disables the service, removes `/etc/systemd/system/command-bridge-mcp-server.service`, reloads systemd, and deletes `/opt/command-bridge-mcp-server`:
+The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge-mcp-server.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge-mcp-server</code>:
 
 ```bash
 uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
@@ -182,7 +208,9 @@ Then restrict port 8800 with the host firewall and restart the service. `COMMAND
 
 ## Permission boundary
 
-The default service is a low-privilege diagnostic agent, not a root shell. Its account has no login shell, sudo access, Docker access, or supplementary groups. Commands such as `systemctl restart`, package installation, firewall changes, and arbitrary file modification are intentionally unavailable.
+The default service is a low-privilege diagnostic agent, not a root shell. Its account has no login shell, Docker access, or supplementary groups. It has one fixed no-argument sudoers permission solely for the root-owned audit reader; it has no generic sudo command access. Commands such as <code>systemctl restart</code>, package installation, firewall changes, and arbitrary file modification are intentionally unavailable.
+
+The controlled reader requires a sudo privilege transition, so the systemd unit cannot use <code>NoNewPrivileges=true</code> or <code>RestrictSUIDSGID=true</code>. Do not change that exception into broad sudo access or add the service account to privileged groups.
 
 `COMMAND_BRIDGE_ALLOWED_ROOTS` restricts the command working directory. It does not stop an allowed command from naming another readable path as an argument. The real boundary is the service account plus the systemd filesystem and capability restrictions.
 

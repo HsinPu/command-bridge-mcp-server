@@ -33,7 +33,11 @@ StateDirectory=command-bridge-mcp-server
 StateDirectoryMode=0750
 ReadWritePaths=/var/lib/command-bridge-mcp-server/work
 
-NoNewPrivileges=true
+# The only permitted privilege transition is the root-owned, no-argument audit
+# reader authorized by /etc/sudoers.d/command-bridge-mcp-server-audit-reader.
+# Keep the service account out of sudo and systemd-journal groups; do not grant
+# any other sudo command. NoNewPrivileges/RestrictSUIDSGID would block sudo.
+NoNewPrivileges=false
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
@@ -44,7 +48,6 @@ ProtectControlGroups=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectKernelLogs=true
-RestrictSUIDSGID=true
 RestrictRealtime=true
 RestrictNamespaces=true
 LockPersonality=true

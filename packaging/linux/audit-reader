@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -eu
+
+# This root-owned helper accepts no arguments. The service account can invoke
+# it only through one exact sudoers entry, and it emits only this service's
+# compact CommandBridge Audit JSON messages (not arbitrary service logs).
+exec /usr/bin/journalctl \
+  --no-pager \
+  --unit command-bridge-mcp-server.service \
+  --output=cat \
+  --lines=1000 \
+  --grep='^{"schemaVersion":1,"event":"command_bridge\.audit",'

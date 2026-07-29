@@ -19,4 +19,5 @@ After the GitHub repository is published, report vulnerabilities through a priva
 - Restrict working-directory roots and inherited environment variables.
 - Never pass passwords, API keys, or private keys as command arguments.
 - Treat <code>COMMAND_BRIDGE_ALLOWED_ROOTS</code> as a working-directory restriction, not a filesystem sandbox; command arguments can still name other paths that the service account can read.
-- Do not add the service account to <code>sudo</code>, <code>docker</code>, <code>adm</code>, or <code>systemd-journal</code> groups. Add narrowly scoped privileged helpers later if a specific administrative action is required.
+- Do not add the service account to <code>sudo</code>, <code>docker</code>, <code>adm</code>, or <code>systemd-journal</code> groups. On Linux, the installer creates one exact no-argument sudoers rule only for the root-owned audit reader; do not expand, reuse, or replace it with generic sudo access.
+- The Linux audit reader needs that controlled sudo transition, so the service unit deliberately does not use <code>NoNewPrivileges=true</code> or <code>RestrictSUIDSGID=true</code>. This exception must remain limited to the fixed reader.

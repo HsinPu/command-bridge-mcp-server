@@ -35,7 +35,29 @@ jobs:
 
       - name: Check Linux script syntax
         if: runner.os == 'Linux'
-        run: bash -n scripts/linux-systemd/install.sh scripts/linux-systemd/uninstall.sh
+        run: bash -n scripts/linux-systemd/install.sh scripts/linux-systemd/uninstall.sh packaging/linux/audit-reader
+
+      - name: Check Windows installer assets
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $files = Get-ChildItem -Path scripts/windows -Recurse -Filter *.ps1
+          $allErrors = @()
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            )
+            $allErrors += $errors
+          }
+          if ($allErrors.Count -gt 0) {
+            $allErrors | ForEach-Object { $_.ToString() }
+            exit 1
+          }
+          [xml](Get-Content -Raw packaging/windows/CommandBridgeMCP.xml) | Out-Null
 
       - name: Prepare systemd verification paths
         if: runner.os == 'Linux'

@@ -1,0 +1,22 @@
+<service>
+  <id>CommandBridgeMCP</id>
+  <name>CommandBridge MCP</name>
+  <description>Policy-controlled CommandBridge MCP server</description>
+  <depend>EventLog</depend>
+  <executable>%BASE%\runtime\node.exe</executable>
+  <arguments>"%BASE%\app\dist\index.js"</arguments>
+  <workingdirectory>%BASE%\app</workingdirectory>
+  <env name="NODE_ENV" value="production"/>
+  <env name="DOTENV_CONFIG_PATH" value="%ProgramData%\CommandBridgeMCP\command-bridge.env"/>
+  <env name="HOME" value="%ProgramData%\CommandBridgeMCP"/>
+  <startmode>Automatic</startmode>
+  <stoptimeout>20sec</stoptimeout>
+  <onfailure action="restart" delay="5 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%ProgramData%\CommandBridgeMCP\logs</logpath>
+  <log mode="roll"/>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+  </serviceaccount>
+</service>

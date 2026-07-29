@@ -10,7 +10,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "npm run build && node --test dist/services/commandPolicy.test.js dist/installAssets.test.js dist/uninstallAssets.test.js"
+    "test": "npm run build && node --test dist/services/commandPolicy.test.js dist/services/auditLog.test.js dist/services/commandExecutor.test.js dist/tools/commandBridgeTools.test.js dist/installAssets.test.js dist/uninstallAssets.test.js dist/windowsInstallAssets.test.js"
   },
   "engines": {
     "node": ">=20"

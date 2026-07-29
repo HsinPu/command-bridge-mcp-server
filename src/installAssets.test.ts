@@ -12,6 +12,7 @@ const installer = readFileSync(
 const unit = readFileSync(
   resolve(projectRoot, "packaging/systemd/command-bridge-mcp-server.service")
 );
+const auditReader = readFileSync(resolve(projectRoot, "packaging/linux/audit-reader"));
 const documentation = [
   readFileSync(resolve(projectRoot, "README.md"), "utf8"),
   readFileSync(resolve(projectRoot, "README.zh-TW.md"), "utf8"),
@@ -23,6 +24,32 @@ test("installer pins the committed systemd unit digest", () => {
   const actualDigest = createHash("sha256").update(unit).digest("hex");
 
   assert.equal(configuredDigest, actualDigest);
+});
+
+test("installer pins and deploys the fixed Linux audit reader", () => {
+  const configuredDigest = /readonly AUDIT_READER_SHA256="([a-f0-9]{64})"/.exec(installer)?.[1];
+  const actualDigest = createHash("sha256").update(auditReader).digest("hex");
+
+  assert.equal(configuredDigest, actualDigest);
+  assert.match(installer, /readonly AUDIT_READER_PATH="\$\{AUDIT_READER_DIR\}\/audit-reader"/);
+  assert.match(
+    installer,
+    /readonly AUDIT_SUDOERS_FILE="\/etc\/sudoers\.d\/command-bridge-mcp-server-audit-reader"/
+  );
+  assert.match(installer, /packaging\/linux\/audit-reader/);
+  assert.match(installer, /install -m 0755 -o root -g root "\$\{TEMP_DIR\}\/audit-reader"/);
+  assert.match(installer, /printf '%s ALL=\(root\) NOPASSWD: %s ""\\n' \\/);
+  assert.match(
+    installer,
+    /"\$\{SERVICE_USER\}" "\$\{AUDIT_READER_PATH\}" > "\$\{sudoers_staging\}"/
+  );
+  assert.match(installer, /visudo -cf "\$\{AUDIT_SUDOERS_FILE\}"/);
+  assert.match(installer, /runuser -u "\$\{SERVICE_USER\}" -- \/usr\/bin\/sudo -n "\$\{AUDIT_READER_PATH\}"/);
+  assert.match(auditReader.toString("utf8"), /exec \/usr\/bin\/journalctl/);
+  assert.match(auditReader.toString("utf8"), /--unit command-bridge-mcp-server\.service/);
+  assert.match(auditReader.toString("utf8"), /--output=cat/);
+  assert.match(auditReader.toString("utf8"), /--lines=1000/);
+  assert.match(auditReader.toString("utf8"), /--grep='\^\{"schemaVersion":1,"event":"command_bridge\\\.audit",'/);
 });
 
 test("installer source ref matches the npm package version", () => {
@@ -64,7 +91,8 @@ test("systemd unit uses the versioned application and runtime symlinks", () => {
     /ExecStart=\/opt\/command-bridge-mcp-server\/runtime\/current\/bin\/node \/opt\/command-bridge-mcp-server\/current\/dist\/index\.js/
   );
   assert.match(unitText, /User=command-bridge/);
-  assert.match(unitText, /NoNewPrivileges=true/);
+  assert.match(unitText, /NoNewPrivileges=false/);
+  assert.doesNotMatch(unitText, /RestrictSUIDSGID=true/);
   assert.match(unitText, /ProtectSystem=strict/);
 });
 
