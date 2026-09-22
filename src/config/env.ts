@@ -2,10 +2,13 @@ import "dotenv/config";
 import { delimiter, resolve } from "node:path";
 import { z } from "zod";
 import type { ExecutionMode, ShellKind } from "../services/commandPolicy.js";
+import { loadCommandProfiles, validateEnabledProfiles, type CommandProfile } from "../services/commandProfiles.js";
 
 const rawEnvSchema = z.object({
   COMMAND_BRIDGE_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
-  COMMAND_BRIDGE_BEARER_TOKEN: z.string().min(32).optional(),
+  COMMAND_BRIDGE_AUDIT_BACKEND: z.enum(["auto", "journal", "eventlog", "file"]).default("auto"),
+  COMMAND_BRIDGE_POLICY_FILE: z.string().min(1).optional(),
+  COMMAND_BRIDGE_BEARER_TOKEN: z.preprocess(v => v === "" ? undefined : v, z.string().min(32).optional()),
   COMMAND_BRIDGE_HTTP_HOST: z.string().min(1).default("127.0.0.1"),
   COMMAND_BRIDGE_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(8800),
   COMMAND_BRIDGE_ALLOWED_HOSTS: z.string().optional(),
@@ -21,6 +24,9 @@ const rawEnvSchema = z.object({
 });
 
 export interface AppConfig {
+  commandProfiles?: Map<string, CommandProfile>;
+  policyFile?: string;
+  auditBackend?: "auto" | "journal" | "eventlog" | "file";
   transport: "stdio" | "http";
   bearerToken?: string;
   httpHost: string;
@@ -58,8 +64,10 @@ export function loadConfig(): AppConfig {
       : defaultAllowedCommands()
     ).map((command) => command.toLowerCase())
   );
-  const allowedRoots = raw.COMMAND_BRIDGE_ALLOWED_ROOTS
-    ? raw.COMMAND_BRIDGE_ALLOWED_ROOTS.split(delimiter).map((root) => resolve(root.trim()))
+  const rootEntries = raw.COMMAND_BRIDGE_ALLOWED_ROOTS?.split(delimiter).map(root => root.trim());
+  if (rootEntries?.some(root => root.length === 0)) throw new Error("COMMAND_BRIDGE_ALLOWED_ROOTS contains an empty path.");
+  const allowedRoots = rootEntries
+    ? rootEntries.map(root => resolve(root))
     : [resolve(process.cwd())];
 
   if (raw.COMMAND_BRIDGE_MAX_TIMEOUT_MS < raw.COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS) {
@@ -86,7 +94,12 @@ export function loadConfig(): AppConfig {
     throw new Error("COMMAND_BRIDGE_ALLOWED_ROOTS contains an empty path.");
   }
 
+  const commandProfiles = loadCommandProfiles(raw.COMMAND_BRIDGE_POLICY_FILE);
+  if (raw.COMMAND_BRIDGE_EXECUTION_MODE === "allowlist") validateEnabledProfiles(commandProfiles, allowedCommands, allowedShells);
   return {
+    commandProfiles,
+    policyFile: raw.COMMAND_BRIDGE_POLICY_FILE,
+    auditBackend: raw.COMMAND_BRIDGE_AUDIT_BACKEND,
     transport: raw.COMMAND_BRIDGE_TRANSPORT,
     bearerToken: raw.COMMAND_BRIDGE_BEARER_TOKEN,
     httpHost: raw.COMMAND_BRIDGE_HTTP_HOST,

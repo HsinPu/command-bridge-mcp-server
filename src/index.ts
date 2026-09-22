@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import type { Server } from "node:http";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config/env.js";
 import { createCommandBridgeServer } from "./server.js";
@@ -10,6 +9,8 @@ import { startHttpTransport } from "./transport/httpTransport.js";
 async function main(): Promise<void> {
   const config = loadConfig();
   const executor = new CommandExecutor(config);
+  const readiness = await executor.readiness();
+  if (!readiness.ready) throw new Error("Startup dependency checks failed: " + Object.entries(readiness.checks).filter(([, ok]) => !ok).map(([name]) => name).join(", "));
 
   if (config.transport === "http") {
     const httpServer = await startHttpTransport(config, executor);
@@ -20,19 +21,25 @@ async function main(): Promise<void> {
         config.httpPort +
         "/mcp"
     );
-    registerShutdownHandlers(httpServer);
+    registerShutdownHandlers(executor, () => new Promise<void>((resolve) => httpServer.close(() => resolve())));
     return;
   }
 
   const server = createCommandBridgeServer(config, executor);
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  registerShutdownHandlers(executor, () => server.close());
   console.error("CommandBridge MCP running via stdio.");
 }
 
-function registerShutdownHandlers(httpServer: Server): void {
-  const shutdown = () => {
-    httpServer.close(() => process.exit(0));
+function registerShutdownHandlers(executor: CommandExecutor, close: () => Promise<void>): void {
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    const deadline = setTimeout(() => process.exit(1), 15_000);
+    try { await executor.shutdown(); await close(); clearTimeout(deadline); process.exit(0); }
+    catch { clearTimeout(deadline); process.exit(1); }
   };
 
   process.once("SIGINT", shutdown);

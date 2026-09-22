@@ -1,9 +1,15 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { access, open, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { delimiter, dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import {
   assertCommandAllowed,
   resolveWorkingDirectory,
+  resolveSafeCommand,
   type ShellKind
 } from "./commandPolicy.js";
 import {
@@ -58,13 +64,62 @@ const defaultEnvironmentKeys = [
 
 export class CommandExecutor {
   private activeCommands = 0;
+  private stopping = false;
+  private readonly running = new Set<() => void>();
+  private readonly pending = new Set<Promise<CommandResult>>();
 
   constructor(
     private readonly config: AppConfig,
     private readonly auditLog: AuditLog = createAuditLog(config)
   ) {}
 
-  async execute(request: CommandRequest): Promise<CommandResult> {
+  execute(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
+    const operation = this.executeInternal(request, signal);
+    this.pending.add(operation);
+    void operation.finally(() => this.pending.delete(operation)).catch(() => undefined);
+    return operation;
+  }
+
+  async shutdown(): Promise<void> {
+    this.stopping = true;
+    for (const stop of this.running) stop();
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        Promise.allSettled([...this.pending]),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
+      ]);
+    } finally { if (timer) clearTimeout(timer); }
+  }
+
+  async readiness(): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
+    const checks: Record<string, boolean> = { accepting: !this.stopping, workingDirectory: true, shells: true, audit: true };
+    try { for (const root of this.config.allowedRoots) await access(root, constants.R_OK | constants.X_OK); }
+    catch { checks.workingDirectory = false; }
+    if (this.config.policyFile) {
+      checks.policyReadable = true;
+      try { await access(this.config.policyFile, constants.R_OK); } catch { checks.policyReadable = false; }
+      checks.policyReadOnly = true;
+      try { const handle = await open(this.config.policyFile, "r+"); await handle.close(); checks.policyReadOnly = false; }
+      catch { /* Actual opens enforce Windows DACLs, unlike fs.access. */ }
+      const probe = join(dirname(this.config.policyFile), ".command-bridge-permission-" + randomUUID());
+      try { const handle = await open(probe, "wx", 0o600); await handle.close(); await unlink(probe); checks.policyReadOnly = false; }
+      catch { /* The service must not be able to replace its policy. */ }
+    }
+    for (const shell of this.config.allowedShells) {
+      const executable = buildShellInvocation(shell, "").executable;
+      const paths = isAbsolute(executable) ? [executable] : (process.env.PATH ?? "").split(delimiter).map(p => join(p, executable));
+      const found = await Promise.all(paths.map(p => access(p, constants.X_OK).then(() => true, () => false)));
+      if (!found.some(Boolean)) checks.shells = false;
+    }
+    try {
+      await this.auditLog.write(createAuditEvent({ command: "CommandBridge readiness verification", phase: "completed", executionMode: this.config.executionMode, source: this.auditSource() }));
+      await this.auditLog.list(1);
+    } catch { checks.audit = false; }
+    return { ready: Object.values(checks).every(Boolean), checks };
+  }
+
+  private async executeInternal(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
     const requestedShell = request.shell ?? this.config.allowedShells[0] ?? null;
     const requestedCwd = request.cwd ?? this.config.allowedRoots[0] ?? null;
     const attempted = createAuditEvent({
@@ -85,6 +140,7 @@ export class CommandExecutor {
     let timeoutMs: number;
 
     try {
+      if (this.stopping || signal?.aborted) throw new AppError("COMMAND_CANCELLED", "The command was cancelled or the service is stopping.");
       if (this.activeCommands >= this.config.maxParallelCommands) {
         throw new AppError(
           "COMMAND_CONCURRENCY_LIMIT",
@@ -120,7 +176,7 @@ export class CommandExecutor {
 
     this.activeCommands += 1;
     try {
-      const result = await this.runProcess(shell, request.command, cwd, timeoutMs);
+      const result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal);
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "completed", {
           shell,
@@ -214,15 +270,25 @@ export class CommandExecutor {
     shell: ShellKind,
     command: string,
     cwd: string,
-    timeoutMs: number
+    timeoutMs: number,
+    signal?: AbortSignal
   ): Promise<CommandResult> {
-    const invocation = buildShellInvocation(shell, command);
+    let invocation: ShellInvocation;
+    const environment = buildChildEnvironment(this.config.passthroughEnv);
+    if (this.config.executionMode === "allowlist") {
+      const { profile, args } = resolveSafeCommand(this.config, shell, command);
+      invocation = { executable: profile.executable, args };
+      if (profile.cmdlet) {
+        invocation.args = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", fileURLToPath(new URL("../../scripts/windows/run-cmdlet.ps1", import.meta.url))];
+        environment.COMMAND_BRIDGE_CMDLET_REQUEST = Buffer.from(JSON.stringify({ name: profile.cmdlet, args })).toString("base64");
+      }
+    } else invocation = buildShellInvocation(shell, command);
     const startedAt = Date.now();
 
     return new Promise((resolve, reject) => {
       const child = spawn(invocation.executable, invocation.args, {
         cwd,
-        env: buildChildEnvironment(this.config.passthroughEnv),
+        env: environment,
         detached: process.platform !== "win32",
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"]
@@ -234,11 +300,42 @@ export class CommandExecutor {
       let truncated = false;
       let settled = false;
 
-      const terminate = () => terminateProcessTree(child);
+      let termination: Promise<void> | undefined;
+      let closeDeadline: NodeJS.Timeout | undefined;
+      let cancellation = false;
+      const finishFailure = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        child.unref();
+        this.stopping = true;
+        reject(error);
+      };
+      const terminate = () => {
+        if (!termination) {
+          termination = terminateProcessTree(child);
+          void termination.then(() => {
+            if (!settled) closeDeadline = setTimeout(() => finishFailure(new AppError("COMMAND_TERMINATION_FAILED", "Command streams did not close after termination.")), 500);
+          }, () => undefined);
+          void termination.catch(error => finishFailure(new AppError("COMMAND_TERMINATION_FAILED", "Could not confirm command termination.", undefined, { cause: error })));
+        }
+      };
+      const cancel = () => { cancellation = true; terminate(); };
+      const cleanup = () => {
+        clearTimeout(timeout);
+        if (closeDeadline) clearTimeout(closeDeadline);
+        this.running.delete(cancel);
+        signal?.removeEventListener("abort", cancel);
+      };
       const timeout = setTimeout(() => {
         timedOut = true;
         terminate();
       }, timeoutMs);
+      this.running.add(cancel);
+      signal?.addEventListener("abort", cancel, { once: true });
+      if (this.stopping || signal?.aborted) cancel();
 
       const appendOutput = (current: string, chunk: Buffer): string => {
         const text = chunk.toString("utf8");
@@ -273,7 +370,7 @@ export class CommandExecutor {
           return;
         }
         settled = true;
-        clearTimeout(timeout);
+        cleanup();
         reject(
           new AppError(
             "COMMAND_START_FAILED",
@@ -284,18 +381,21 @@ export class CommandExecutor {
         );
       });
 
-      child.once("close", (exitCode, signal) => {
+      child.once("close", async (exitCode, processSignal) => {
+        try { await termination; }
+        catch (error) { finishFailure(new AppError("COMMAND_TERMINATION_FAILED", "Could not confirm command termination.", undefined, { cause: error })); return; }
         if (settled) {
           return;
         }
         settled = true;
-        clearTimeout(timeout);
+        cleanup();
+        if (cancellation) { reject(new AppError("COMMAND_CANCELLED", "The command was cancelled.")); return; }
         resolve({
           ok: exitCode === 0 && !timedOut && !truncated,
           shell,
           cwd,
           exitCode,
-          signal,
+          signal: processSignal,
           stdout,
           stderr,
           timedOut,
@@ -389,23 +489,49 @@ function clampTimeout(
   return Math.min(Math.max(Math.trunc(requestedTimeoutMs), 1_000), maxTimeoutMs);
 }
 
-function terminateProcessTree(child: ChildProcess): void {
-  if (!child.pid) {
-    child.kill();
-    return;
-  }
-
-  if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
-      windowsHide: true,
-      stdio: "ignore"
-    }).unref();
-    return;
-  }
-
-  try {
-    process.kill(-child.pid, "SIGTERM");
-  } catch {
-    child.kill("SIGTERM");
-  }
+export async function terminateProcessTree(child: ChildProcess): Promise<void> {
+  if (!child.pid) return;
+  // A Linux group can outlive its leader while descendants still hold our pipes.
+  if (process.platform === "win32" && (child.exitCode !== null || child.signalCode !== null)) return;
+  const pid = child.pid;
+  await new Promise<void>((resolve, reject) => {
+    let ended = false;
+    const timers: NodeJS.Timeout[] = [];
+    const done = (error?: Error) => {
+      if (ended) return;
+      ended = true;
+      timers.forEach(clearTimeout);
+      child.removeListener("close", onClose);
+      error ? reject(error) : resolve();
+    };
+    const onClose = () => { /* Completion is confirmed by taskkill or process-group checks. */ };
+    child.once("close", onClose);
+    timers.push(setTimeout(() => done(new Error("Process termination deadline exceeded.")), 5_000));
+    if (process.platform === "win32") {
+      const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+      killer.once("error", error => done(error));
+      killer.once("close", code => {
+        if (code !== 0) { done(new Error("taskkill failed.")); return; }
+        if (child.exitCode !== null || child.signalCode !== null) done();
+        else child.once("close", () => done());
+      });
+      timers.push(setTimeout(() => killer.kill(), 4_000));
+    } else {
+      const send = (signal: NodeJS.Signals) => {
+        try { process.kill(-pid, signal); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") done(error as Error); }
+      };
+      send("SIGTERM");
+      timers.push(setTimeout(() => send("SIGKILL"), 2_000));
+      const check = () => {
+        if (ended) return;
+        try { process.kill(-pid, 0); timers.push(setTimeout(check, 50)); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ESRCH") done();
+          else done(error as Error);
+        }
+      };
+      check();
+    }
+  });
 }

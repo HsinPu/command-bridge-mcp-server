@@ -2,7 +2,7 @@ export class AppError extends Error {
   constructor(
     public readonly code: string,
     message: string,
-    public readonly action: string,
+    public readonly action: string = "Check the CommandBridge service logs before retrying.",
     options?: ErrorOptions
   ) {
     super(message, options);

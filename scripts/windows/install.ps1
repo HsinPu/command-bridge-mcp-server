@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [switch]$PrintCodexSetup,
-  [string]$CodexUrl
+  [string]$CodexUrl,
+  [switch]$RefreshNetwork
 )
 
 Set-StrictMode -Version Latest
@@ -10,15 +11,16 @@ $ErrorActionPreference = "Stop"
 $ServiceName = "CommandBridgeMCP"
 $EventSource = "CommandBridgeMCP"
 $PackageName = "command-bridge-mcp-server"
-$PackageVersion = "0.4.0"
-$SourceRef = "v0.4.0"
+$PackageVersion = ""
+$SourceRef = ""
+$ApplicationRelativePath = "app"
+$ConfigBackup = $null
 $NodeVersion = "24.18.0"
 $WinSwVersion = "2.12.0"
 $WinSwUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
 $WinSwSha256 = "05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da"
 $NodeBaseUrl = "https://nodejs.org/download/release/v$NodeVersion"
 $NodeArchiveName = "node-v$NodeVersion-win-x64.zip"
-$SourceArchiveUrl = "https://github.com/HsinPu/command-bridge-mcp-server/archive/refs/tags/$SourceRef.zip"
 $InstallRoot = Join-Path $env:ProgramFiles "CommandBridgeMCP"
 $ConfigRoot = Join-Path $env:ProgramData "CommandBridgeMCP"
 $ConfigFile = Join-Path $ConfigRoot "command-bridge.env"
@@ -30,6 +32,8 @@ $TempRoot = Join-Path $env:TEMP ("command-bridge-install-" + [Guid]::NewGuid().T
 $StagingRoot = Join-Path (Split-Path -Parent $InstallRoot) (".CommandBridgeMCP-staging-" + $PID)
 $PreviousRoot = Join-Path (Split-Path -Parent $InstallRoot) (".CommandBridgeMCP-previous-" + $PID)
 $ServicePreviouslyInstalled = $false
+$PreviousMoved = $false
+$ActivationSucceeded = $false
 $InstallCommitted = $false
 $EventSourceCreated = $false
 
@@ -90,20 +94,18 @@ function Assert-Sha256 {
 function Get-SourceRoot {
   $localSource = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
   if ((Test-Path -LiteralPath (Join-Path $localSource "package.json")) -and (Test-Path -LiteralPath (Join-Path $localSource "src"))) {
+    $shaFile = Join-Path $localSource '.command-bridge-source-sha'
+    $script:SourceRef = if (Test-Path -LiteralPath $shaFile) { [IO.File]::ReadAllText($shaFile).Trim() } else { (& git -C $localSource rev-parse HEAD).Trim() }
+    if (-not (Test-Path -LiteralPath $shaFile)) {
+      $dirty = & git -C $localSource status --porcelain --untracked-files=normal
+      if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Commit local source changes before installation so release identity is unambiguous.' }
+    }
+    if ($script:SourceRef -cnotmatch '^[a-f0-9]{40}$') { throw 'A full source commit SHA is required.' }
     Write-Log "Using local CommandBridge source from $localSource."
     return (Resolve-Path -LiteralPath $localSource).Path
   }
 
-  $archive = Join-Path $TempRoot "command-bridge-source.zip"
-  $extract = Join-Path $TempRoot "source-extract"
-  Write-Log "Downloading CommandBridge MCP $SourceRef."
-  Invoke-WebDownload $SourceArchiveUrl $archive
-  Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-  $directories = @(Get-ChildItem -LiteralPath $extract -Directory)
-  if ($directories.Count -ne 1) {
-    throw "Downloaded CommandBridge source archive has an unexpected layout."
-  }
-  return $directories[0].FullName
+  throw 'Use scripts/bootstrap.ps1 to download a CI-verified source snapshot.'
 }
 
 function Get-NodeRuntime {
@@ -158,9 +160,13 @@ function Build-Source {
   } finally {
     Pop-Location
   }
-  if ($name -ne $PackageName -or $version -ne $PackageVersion) {
+  if ($name -ne $PackageName -or $version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Source package metadata does not match CommandBridge $SourceRef."
   }
+  $expectedVersion = Join-Path $SourceRoot '.command-bridge-source-version'
+  if ((Test-Path -LiteralPath $expectedVersion) -and [IO.File]::ReadAllText($expectedVersion).Trim() -ne $version) { throw 'Source version does not match the verified channel.' }
+  $script:PackageVersion = $version
+  $script:ApplicationRelativePath = "releases\v$version-$SourceRef"
 
   Write-Log "Installing locked dependencies and running the CommandBridge test suite."
   $previousPath = $env:PATH
@@ -221,6 +227,13 @@ function New-SecureConfiguration {
 
   if (Test-Path -LiteralPath $ConfigFile) {
     Write-Log "Preserving existing configuration and bearer token at $ConfigFile."
+    if ($RefreshNetwork) {
+      $script:ConfigBackup = [IO.File]::ReadAllText($ConfigFile)
+      $httpHost = Get-AutomaticHttpHost
+      $updated = [regex]::Replace($script:ConfigBackup, '(?m)^COMMAND_BRIDGE_HTTP_HOST=.*$', "COMMAND_BRIDGE_HTTP_HOST=$httpHost")
+      $updated = [regex]::Replace($updated, '(?m)^COMMAND_BRIDGE_ALLOWED_HOSTS=.*$', "COMMAND_BRIDGE_ALLOWED_HOSTS=$httpHost")
+      [IO.File]::WriteAllText($ConfigFile, $updated, (New-Object System.Text.UTF8Encoding($false)))
+    }
     return
   }
 
@@ -256,6 +269,8 @@ function New-SecureConfiguration {
 
   $lines = @(
     "COMMAND_BRIDGE_TRANSPORT=http",
+    "COMMAND_BRIDGE_AUDIT_BACKEND=eventlog",
+    "COMMAND_BRIDGE_POLICY_FILE=$(Join-Path $ConfigRoot 'policy.json')",
     "COMMAND_BRIDGE_BEARER_TOKEN=$token",
     "COMMAND_BRIDGE_HTTP_HOST=$httpHost",
     "COMMAND_BRIDGE_HTTP_PORT=$port",
@@ -291,6 +306,9 @@ function Copy-ApplicationPayload {
   }
   New-Item -ItemType Directory -Path $auditDestination -Force | Out-Null
   Copy-Item -Path (Join-Path $auditSource "*") -Destination $auditDestination -Force
+  Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-install.mjs') -Destination (Join-Path $Destination 'scripts\verify-install.mjs')
+  Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmdlet.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmdlet.ps1')
+  [IO.File]::WriteAllText((Join-Path $Destination 'install-info.json'), (@{ version = $PackageVersion; sourceSha = $SourceRef; runtimeVersion = $NodeVersion } | ConvertTo-Json))
 }
 
 function Set-RestrictedAcl {
@@ -361,7 +379,7 @@ function Wait-ForHealth {
 }
 
 function Invoke-AuditVerification {
-  $appRoot = Join-Path $InstallRoot "app"
+  $appRoot = Join-Path $InstallRoot $ApplicationRelativePath
   $writeScript = Join-Path $appRoot "scripts\windows\audit\write-audit-event.ps1"
   $readScript = Join-Path $appRoot "scripts\windows\audit\read-audit-events.ps1"
   $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -394,7 +412,7 @@ function Invoke-AuditVerification {
 }
 
 function Print-CodexSetup {
-  if (-not $PrintCodexSetup -and -not $CodexUrl) {
+  if (-not $PrintCodexSetup -and -not $CodexUrl -and -not $RefreshNetwork) {
     return
   }
   if ([string]::IsNullOrWhiteSpace($CodexUrl)) {
@@ -424,6 +442,13 @@ function Print-CodexSetup {
 
 function Rollback-Installation {
   try {
+    if ($null -ne $ConfigBackup) { [IO.File]::WriteAllText($ConfigFile, $ConfigBackup, (New-Object System.Text.UTF8Encoding($false))) }
+    if ($ServicePreviouslyInstalled -and -not $PreviousMoved) {
+      # Activation has not replaced the old files. Restore registration if uninstall succeeded.
+      if (-not (Get-ManagedService)) { Invoke-External (Join-Path $InstallRoot $ServiceExeName) @('install') }
+      Start-Service -Name $ServiceName -ErrorAction Stop
+      return
+    }
     $service = Get-ManagedService
     if ($service) {
       Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
@@ -465,15 +490,31 @@ try {
   $nodeRoot = Get-NodeRuntime
   $winSw = Get-WinSw
   Build-Source $sourceRoot $nodeRoot
+  $previousDotenv = $env:DOTENV_CONFIG_PATH
+  try {
+    if (Test-Path -LiteralPath $ConfigFile) {
+      $env:DOTENV_CONFIG_PATH = $ConfigFile
+      Invoke-External (Join-Path $nodeRoot 'node.exe') @((Join-Path $sourceRoot 'dist\checkConfig.js'))
+    }
+  } finally { $env:DOTENV_CONFIG_PATH = $previousDotenv }
   New-SecureConfiguration
+  $policyPath = Join-Path $ConfigRoot 'policy.json'
+  if (-not (Test-Path -LiteralPath $policyPath)) { Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\policy.example.json') -Destination $policyPath }
+  try {
+    $env:DOTENV_CONFIG_PATH = $ConfigFile
+    Invoke-External (Join-Path $nodeRoot 'node.exe') @((Join-Path $sourceRoot 'dist\checkConfig.js'))
+  } finally { $env:DOTENV_CONFIG_PATH = $previousDotenv }
   Register-EventLogSource
 
   New-Item -ItemType Directory -Path $StagingRoot -Force | Out-Null
   Copy-Item -LiteralPath $winSw -Destination (Join-Path $StagingRoot $ServiceExeName) -Force
   Copy-Item -LiteralPath (Join-Path $sourceRoot "packaging\windows\$XmlName") -Destination (Join-Path $StagingRoot $XmlName) -Force
+  $xmlPath = Join-Path $StagingRoot $XmlName
+  [IO.File]::WriteAllText($xmlPath, [IO.File]::ReadAllText($xmlPath).Replace('%BASE%\app', "%BASE%\$ApplicationRelativePath"))
+  Copy-Item -LiteralPath (Join-Path $sourceRoot 'scripts\windows\uninstall.ps1') -Destination (Join-Path $StagingRoot 'uninstall.ps1')
   New-Item -ItemType Directory -Path (Join-Path $StagingRoot "runtime") -Force | Out-Null
   Copy-Item -Path (Join-Path $nodeRoot "*") -Destination (Join-Path $StagingRoot "runtime") -Recurse -Force
-  Copy-ApplicationPayload $sourceRoot (Join-Path $StagingRoot "app")
+  Copy-ApplicationPayload $sourceRoot (Join-Path $StagingRoot $ApplicationRelativePath)
   Set-RestrictedAcl $StagingRoot
 
   if ($existingService) {
@@ -481,6 +522,7 @@ try {
     Stop-Service -Name $ServiceName -Force -ErrorAction Stop
     Invoke-External (Join-Path $InstallRoot $ServiceExeName) @("uninstall")
     Move-Item -LiteralPath $InstallRoot -Destination $PreviousRoot
+    $PreviousMoved = $true
   }
   Move-Item -LiteralPath $StagingRoot -Destination $InstallRoot
   $InstallCommitted = $true
@@ -489,8 +531,9 @@ try {
   Invoke-External $serviceExe @("install")
   Start-Service -Name $ServiceName -ErrorAction Stop
   Wait-ForHealth
-  Invoke-AuditVerification
+  Invoke-External (Join-Path $InstallRoot 'runtime\node.exe') @((Join-Path $InstallRoot "$ApplicationRelativePath\scripts\verify-install.mjs"), $ConfigFile)
 
+  $ActivationSucceeded = $true
   if (Test-Path -LiteralPath $PreviousRoot) {
     Remove-Item -LiteralPath $PreviousRoot -Recurse -Force
   }
@@ -499,8 +542,13 @@ try {
   Write-Log "Application Event Log source: $EventSource"
   Print-CodexSetup
 } catch {
-  if ($InstallCommitted -or $ServicePreviouslyInstalled -or $EventSourceCreated) {
+  if ($ActivationSucceeded) {
+    Write-Warning 'The new service passed verification. Post-install cleanup or output failed; the running installation has been retained.'
+  } elseif ($InstallCommitted -or $ServicePreviouslyInstalled) {
     Rollback-Installation
+  } else {
+    if ($null -ne $ConfigBackup) { [IO.File]::WriteAllText($ConfigFile, $ConfigBackup, (New-Object System.Text.UTF8Encoding($false))) }
+    if ($EventSourceCreated) { Remove-EventLog -Source $EventSource }
   }
   throw
 } finally {

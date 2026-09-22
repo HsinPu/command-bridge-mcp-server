@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.0 — 2026-09-22 (unreleased)
+
+Major release from the 0.5.0 implementation stage: allowlist mode no longer accepts arbitrary shell argument syntax. The existing MCP tools and result fields remain, but custom allowlists require explicit policies.
+
+- Literal command parsing, exact argv matching, fixed native executables and a fixed PowerShell cmdlet wrapper replace shell interpretation in allowlist mode.
+- COMMAND_BRIDGE_POLICY_FILE defines administrator-controlled schemaVersion 1 policies. Missing, duplicate, invalid or unsupported enabled policies fail before activation. Shells/script hosts cannot be custom safe targets.
+- Resolve working directories through real paths to reject symlink/junction escapes and validate empty root entries before resolving.
+- Includes the CI-verified installation channel and reliability improvements described under 0.5.0. No version tag is required by the new bootstrap.
+- Migration: review [the 1.0 guide](docs/migration-1.0.md), create exact custom argument policies, protect policy permissions, and retain hostname for installation verification. Old complex arguments may now be rejected; unrestricted is never selected automatically.
+- Validation: cross-platform unit/integration checks plus disposable service lifecycle CI gate channel publication. Local Windows testing does not substitute for an executed Linux/Windows service CI run.
+
+## 0.5.0 — 2026-09-22 (unreleased implementation stage)
+
+Minor release from 0.4.0: CI-verified bootstrap installation and reliability improvements, retaining the existing MCP interface.
+
+- Fixed bootstrap URLs resolve a successful main commit through the serialized install channel. All source and installation assets come from one SHA; no release tag is required.
+- Build-time application version comes from package.json. Installed identities include version, source SHA, and runtime version; uninstallers are saved with installations.
+- Bounded process termination, cancellation and shutdown; audit helper deadlines; private rotating file audit for local stdio.
+- Authenticated readiness and real service-account MCP/audit verification before upgrade backups are removed.
+- Explicit network refresh preserves tokens and restores prior configuration on failure.
+
 ## 0.4.0 — 2026-09-22 (unreleased)
 
 Minor release from 0.3.1: adds automatic IP-based connection setup while preserving existing installations and explicit HTTPS URLs.

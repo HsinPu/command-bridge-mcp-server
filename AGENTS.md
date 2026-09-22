@@ -38,7 +38,7 @@ npm run dev
 npm start
 ```
 
-- npm test 會先建置，再執行 package.json 明列的 Node.js test 檔案。新增測試檔時需確認是否納入此清單。
+- npm test 會先建置，再由 scripts/test.mjs 自動探索 dist/ 內所有 .test.js。
 - npm run dev 使用 tsx 執行 src/index.ts；npm start 執行建置後的 dist/index.js。
 - 本機設定範本為 .env.example；.env、node_modules/、dist/ 已列入 .gitignore。
 - CI 另檢查 Linux Shell 語法、PowerShell 語法、WinSW XML 與 systemd unit。
@@ -69,10 +69,9 @@ npm start
 2. 同步更新所有代表本專案目前版本的位置：
    - package.json 的 version。
    - package-lock.json 頂層 version 及 packages[""] 的 version；不要批次替換第三方依賴的版本。
-   - src/server.ts 的 MCP Server version。
-   - scripts/linux-systemd/install.sh 的 SOURCE_REF（v 前綴）。
-   - scripts/windows/install.ps1 的 PackageVersion 與 SourceRef（後者含 v 前綴）。
-   - README.md、README.zh-TW.md、docs/ 與測試中指向本次版本的安裝範例、斷言及下載連結。歷史紀錄與明確的舊版範例保留原版本。
+   - MCP Server 版本由 scripts/build.mjs 從 package.json 產生，不維護另一個應用版本常數。
+   - 安裝器從來源 package.json 取得版本，以完整來源 SHA 區別部署內容，不要求版本等於 tag。
+   - README.md、README.zh-TW.md、docs/ 與測試中的目前版本範例。固定 bootstrap 入口不隨版本變動，歷史紀錄與舊版範例保留。
 3. 在根目錄 CHANGELOG.md 新增該版本的紀錄（檔案不存在則建立），包含日期、升版等級與理由、具體變更；大版必須寫明不相容之處及使用者如何遷移。
 4. 搜尋舊版本字串，逐筆確認是否仍有需要同步的目前版本參照；不要改動 Node.js、WinSW 等獨立元件版本，除非本次確實更新該元件。
 5. 執行 npm test 及與修改相關的平台／腳本檢查，確認版本一致性。若環境限制導致無法驗證，明確記錄未執行項目與原因，不得宣稱通過。
@@ -89,7 +88,7 @@ npm start
 - 說明安裝後會啟動服務、設定開機啟動、自動帶入適用的 IP，並印出含 Token 的 Codex 連線設定。區分新安裝與既有設定保留、區網位址與 loopback 回退，避免宣稱所有環境都能直接遠端連線。
 - 在 README 保留必要的權限、網路、Token 和資料保留說明；詳細設定、疑難排解、升級回復與完整清除方式放在 docs/ 平台指南，從 README 連結過去。
 - 功能描述必須符合實作，不將白名單宣稱為完整沙箱、絕對防止危險操作或刪除，也不將 Audit Log 宣稱為不可竄改。自動 IP 的 HTTP 連線只適用可信任區網／VPN；HTTPS 與防火牆不會自動建立。
-- 下載網址須與目標版本一致，未發布 tag 時明確標示不可直接使用；不把推送 main 當成發布 tag。
+- README 使用 main 上的固定 bootstrap 入口；bootstrap 只能依 install-channel/channel.txt 下載同一完整 SHA 的來源，禁止退回浮動 main。僅通過跨平台 CI 與服務驗證的 main push 可更新 channel；發布須序列化並防止舊執行結果覆寫新來源。不要求發布 tag，保留既有 v0.4.0 tag。
 - 純介紹或排版修改時，確認四個一行指令沒有意外變動、相對文件連結有效、中英文內容一致，並執行 git diff --check。純文件修改不需升版，也不需為排版新增程式測試。
 
 ## 修改時應維持的行為
@@ -104,9 +103,9 @@ npm start
 
 ## 初步檢查紀錄（2026-09-22）
 
-這次僅閱讀程式碼與文件，沒有安裝依賴或執行測試；以下不能視為完整安全稽核結果。
+初次觀察已在 1.0.0 實作中處理；以下不代表完整安全稽核認證。
 
-1. **待修正：允許根目錄的空白項目檢查順序。** src/config/env.ts 先將 COMMAND_BRIDGE_ALLOWED_ROOTS 各項目 trim 後傳給 resolve()，才檢查結果是否為空字串。空白項目會被轉為目前工作目錄，使後續空字串檢查無法攔截。應在 resolve() 前驗證原始項目，並補上相關測試。
-2. **待調查：Shell 白名單解析邊界。** src/services/commandPolicy.ts 以正規表示式攔截部分控制語法、比對起始指令名稱，再由 Shell 執行完整字串。需要檢查不同 Shell 的解析差異與潛在繞過方式；目前尚未驗證具體繞過案例，不應將其描述成已確認漏洞。
+1. **已修正：空白根目錄。** 在 resolve() 前拒絕空項目，執行時以 realpath 檢查 symlink／junction 越界，附行為測試。
+2. **已替換：Shell 白名單執行。** allowlist 僅接受字面參數與精確 argv 政策；原生程式直接啟動，PowerShell Cmdlet 透過固定包裝程式。自訂政策只允許受管理的原生執行檔，政策檔及其所在目錄不可讓服務帳號寫入。unrestricted 必須明確啟用，不因政策錯誤自動切換。
 
 後續完成修正或驗證時，更新以上紀錄，避免把歷史觀察當作目前狀態。

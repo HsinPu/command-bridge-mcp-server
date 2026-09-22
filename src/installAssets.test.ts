@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
+import { version } from "./version.js";
 
 const projectRoot = process.cwd();
 const bash = process.platform === "win32"
@@ -64,13 +65,10 @@ test("installer pins and deploys the fixed Linux audit reader", () => {
   assert.match(auditReader.toString("utf8"), /--grep='\^\{"schemaVersion":1,"event":"command_bridge\\\.audit",'/);
 });
 
-test("installer source ref matches the npm package version", () => {
-  const packageJson = JSON.parse(
-    readFileSync(resolve(projectRoot, "package.json"), "utf8")
-  ) as { version: string };
-  const sourceRef = /readonly SOURCE_REF="([^"]+)"/.exec(installer)?.[1];
-
-  assert.equal(sourceRef, `v${packageJson.version}`);
+test("installer identifies source by SHA independently from package version", () => {
+  assert.match(installer, /\.command-bridge-source-sha/);
+  assert.doesNotMatch(installer, /refs\/tags|readonly SOURCE_REF="v/);
+  assert.match(installer, /release_name="v\$\{package_version\}-\$\{SOURCE_REF\}"/);
 });
 
 test("nested installer can locate a checked-out project root", () => {
@@ -89,10 +87,7 @@ test("MCP server version matches the npm package version", () => {
   const packageJson = JSON.parse(
     readFileSync(resolve(projectRoot, "package.json"), "utf8")
   ) as { version: string };
-  const serverSource = readFileSync(resolve(projectRoot, "src/server.ts"), "utf8");
-  const serverVersion = /version: "([^"]+)"/.exec(serverSource)?.[1];
-
-  assert.equal(serverVersion, packageJson.version);
+  assert.equal(version, packageJson.version);
 });
 
 test("systemd unit uses the versioned application and runtime symlinks", () => {

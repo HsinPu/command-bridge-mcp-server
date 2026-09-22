@@ -18,7 +18,7 @@ function Assert-True($Condition, [string]$Message) {
 }
 
 # Mock directory creation and write configuration only to a unique temporary file.
-$ConfigRoot = "TestDrive:\config"
+$ConfigRoot = $env:TEMP
 $WorkDirectory = "TestDrive:\work"
 $LogsDirectory = "TestDrive:\logs"
 $ConfigFile = Join-Path $env:TEMP ("command-bridge-test-" + [guid]::NewGuid() + ".env")
@@ -26,6 +26,8 @@ function New-Item { param($ItemType, $Path, [switch]$Force) }
 function Test-Path { param($LiteralPath) return $false }
 $CodexUrl = ""
 $PrintCodexSetup = $true
+$RefreshNetwork = $false
+$ConfigBackup = $null
 $script:addresses = @(
   [pscustomobject]@{ IPAddress = '8.8.8.8'; InterfaceIndex = 1; SkipAsSource = $false },
   [pscustomobject]@{ IPAddress = '10.0.0.2'; InterfaceIndex = 2; SkipAsSource = $false },
@@ -118,6 +120,7 @@ try {
 
 # Mock the fixed writer/reader rather than touching the machine's Event Log.
 $InstallRoot = $SourceRoot
+$ApplicationRelativePath = ''
 $script:failBuild = $false
 function Invoke-External {
   param($FilePath, $Arguments)
@@ -129,4 +132,15 @@ Set-Item -Path "Function:$readerCommand" -Value {
   return $script:verificationEvent
 }
 Invoke-AuditVerification
+# If stopping/unregistering the old service fails, rollback must not delete its files.
+$ConfigBackup = $null
+$ServicePreviouslyInstalled = $true
+$PreviousMoved = $false
+$ServiceName = 'TestService'
+$script:restarted = $false
+function Get-ManagedService { return [pscustomobject]@{ Name = 'TestService' } }
+function Start-Service { param($Name, $ErrorAction) $script:restarted = $true }
+function Remove-Item { param($LiteralPath, [switch]$Recurse, [switch]$Force) throw 'Rollback attempted to delete the unchanged installation.' }
+Rollback-Installation
+Assert-True $script:restarted 'The previous service must be restarted without replacing its files.'
 Write-Output "Windows installer behavior checks passed."

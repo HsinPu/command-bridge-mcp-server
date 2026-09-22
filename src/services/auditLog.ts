@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { FileAuditLog } from "./fileAuditLog.js";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import type { ExecutionMode, ShellKind } from "./commandPolicy.js";
@@ -79,10 +81,13 @@ export interface WindowsEventLogAuditLogDependencies {
 
 type WindowsAuditScriptName = "write-audit-event.ps1" | "read-audit-events.ps1";
 
-export function createAuditLog(_config: AppConfig): AuditLog {
-  return process.platform === "win32"
-    ? new WindowsEventLogAuditLog()
-    : new LinuxJournalAuditLog();
+export function createAuditLog(config: AppConfig): AuditLog {
+  const backend = config.auditBackend && config.auditBackend !== "auto" ? config.auditBackend
+    : config.transport === "stdio" ? "file" : process.platform === "win32" ? "eventlog" : "journal";
+  if (backend === "file") return new FileAuditLog();
+  if (backend === "eventlog" && process.platform === "win32") return new WindowsEventLogAuditLog();
+  if (backend === "journal" && process.platform === "linux") return new LinuxJournalAuditLog();
+  throw new Error("The selected audit backend is not supported on this platform.");
 }
 
 export function createAuditEvent(input: CreateAuditEventInput): CommandAuditEvent {
@@ -483,7 +488,7 @@ function runWindowsAuditScript(
     "v1.0",
     "powershell.exe"
   );
-  const scriptPath = resolve(process.cwd(), "scripts", "windows", "audit", scriptName);
+  const scriptPath = fileURLToPath(new URL("../../scripts/windows/audit/" + scriptName, import.meta.url));
   const environment: NodeJS.ProcessEnv = {
     SystemRoot: systemRoot,
     WINDIR: systemRoot,
@@ -507,7 +512,7 @@ function runWindowsAuditScript(
   );
 }
 
-function runFixedProcess(
+export function runFixedProcess(
   executable: string,
   args: string[],
   environment?: NodeJS.ProcessEnv,
@@ -519,6 +524,7 @@ function runFixedProcess(
     const child = spawn(executable, args, {
       env: environment,
       windowsHide: true,
+      detached: process.platform !== "win32",
       stdio: ["ignore", captureStdout ? "pipe" : "ignore", "ignore"]
     });
 
@@ -527,14 +533,32 @@ function runFixedProcess(
         return;
       }
       settled = true;
+      clearTimeout(timeout);
       reject(error instanceof Error ? error : new Error("Fixed audit helper failed."));
     };
+
+    const stopHelper = () => {
+      if (child.pid && process.platform !== "win32") {
+        try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+      } else if (child.pid) {
+        const killer = spawn(resolve(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+        killer.once("error", () => child.kill());
+        const killTimer = setTimeout(() => killer.kill(), 1000);
+        killer.once("close", () => clearTimeout(killTimer));
+      }
+      child.stdout?.destroy();
+      child.unref();
+    };
+    const timeout = setTimeout(() => {
+      stopHelper();
+      fail(new Error("Audit helper timed out."));
+    }, 5_000);
 
     child.once("error", fail);
     child.stdout?.on("data", (chunk: Buffer) => {
       output += chunk.toString("utf8");
       if (Buffer.byteLength(output, "utf8") > MAX_AUDIT_READER_OUTPUT_BYTES) {
-        child.kill();
+        stopHelper();
         fail(new Error("Fixed audit helper output exceeded its safe limit."));
       }
     });
@@ -547,6 +571,7 @@ function runFixedProcess(
         return;
       }
       settled = true;
+      clearTimeout(timeout);
       resolvePromise(output);
     });
   });

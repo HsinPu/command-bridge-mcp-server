@@ -35,13 +35,15 @@ jobs:
 
       - name: Check Linux script syntax
         if: runner.os == 'Linux'
-        run: bash -n scripts/linux-systemd/install.sh scripts/linux-systemd/uninstall.sh packaging/linux/audit-reader
+        run: |
+          while IFS= read -r -d '' script; do bash -n "$script"; done < <(find scripts -name '*.sh' -print0)
+          bash -n packaging/linux/audit-reader
 
       - name: Check Windows installer assets
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          $files = Get-ChildItem -Path scripts/windows -Recurse -Filter *.ps1
+          $files = Get-ChildItem -Path scripts -Recurse -Filter *.ps1
           $allErrors = @()
           foreach ($file in $files) {
             $tokens = $null
@@ -77,3 +79,42 @@ jobs:
       - name: Verify systemd unit
         if: runner.os == 'Linux'
         run: sudo systemd-analyze verify packaging/systemd/command-bridge-mcp-server.service
+
+  publish-channel:
+    needs: [test, service-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: install-channel
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+      - run: node scripts/publish-channel.mjs
+
+  service-smoke:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Linux service lifecycle
+        if: runner.os == 'Linux'
+        run: bash scripts/linux-systemd/tests/service-smoke.sh
+      - name: Windows service lifecycle
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\scripts\windows\tests\service-smoke.ps1

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Status](https://img.shields.io/badge/status-pre--1.0-orange)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -13,7 +13,7 @@ CommandBridge 是部署在目標主機上的 [Model Context Protocol（MCP）](h
 每台主機各自執行一個 MCP Endpoint。服務支援本機 `stdio` 與遠端 Streamable HTTP；下方的一鍵安裝會建立可開機啟動的 HTTP 背景服務。
 
 > [!NOTE]
-> 目前為 pre-1.0 專案，適合受控環境。下方下載指令固定指向 `v0.4.0`，需等該 tag 發布後使用；只有推送 `main` 不會建立此版本的下載網址。
+> 安裝採用固定 bootstrap 網址，來源是通過全部 CI（含真實服務安裝測試）的 main commit，不再要求發布 tag。首次成功建立 install-channel 前，入口會清楚報錯，不會改抓未驗證的版本。自訂過白名單的使用者，升級前請先閱讀 [1.0 遷移指南](docs/migration-1.0.md)。
 
 ## 可以做什麼？
 
@@ -66,7 +66,7 @@ Linux 不支援 Alpine／musl，也不能直接以此 systemd 安裝器部署到
 以系統管理員身分開啟 Windows PowerShell（x64），貼上：
 
 ~~~powershell
-$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/windows/install.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
+$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
 ~~~
 
 ### Linux
@@ -74,7 +74,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 適用使用 systemd 的 glibc Linux（x64／ARM64），貼上：
 
 ~~~bash
-script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/install.sh -o "$script" && sudo bash "$script" --print-codex-setup && rm -f "$script"
+script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --print-codex-setup && rm -f "$script"
 ~~~
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge-mcp-server` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。
@@ -115,12 +115,12 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 
 ## 指令限制與安全邊界
 
-預設為 `allowlist`，只接受設定好的指令名稱，並攔截部分 Shell 控制語法。Linux 的預設清單包含 `uname`、`hostname`、`df`、`ps` 等；Windows 包含 `Get-Process`、`Get-Service`、`systeminfo` 等。
+預設為 `allowlist`，只解析字面參數、比對完整且精確的 argv 組合，直接啟動固定程式，不交給 Shell 二次解析。PowerShell Cmdlet 使用固定包裝程式。Linux 預設包含 `uname`、`hostname`、`df`、`ps`；Windows 包含 `Get-Process`、`Get-Service`、`systeminfo`。內建指令預設允許無參數呼叫；`Get-CimInstance` 查詢 `Win32_OperatingSystem`。自訂指令需由管理員建立政策檔。
 
-`rm`、`del`、`Remove-Item` 等刪除指令不在預設白名單中，會被拒絕。但這不是完整的禁止刪除機制：加入這些指令、改用 `unrestricted`，或透過其他程式的參數與 Shell 解析差異，都可能改變風險。
+`rm`、`del`、`Remove-Item` 不在預設政策中，會被拒絕。自訂原生程式政策仍可能允許破壞性操作；明確啟用 `unrestricted` 則恢復自由 Shell 指令。兩種模式都不是完整檔案系統沙箱。
 
 > [!IMPORTANT]
-> 白名單目前以指令名稱與語法檢查為主，不提供完整的參數沙箱。工作目錄限制也不會阻止指令透過參數存取其他有權限的路徑。請保留低權限帳號與必要的網路限制，不要把服務直接公開到網際網路。詳見 [安全政策](SECURITY.md)。
+> 管理員必須信任所核准的程式與每組參數；服務帳號不應能修改政策或核准的程式。工作目錄檢查會解析 symlink，但參數仍可存取其他有權限的路徑。請保留低權限帳號與網路限制，不要把服務直接公開到網際網路。詳見 [安全政策](SECURITY.md)。
 
 服務安裝的預設限制：
 
@@ -145,6 +145,8 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 
 Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初始寫入失敗時不執行指令；終結事件寫入失敗時不回傳擷取的輸出。保存期限由主機設定決定，日誌不具不可竄改保證。
 
+本機 stdio 預設改用使用者資料目錄內的私有 JSONL 檔案，每檔 10 MiB、保留五份；服務安裝則明確選用 journal／Event Log。需驗證 Token 的 `/ready` 會檢查服務依賴；安裝器還會透過真實 MCP 執行指令並核對 Audit lifecycle，通過後才移除升級備份。
+
 ## 一鍵解除安裝
 
 停止並移除服務與程式，保留設定、Token 和工作資料。
@@ -154,13 +156,13 @@ Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初�
 以系統管理員身分開啟 Windows PowerShell，貼上：
 
 ~~~powershell
-$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/windows/uninstall.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Yes; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
+$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Uninstall -Yes; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
 ~~~
 
 ### Linux
 
 ~~~bash
-script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/uninstall.sh -o "$script" && sudo bash "$script" --yes && rm -f "$script"
+script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --uninstall --yes && rm -f "$script"
 ~~~
 
 詳細設定與完整清除方式：[Windows 指南](docs/windows-service.md) · [Linux 指南](docs/linux-systemd.md)。
@@ -171,5 +173,6 @@ script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/comman
 - [Windows 部署指南](docs/windows-service.md)：服務設定、Event Log、回復與完整移除。
 - [設定範本](.env.example)：可調整的環境變數；本機程式的預設傳輸為 stdio，與服務安裝設定不同。
 - [更新紀錄](CHANGELOG.md)：版本變更與發布狀態。
+- [1.0 遷移與政策指南](docs/migration-1.0.md)：精確參數、自訂政策、Audit 後端與網路重設。
 - [Issues](https://github.com/HsinPu/command-bridge-mcp-server/issues)：一般問題與功能建議；請附上版本、作業系統及去除秘密後的錯誤資訊。
 - [安全政策](SECURITY.md)：安全問題請依文件以私下方式回報。

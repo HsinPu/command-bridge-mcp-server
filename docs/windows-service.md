@@ -11,19 +11,19 @@ The Windows installer deploys CommandBridge as a WinSW-managed Windows service n
 
 ARM64 is intentionally deferred until a stable compatible service wrapper is selected.
 
-## Install v0.4.0
+## Install the latest verified source
 
-No clone, Git, or preinstalled Node.js is required. After the `v0.4.0` tag is published, open Windows PowerShell as administrator and paste:
+No clone, Git, or preinstalled Node.js is required. The fixed bootstrap selects a main commit only after CI succeeds. Open Windows PowerShell as administrator and paste:
 
 ~~~powershell
-$installer = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/windows/install.ps1" -OutFile $installer; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "Installation failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
+$installer = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $installer; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "Installation failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
 ~~~
 
 Download failures stop before execution. The temporary installer is removed on success or failure, and a nonzero installer exit code is reported as an error. Execution-policy bypass is limited to the child process. Without a URL, a fresh install selects a private IPv4 address (preferring a default-route interface), sets the listener and allowed Host, and prints `http://<IP>:<port>/mcp`. It accepts RFC1918 and 100.64.0.0/10 addresses (including Tailscale), falling back to `127.0.0.1` for local-only use if none is found. Existing configuration and tokens are preserved; the output uses the saved listener host and port. A wildcard IPv4 listener uses the detected private IP; wildcard IPv6 uses IPv6 loopback for local setup.
 
 Add `-CodexUrl "https://your-private-host/mcp"` to use an existing HTTPS route; a fresh install then defaults to loopback. Explicit `COMMAND_BRIDGE_HTTP_HOST` and `COMMAND_BRIDGE_HTTP_PORT` override detection. A concrete non-loopback host is also used as the allowed Host unless separately configured; wildcard binds still require an explicit allowed Hosts list. The installer does not provision HTTPS or a tunnel.
 
-Clone or download the release, open an elevated PowerShell session, and run:
+For development, use a clean committed Git checkout, open an elevated PowerShell session, and run:
 
 ~~~powershell
 Set-Location C:\path\to\command-bridge-mcp-server
@@ -33,13 +33,13 @@ Set-Location C:\path\to\command-bridge-mcp-server
 The installer:
 
 1. Requires an administrator session and x64 Windows.
-2. Uses the checked-out source when present, otherwise downloads the <code>v0.4.0</code> source archive.
+2. Uses the complete source archive selected by the CI channel; a local checkout must be committed before installation.
 3. Downloads Node.js <code>v24.18.0</code> and verifies the official SHA-256 manifest entry.
 4. Downloads only WinSW <code>v2.12.0</code> from its fixed release URL and verifies SHA-256 <code>05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da</code>.
 5. Builds and tests the source, then removes development dependencies before deployment.
 6. Creates or preserves the bearer-token configuration under <code>%ProgramData%\CommandBridgeMCP</code>.
 7. Registers the <code>CommandBridgeMCP</code> source in the Application Event Log with <code>New-EventLog</code>.
-8. Installs and starts the WinSW service, checks <code>/health</code>, writes an audit verification event, and confirms the fixed Event Log reader returns only CommandBridge audit events.
+8. Installs and starts the WinSW service, checks <code>/health</code> and authenticated <code>/ready</code>, executes hostname through MCP, and queries its matching Audit lifecycle under the actual service account.
 9. Restores the prior application directory and service if an upgrade fails after the activation step.
 
 The Event Log source registration requires administrator rights. See Microsoft’s [New-EventLog reference](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/new-eventlog?view=powershell-5.1).
@@ -54,10 +54,11 @@ The Event Log source registration requires administrator rights. See Microsoft�
 ├── CommandBridgeMCP.exe             WinSW v2.12.0
 ├── CommandBridgeMCP.xml             service definition
 ├── runtime\                         bundled Node.js v24.18.0
-└── app\                             production CommandBridge application
+└── releases\v<version>-<sha>\        production application and install-info.json
 
 %ProgramData%\CommandBridgeMCP\
 ├── command-bridge.env               bearer-token configuration
+├── policy.json                      administrator-controlled exact argv policies
 ├── work\                            LocalService writable working root
 └── logs\                            WinSW service logs
 ~~~
@@ -135,3 +136,7 @@ The uninstaller verifies that any existing <code>CommandBridgeMCP</code> service
 The Windows service is not an administrator shell. Keep <code>allowlist</code> mode for normal operation, allow only required working roots, and keep HTTP behind private networking or authenticated TLS. The Application Event Log source can be unregistered by an administrator during uninstall; event retention and administrator-level tampering are outside CommandBridge’s control.
 
 WinSW configuration uses its standard XML service-account support. See the [WinSW XML configuration reference](https://github.com/winsw/winsw/blob/v2.12.0/doc/xmlConfigFile.md).
+
+## 1.0 migration and reliability
+
+See [the migration guide](migration-1.0.md) for custom native policies, audit backends, authenticated readiness, installation identity, and -RefreshNetwork. The installer validates policies before stopping the existing service and verifies a real MCP command plus its audit ID under LocalService before deleting the backup. The installed uninstaller is %ProgramFiles%\CommandBridgeMCP\uninstall.ps1.

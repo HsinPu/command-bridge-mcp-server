@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Status](https://img.shields.io/badge/status-pre--1.0-orange)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -13,7 +13,7 @@ CommandBridge is a [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 Each host runs its own MCP endpoint. The server supports local `stdio` and remote Streamable HTTP; the one-command installers below create an HTTP background service that starts at boot.
 
 > [!NOTE]
-> This project is pre-1.0 and intended for controlled environments. The download commands below are pinned to `v0.4.0` and require that tag to be published. Pushing `main` alone does not make these versioned URLs available.
+> Installation uses a fixed bootstrap URL and the latest main commit that passed all CI checks, including service installation tests. Tags are optional historical references. Until the first successful install-channel publication, bootstrap fails with a clear error instead of installing an unverified commit. Read the [1.0 migration guide](docs/migration-1.0.md) before upgrading custom allowlists.
 
 ## What can you do with it?
 
@@ -66,7 +66,7 @@ Downloads GitHub source and Node.js, builds and tests the application, starts th
 Open Windows PowerShell as administrator (x64) and paste:
 
 ~~~powershell
-$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/windows/install.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
+$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
 ~~~
 
 ### Linux
@@ -74,7 +74,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 On a glibc Linux host with systemd (x64/ARM64), paste:
 
 ~~~bash
-script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/install.sh -o "$script" && sudo bash "$script" --print-codex-setup && rm -f "$script"
+script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --print-codex-setup && rm -f "$script"
 ~~~
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge-mcp-server` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds.
@@ -115,12 +115,12 @@ Example requests for a connected client:
 
 ## Command restrictions and security boundaries
 
-The default `allowlist` mode checks configured command names and blocks certain shell-control syntax. Linux defaults include `uname`, `hostname`, `df`, and `ps`; Windows defaults include `Get-Process`, `Get-Service`, and `systeminfo`.
+The default `allowlist` mode parses literal arguments, matches an exact approved argv combination, and launches a fixed executable without a shell. Built-in PowerShell cmdlets use a fixed wrapper. Linux defaults include `uname`, `hostname`, `df`, and `ps`; Windows defaults include `Get-Process`, `Get-Service`, and `systeminfo`. Built-ins allow no arguments by default; `Get-CimInstance` uses `Win32_OperatingSystem`. Custom commands require an administrator-managed policy file.
 
-Deletion commands such as `rm`, `del`, and `Remove-Item` are absent from the default allowlist and are rejected. This is not a complete deletion-prevention mechanism: adding those commands, enabling `unrestricted`, or using other programs' arguments and shell parsing behavior can change the risk.
+Deletion commands such as `rm`, `del`, and `Remove-Item` are absent from the default policies and are rejected. Enabling a custom native executable policy can permit destructive operations, and `unrestricted` explicitly restores free-form shell execution. Neither mode is a complete filesystem sandbox.
 
 > [!IMPORTANT]
-> Allowlisting currently relies on command-name and syntax checks; it is not a comprehensive argument sandbox. Working-directory restrictions do not prevent commands from naming other accessible paths as arguments. Keep the low-privilege account and appropriate network restrictions, and do not expose the service directly to the internet. See the [security policy](SECURITY.md).
+> Administrators must trust the executable and every argument combination they approve. The service must not be able to modify its policy or approved binaries. Working-directory checks resolve symlinks, but arguments can still refer to other accessible paths. Keep the low-privilege account and network restrictions, and do not expose the service directly to the internet. See the [security policy](SECURITY.md).
 
 Service installation defaults:
 
@@ -145,6 +145,8 @@ Each command request entering the execution flow first records `attempted`, foll
 
 Audit events do not store stdout/stderr, and common secret patterns in commands are redacted. Failure to write the initial event prevents execution; failure to write the terminal event withholds captured output. Retention is controlled by the host, and the logs are not tamper-proof.
 
+Local stdio defaults to private JSONL files in the user's data directory, rotating at 10 MiB per file with five files retained. Service installations explicitly select journal or Event Log. The authenticated `/ready` endpoint checks service dependencies; installation also verifies a real MCP command and matching audit lifecycle before discarding upgrade backups.
+
 ## One-command uninstall
 
 Stops and removes the service and application, preserving configuration, token, and work data.
@@ -154,13 +156,13 @@ Stops and removes the service and application, preserving configuration, token, 
 Open Windows PowerShell as administrator and paste:
 
 ~~~powershell
-$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/windows/uninstall.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Yes; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
+$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Uninstall -Yes; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
 ~~~
 
 ### Linux
 
 ~~~bash
-script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/uninstall.sh -o "$script" && sudo bash "$script" --yes && rm -f "$script"
+script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --uninstall --yes && rm -f "$script"
 ~~~
 
 Detailed settings and full data removal: [Windows guide](docs/windows-service.md) · [Linux guide](docs/linux-systemd.md).
@@ -171,5 +173,6 @@ Detailed settings and full data removal: [Windows guide](docs/windows-service.md
 - [Windows deployment guide](docs/windows-service.md): service configuration, Event Log, recovery, and full removal.
 - [Environment template](.env.example): configurable environment variables; the application's local default is stdio, which differs from service installation settings.
 - [Changelog](CHANGELOG.md): version changes and release status.
+- [1.0 migration and policies](docs/migration-1.0.md): exact arguments, custom policies, audit backends, and network refresh.
 - [Issues](https://github.com/HsinPu/command-bridge-mcp-server/issues): general problems and feature requests. Include the version, operating system, and error details with secrets removed.
 - [Security policy](SECURITY.md): instructions for reporting security issues privately.

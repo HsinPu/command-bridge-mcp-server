@@ -24,7 +24,7 @@ export async function startHttpTransport(
     res.json({ status: "ok" });
   });
 
-  app.use("/mcp", (req, res, next) => {
+  app.use(["/mcp", "/ready"], (req, res, next) => {
     const authorization = req.headers.authorization;
     const suppliedToken = authorization?.startsWith("Bearer ")
       ? authorization.slice("Bearer ".length)
@@ -41,6 +41,13 @@ export async function startHttpTransport(
     }
 
     next();
+  });
+
+  app.get("/ready", async (_req, res) => {
+    try {
+      const readiness = await executor.readiness();
+      res.status(readiness.ready ? 200 : 503).json(readiness);
+    } catch { res.status(503).json({ ready: false }); }
   });
 
   app.post("/mcp", async (req, res) => {

@@ -141,12 +141,12 @@ test("uninstaller supports a no-change dry run", () => {
   assert.match(uninstaller, /Dry run complete; no changes were made\./);
 });
 
-test("release documentation pins uninstall commands to the package version", () => {
+test("documentation uses the fixed bootstrap uninstall entry", () => {
   for (const document of documentation) {
     assert.match(
       document,
       new RegExp(
-        `https://raw\\.githubusercontent\\.com/HsinPu/command-bridge-mcp-server/v${packageJson.version}/scripts/linux-systemd/uninstall\\.sh`
+        `https://raw\\.githubusercontent\\.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap\\.sh`
       )
     );
   }
@@ -154,10 +154,10 @@ test("release documentation pins uninstall commands to the package version", () 
 });
 
 test("test and CI commands include the uninstall assets", () => {
-  assert.match(packageJson.scripts.test, /dist\/uninstallAssets\.test\.js/);
+  assert.match(packageJson.scripts.test, /scripts\/test\.mjs/);
   assert.match(
     ciWorkflow,
-    /bash -n scripts\/linux-systemd\/install\.sh scripts\/linux-systemd\/uninstall\.sh packaging\/linux\/audit-reader/
+    /while IFS= read -r -d '' script; do bash -n "\$script"; done/
   );
   assert.match(ciWorkflow, /Check Windows installer assets/);
 });

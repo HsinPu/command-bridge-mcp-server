@@ -20,10 +20,9 @@ readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
 readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
 readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
-readonly SOURCE_REF="v0.4.0"
+SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SOURCE_ARCHIVE_URL="https://github.com/HsinPu/command-bridge-mcp-server/archive/refs/tags/${SOURCE_REF}.tar.gz"
 readonly SYSTEMD_UNIT_SHA256="39faaea6008bbabcba0c6133a1936cc34273f91df0e1cb5c1da43c1ab0a46014"
 readonly AUDIT_READER_SHA256="3c5542591db8ffe3a75f14448d3c57be0f4f8a0d85ac68a355ae59906536acf7"
 readonly BUILD_USER="command-bridge-build-$$"
@@ -47,6 +46,9 @@ BUILD_ACCOUNT_ACTIVE=0
 BUILT_PACKAGE_VERSION=""
 PRINT_CODEX_SETUP=0
 CODEX_SETUP_URL=""
+REFRESH_NETWORK=0
+CONFIG_BACKUP=""
+INSTALL_SUCCEEDED=0
 
 log() {
   printf '[CommandBridge] %s\n' "$*"
@@ -76,6 +78,10 @@ parse_arguments() {
   while (( $# > 0 )); do
     case "$1" in
       --print-codex-setup)
+        PRINT_CODEX_SETUP=1
+        ;;
+      --refresh-network)
+        REFRESH_NETWORK=1
         PRINT_CODEX_SETUP=1
         ;;
       --codex-url)
@@ -165,6 +171,9 @@ automatic_codex_url() {
 }
 
 cleanup() {
+  if [[ "${INSTALL_SUCCEEDED}" == 0 && -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
+    install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
+  fi
   cleanup_build_account || true
   if [[ -n "${TEMP_DIR}" && -d "${TEMP_DIR}" ]]; then
     case "${TEMP_DIR}" in
@@ -337,6 +346,13 @@ prepare_source() {
   install -d -m 0755 "${source_dir}"
 
   if local_source=$(find_local_source); then
+    if [[ -f "${local_source}/.command-bridge-source-sha" ]]; then
+      SOURCE_REF=$(cat "${local_source}/.command-bridge-source-sha")
+    else
+      SOURCE_REF=$(git -C "${local_source}" rev-parse HEAD)
+      [[ -z "$(git -C "${local_source}" status --porcelain --untracked-files=normal)" ]] || fail "Commit local source changes before installation so release identity is unambiguous."
+    fi
+    [[ "${SOURCE_REF}" =~ ^[a-f0-9]{40}$ ]] || fail "A full source commit SHA is required."
     log "Using local CommandBridge source from ${local_source}."
     tar -C "${local_source}" \
       --exclude=.git \
@@ -346,9 +362,7 @@ prepare_source() {
       --exclude=.env \
       -cf - . | tar -C "${source_dir}" -xf -
   else
-    log "Downloading CommandBridge MCP ${SOURCE_REF}..."
-    download_https "${SOURCE_ARCHIVE_URL}" "${TEMP_DIR}/command-bridge-source.tar.gz"
-    tar -xzf "${TEMP_DIR}/command-bridge-source.tar.gz" -C "${source_dir}" --strip-components=1
+    fail "Use scripts/bootstrap.sh to download a CI-verified source snapshot."
   fi
 
   [[ -f "${source_dir}/package.json" ]] || fail "Downloaded source is missing package.json."
@@ -384,8 +398,11 @@ build_source() {
   package_name=$("${node_root}/bin/node" -p "require('${source_dir}/package.json').name")
   package_version=$("${node_root}/bin/node" -p "require('${source_dir}/package.json').version")
   [[ "${package_name}" == "command-bridge-mcp-server" ]] || fail "Unexpected npm package: ${package_name}"
-  [[ "v${package_version}" == "${SOURCE_REF}" ]] || \
-    fail "Package version ${package_version} does not match installer source ${SOURCE_REF}."
+  [[ "${package_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Invalid source package version."
+  if [[ -f "${source_dir}/.command-bridge-source-version" ]]; then
+    [[ "${package_version}" == "$(cat "${source_dir}/.command-bridge-source-version")" ]] || fail "Source version does not match the verified channel."
+  fi
+  local original_version=${package_version}
 
   create_build_account "${build_home}"
   install -d -m 0700 -o "${BUILD_USER}" -g "${BUILD_GROUP}" "${build_home}"
@@ -406,17 +423,11 @@ build_source() {
     runuser -u "${BUILD_USER}" -- env -i \
       HOME="${build_home}" \
       PATH="${node_root}/bin:/usr/bin:/bin" \
-      "${node_root}/bin/node" "${source_dir}/node_modules/typescript/bin/tsc"
+      "${node_root}/bin/node" "${source_dir}/scripts/build.mjs"
     runuser -u "${BUILD_USER}" -- env -i \
       HOME="${build_home}" \
       PATH="${node_root}/bin:/usr/bin:/bin" \
-      "${node_root}/bin/node" --test \
-        "${source_dir}/dist/services/commandPolicy.test.js" \
-        "${source_dir}/dist/services/auditLog.test.js" \
-        "${source_dir}/dist/services/commandExecutor.test.js" \
-        "${source_dir}/dist/tools/commandBridgeTools.test.js" \
-        "${source_dir}/dist/installAssets.test.js" \
-        "${source_dir}/dist/uninstallAssets.test.js"
+      "${node_root}/bin/node" "${source_dir}/scripts/test.mjs"
 
     runuser -u "${BUILD_USER}" -- env -i \
       HOME="${build_home}" \
@@ -435,7 +446,7 @@ build_source() {
   package_version=$("${node_root}/bin/node" -p "require('${source_dir}/package.json').version")
   [[ "${package_name}" == "command-bridge-mcp-server" ]] || fail "Built package name changed unexpectedly."
   [[ "${package_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Built package version is not path-safe."
-  [[ "v${package_version}" == "${SOURCE_REF}" ]] || fail "Built package version changed unexpectedly."
+  [[ "${package_version}" == "${original_version}" ]] || fail "Built package version changed unexpectedly."
   [[ -f "${source_dir}/dist/index.js" && ! -L "${source_dir}/dist/index.js" ]] || \
     fail "Build completed without a regular dist/index.js file."
   [[ -d "${source_dir}/node_modules/@modelcontextprotocol/sdk" && \
@@ -556,7 +567,7 @@ install_runtime_and_release() {
 
   package_version=${BUILT_PACKAGE_VERSION}
   [[ -n "${package_version}" ]] || fail "Built package version was not recorded."
-  release_name="v${package_version}"
+  release_name="v${package_version}-${SOURCE_REF}"
   release_final="${RELEASES_DIR}/${release_name}"
   release_staging="${RELEASES_DIR}/.${release_name}.new.$$"
 
@@ -588,6 +599,10 @@ install_runtime_and_release() {
       "${source_dir}/SECURITY.md" \
       "${release_staging}/"
     printf '%s\n' "${SOURCE_REF}" > "${release_staging}/.command-bridge-release"
+    install -m 0755 "${source_dir}/scripts/linux-systemd/uninstall.sh" "${release_staging}/uninstall.sh"
+    install -d -m 0755 "${release_staging}/scripts"
+    install -m 0644 "${source_dir}/scripts/verify-install.mjs" "${release_staging}/scripts/verify-install.mjs"
+    printf '{"version":"%s","sourceSha":"%s","runtimeVersion":"%s"}\n' "${package_version}" "${SOURCE_REF}" "${NODE_VERSION}" > "${release_staging}/install-info.json"
     chown -R root:root "${release_staging}"
     chmod -R go-w "${release_staging}"
     mv "${release_staging}" "${release_final}"
@@ -648,12 +663,23 @@ validate_new_configuration() {
 install_configuration() {
   local token host port allowed_hosts execution_mode
 
-  install -d -m 0700 -o root -g root "${CONFIG_DIR}"
+  install -d -m 0750 -o root -g "${SERVICE_GROUP}" "${CONFIG_DIR}"
+  if [[ ! -e "${CONFIG_DIR}/policy.json" ]]; then
+    install -m 0640 -o root -g "${SERVICE_GROUP}" "${TEMP_DIR}/source/packaging/policy.example.json" "${CONFIG_DIR}/policy.json"
+  fi
 
   if [[ -e "${CONFIG_FILE}" ]]; then
     log "Preserving existing configuration and bearer token at ${CONFIG_FILE}."
     chown root:root "${CONFIG_FILE}"
     chmod 0600 "${CONFIG_FILE}"
+    if [[ "${REFRESH_NETWORK}" == 1 ]]; then
+      CONFIG_BACKUP="${TEMP_DIR}/previous-config.env"
+      cp -p "${CONFIG_FILE}" "${CONFIG_BACKUP}"
+      host=$(detect_private_ipv4)
+      awk -v host="${host}" '/^COMMAND_BRIDGE_HTTP_HOST=/{print "COMMAND_BRIDGE_HTTP_HOST=" host;next} /^COMMAND_BRIDGE_ALLOWED_HOSTS=/{print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host;next} {print}' "${CONFIG_FILE}" > "${CONFIG_FILE}.new"
+      chmod 0600 "${CONFIG_FILE}.new"
+      mv "${CONFIG_FILE}.new" "${CONFIG_FILE}"
+    fi
     return
   fi
 
@@ -670,6 +696,8 @@ install_configuration() {
   umask 077
   {
     printf 'COMMAND_BRIDGE_TRANSPORT=http\n'
+    printf 'COMMAND_BRIDGE_AUDIT_BACKEND=journal\n'
+    printf 'COMMAND_BRIDGE_POLICY_FILE=%s/policy.json\n' "${CONFIG_DIR}"
     printf 'COMMAND_BRIDGE_BEARER_TOKEN=%s\n' "${token}"
     printf 'COMMAND_BRIDGE_HTTP_HOST=%s\n' "${host}"
     printf 'COMMAND_BRIDGE_HTTP_PORT=%s\n' "${port}"
@@ -716,6 +744,9 @@ health_url() {
 rollback_activation() {
   ROLLBACK_IN_PROGRESS=1
   log "Rolling back the activated release..."
+  if [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
+    install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
+  fi
 
   rollback_audit_access
   if [[ -z "${PREVIOUS_RELEASE}" ]]; then
@@ -894,11 +925,18 @@ main() {
   prepare_node_runtime "${node_arch}"
   prepare_source
   build_source
+  if [[ -f "${CONFIG_FILE}" ]]; then
+    DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
+  fi
   ensure_service_account
-  install_runtime_and_release "${node_arch}"
   install_configuration
+  DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
+  install_runtime_and_release "${node_arch}"
   install_audit_access
   install_and_start_service
+  "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
+  ACTIVATION_STARTED=0
+  INSTALL_SUCCEEDED=1
   print_summary
   print_codex_setup
 }

@@ -94,9 +94,9 @@ export function registerCommandBridgeTools(
         openWorldHint: true
       }
     },
-    async ({ command, shell, cwd, timeoutMs }) => {
+    async ({ command, shell, cwd, timeoutMs }, extra) => {
       try {
-        return toToolResult(await executor.execute({ command, shell, cwd, timeoutMs }));
+        return toToolResult(await executor.execute({ command, shell, cwd, timeoutMs }, extra.signal));
       } catch (error) {
         return toToolResult(toErrorPayload(error), true);
       }

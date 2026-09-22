@@ -1,16 +1,16 @@
 {
   "name": "command-bridge-mcp-server",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Cross-platform MCP server for policy-controlled Linux and Windows command execution.",
   "type": "module",
   "bin": {
     "command-bridge-mcp-server": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build.mjs",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "npm run build && node --test dist/services/commandPolicy.test.js dist/services/auditLog.test.js dist/services/commandExecutor.test.js dist/tools/commandBridgeTools.test.js dist/installAssets.test.js dist/uninstallAssets.test.js dist/windowsInstallAssets.test.js"
+    "test": "npm run build && node scripts/test.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -4,7 +4,7 @@ CommandBridge MCP executes operating-system commands. Treat every deployment as 
 
 ## Supported versions
 
-Only the latest released version will receive security fixes while the project is pre-1.0.
+Only the latest released version receives security fixes. The installation channel selects a main commit only after the required CI checks pass; it does not imply a separately published GitHub Release.
 
 ## Reporting a vulnerability
 
@@ -17,6 +17,8 @@ After the GitHub repository is published, report vulnerabilities through a priva
 - Use a private network or an authenticated TLS reverse proxy for HTTP mode.
 - Use a unique bearer token per host and rotate it if exposure is suspected.
 - Restrict working-directory roots and inherited environment variables.
+- In 1.0 allowlist mode, approve fixed native executables and exact argument combinations in an administrator-managed policy. Keep the policy, binaries and their parent directories unwritable by the service. This is not a sandbox for unsafe administrator-approved programs.
+- `unrestricted` deliberately permits shell interpretation and must never be a fallback for invalid policies.
 - Never pass passwords, API keys, or private keys as command arguments.
 - Treat <code>COMMAND_BRIDGE_ALLOWED_ROOTS</code> as a working-directory restriction, not a filesystem sandbox; command arguments can still name other paths that the service account can read.
 - Do not add the service account to <code>sudo</code>, <code>docker</code>, <code>adm</code>, or <code>systemd-journal</code> groups. On Linux, the installer creates one exact no-argument sudoers rule only for the root-owned audit reader; do not expand, reuse, or replace it with generic sudo access.
