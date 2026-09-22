@@ -10,8 +10,8 @@ $ErrorActionPreference = "Stop"
 $ServiceName = "CommandBridgeMCP"
 $EventSource = "CommandBridgeMCP"
 $PackageName = "command-bridge-mcp-server"
-$PackageVersion = "0.3.0"
-$SourceRef = "v0.3.0"
+$PackageVersion = "0.3.1"
+$SourceRef = "v0.3.1"
 $NodeVersion = "24.18.0"
 $WinSwVersion = "2.12.0"
 $WinSwUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
@@ -163,10 +163,16 @@ function Build-Source {
   }
 
   Write-Log "Installing locked dependencies and running the CommandBridge test suite."
-  Invoke-External $npm @("ci", "--ignore-scripts", "--no-audit", "--no-fund") $SourceRoot
-  Invoke-External $npm @("run", "build") $SourceRoot
-  Invoke-External $npm @("test") $SourceRoot
-  Invoke-External $npm @("prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund") $SourceRoot
+  $previousPath = $env:PATH
+  try {
+    $env:PATH = "$NodeRoot;$previousPath"
+    Invoke-External $npm @("ci", "--ignore-scripts", "--no-audit", "--no-fund") $SourceRoot
+    Invoke-External $npm @("run", "build") $SourceRoot
+    Invoke-External $npm @("test") $SourceRoot
+    Invoke-External $npm @("prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund") $SourceRoot
+  } finally {
+    $env:PATH = $previousPath
+  }
 }
 
 function New-SecureConfiguration {
@@ -190,11 +196,11 @@ function New-SecureConfiguration {
     throw "COMMAND_BRIDGE_BEARER_TOKEN must contain at least 32 safe characters."
   }
 
-  $host = if ($env:COMMAND_BRIDGE_HTTP_HOST) { $env:COMMAND_BRIDGE_HTTP_HOST } else { "127.0.0.1" }
+  $httpHost = if ($env:COMMAND_BRIDGE_HTTP_HOST) { $env:COMMAND_BRIDGE_HTTP_HOST } else { "127.0.0.1" }
   $port = if ($env:COMMAND_BRIDGE_HTTP_PORT) { $env:COMMAND_BRIDGE_HTTP_PORT } else { "8800" }
   $mode = if ($env:COMMAND_BRIDGE_EXECUTION_MODE) { $env:COMMAND_BRIDGE_EXECUTION_MODE } else { "allowlist" }
   $allowedHosts = if ($env:COMMAND_BRIDGE_ALLOWED_HOSTS) { $env:COMMAND_BRIDGE_ALLOWED_HOSTS } else { "" }
-  if ($host -notmatch "^[A-Za-z0-9._:%-]+$") {
+  if ($httpHost -notmatch "^[A-Za-z0-9._:%-]+$") {
     throw "Invalid COMMAND_BRIDGE_HTTP_HOST."
   }
   if ($port -notmatch "^[0-9]+$" -or [int]$port -lt 1 -or [int]$port -gt 65535) {
@@ -203,14 +209,14 @@ function New-SecureConfiguration {
   if ($mode -notin @("allowlist", "unrestricted")) {
     throw "COMMAND_BRIDGE_EXECUTION_MODE must be allowlist or unrestricted."
   }
-  if ($host -notin @("127.0.0.1", "localhost", "::1") -and [string]::IsNullOrWhiteSpace($allowedHosts)) {
+  if ($httpHost -notin @("127.0.0.1", "localhost", "::1") -and [string]::IsNullOrWhiteSpace($allowedHosts)) {
     throw "COMMAND_BRIDGE_ALLOWED_HOSTS is required for a non-loopback HTTP host."
   }
 
   $lines = @(
     "COMMAND_BRIDGE_TRANSPORT=http",
     "COMMAND_BRIDGE_BEARER_TOKEN=$token",
-    "COMMAND_BRIDGE_HTTP_HOST=$host",
+    "COMMAND_BRIDGE_HTTP_HOST=$httpHost",
     "COMMAND_BRIDGE_HTTP_PORT=$port",
     "COMMAND_BRIDGE_ALLOWED_HOSTS=$allowedHosts",
     "COMMAND_BRIDGE_EXECUTION_MODE=$mode",
@@ -291,15 +297,15 @@ function Get-ConfigValue {
 }
 
 function Wait-ForHealth {
-  $host = Get-ConfigValue "COMMAND_BRIDGE_HTTP_HOST"
+  $httpHost = Get-ConfigValue "COMMAND_BRIDGE_HTTP_HOST"
   $port = Get-ConfigValue "COMMAND_BRIDGE_HTTP_PORT"
-  if ($host -eq "0.0.0.0" -or $host -eq "::") {
-    $host = "127.0.0.1"
+  if ($httpHost -eq "0.0.0.0" -or $httpHost -eq "::") {
+    $httpHost = "127.0.0.1"
   }
-  if ($host -eq "::1") {
-    $host = "[::1]"
+  if ($httpHost -eq "::1") {
+    $httpHost = "[::1]"
   }
-  $uri = "http://{0}:{1}/health" -f $host, $port
+  $uri = "http://{0}:{1}/health" -f $httpHost, $port
   for ($attempt = 1; $attempt -le 20; $attempt += 1) {
     try {
       $response = Invoke-WebRequest -UseBasicParsing -Uri $uri -TimeoutSec 2
@@ -338,10 +344,10 @@ function Invoke-AuditVerification {
     throw "Windows Event Log audit reader verification failed."
   }
   $events = @($messages | ForEach-Object { $_ | ConvertFrom-Json -ErrorAction Stop })
-  if (($events | Where-Object { $_.auditId -eq $auditId }).Count -ne 1) {
+  if (@($events | Where-Object { $_.auditId -eq $auditId }).Count -ne 1) {
     throw "Windows Event Log did not return the audit verification event."
   }
-  if (($events | Where-Object { $_.event -ne "command_bridge.audit" }).Count -ne 0) {
+  if (@($events | Where-Object { $_.event -ne "command_bridge.audit" }).Count -ne 0) {
     throw "Windows Event Log reader returned a non-CommandBridge event."
   }
 }

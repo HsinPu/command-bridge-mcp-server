@@ -26,7 +26,7 @@
 
 ## 專案狀態
 
-CommandBridge MCP 目前為 pre-1.0，適合受控環境使用。下方直接從 GitHub 下載的安裝命令固定使用 <code>v0.3.0</code>；請在該 tag 發布後才使用。你現在可直接從已 clone 的專案安裝。
+CommandBridge MCP 目前為 pre-1.0，適合受控環境使用。下方直接從 GitHub 下載的安裝命令固定使用 <code>v0.3.1</code>；請在該 tag 發布後才使用。你現在可直接從已 clone 的專案安裝。
 
 ## 為什麼使用 CommandBridge？
 
@@ -71,11 +71,11 @@ curl -fsS http://127.0.0.1:8800/health
 ~~~
 
 <details>
-<summary>不 clone，直接安裝已發布的 <code>v0.3.0</code> 版本</summary>
+<summary>不 clone，直接安裝已發布的 <code>v0.3.1</code> 版本</summary>
 
 ~~~bash
 installer=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "$installer"
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o "$installer"
 sudo bash "$installer" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp"
 rm -f "$installer"
 ~~~
@@ -88,6 +88,14 @@ rm -f "$installer"
 > Synology DSM 並非 systemd 主機。請使用 Container Manager 或 DSM 專用套件。
 
 ### Windows Service
+
+以系統管理員身分開啟 Windows PowerShell，貼上一行即可從 GitHub 下載並安裝，不需要先安裝 Git 或 Node.js。此指令需等 `v0.3.1` tag 發布後才能使用。
+
+~~~powershell
+$installer = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/windows/install.ps1" -OutFile $installer; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "Installation failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
+~~~
+
+安裝完成會印出連線設定；未提供 `-CodexUrl` 時使用網址佔位符。HTTPS／Tunnel 需另行設定。`ExecutionPolicy Bypass` 僅套用這次子程序，不會修改系統設定。
 
 在提升權限的 PowerShell，於已 clone 的專案中執行：
 
@@ -201,7 +209,7 @@ Linux 標準解除安裝會移除服務、應用程式、Audit reader 與其受�
 
 ~~~bash
 uninstaller=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
 sudo bash "$uninstaller" --yes
 rm -f "$uninstaller"
 ~~~
@@ -211,7 +219,7 @@ rm -f "$uninstaller"
 
 ~~~bash
 uninstaller=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
 sudo bash "$uninstaller" --purge --yes
 rm -f "$uninstaller"
 ~~~

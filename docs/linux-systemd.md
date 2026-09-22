@@ -15,12 +15,14 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 
 Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package there instead.
 
-## Install v0.3.0
+## Install v0.3.1
+
+Use the remote commands below only after the `v0.3.1` tag is published. Until then, run the installer from a checked-out repository. Git and Node.js are not required for the remote installation; the installer downloads the source archive and a private runtime.
 
 One command:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
 ```
 
 This command asks for the private HTTPS MCP URL ending in `/mcp`. After a successful installation, it prints a marked block containing the URL, generated or preserved bearer token, and exact instructions to paste into a trusted Codex task. Press Enter at the URL prompt to use a placeholder when the private route is not ready.
@@ -28,7 +30,7 @@ This command asks for the private HTTPS MCP URL ending in `/mcp`. After a succes
 To skip the prompt:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
 ```
 
 > [!CAUTION]
@@ -37,7 +39,7 @@ installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/com
 For a review-first installation:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o command-bridge-install.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o command-bridge-install.sh
 less command-bridge-install.sh
 sudo bash command-bridge-install.sh --print-codex-setup
 ```
@@ -47,7 +49,7 @@ The installer performs these steps:
 1. Rejects non-Linux, non-systemd, musl, and unsupported CPU environments.
 2. Takes an installation lock so two upgrades cannot run at the same time.
 3. Downloads pinned Node.js 24.18.0 and verifies its official SHA-256 checksum.
-4. Downloads the pinned CommandBridge MCP v0.3.0 source.
+4. Downloads the pinned CommandBridge MCP v0.3.1 source.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
 7. Creates the low-privilege <code>command-bridge</code> service account and root-only environment file.
@@ -60,8 +62,8 @@ The installer performs these steps:
 
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v0.3.0
-├── releases/v0.3.0/
+├── current -> releases/v0.3.1
+├── releases/v0.3.1/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -164,7 +166,7 @@ Journald retention is a host policy. This installer does not change global journ
 The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge-mcp-server.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge-mcp-server</code>:
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
 ```
 
 It preserves these resources for a future reinstall:
@@ -176,7 +178,7 @@ It preserves these resources for a future reinstall:
 For review and a no-change preview:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o command-bridge-uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o command-bridge-uninstall.sh
 less command-bridge-uninstall.sh
 sudo bash command-bridge-uninstall.sh --dry-run
 sudo bash command-bridge-uninstall.sh --yes
@@ -188,7 +190,7 @@ For a permanent full purge:
 > This deletes the bearer token, configuration, all work data, and the dedicated service identity. The uninstaller refuses to delete an identity whose home, shell, group membership, or running processes do not match the expected low-privilege service account.
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
 ```
 
 Both modes use the same lock as the installer, accept only the fixed CommandBridge paths, verify that the service is inactive and disabled before deleting application files, and can be run repeatedly.
@@ -218,7 +220,7 @@ If a future workflow needs one privileged operation, add a purpose-built helper 
 
 ## Reinstall and upgrade behavior
 
-Running the v0.3.0 installer again is idempotent: it reuses the pinned runtime and release, preserves configuration, reloads the unit, and rechecks service health.
+Running the v0.3.1 installer again is idempotent: it reuses the pinned runtime and release, preserves configuration, reloads the unit, and rechecks service health.
 
 Future versions will use their own versioned release directory. The installer records the current application and runtime symlinks before activation. If the new process cannot become active and pass `/health`, the symlinks are restored and the previous service is restarted.
 

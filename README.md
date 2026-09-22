@@ -26,7 +26,7 @@
 
 ## Project status
 
-CommandBridge MCP is pre-1.0 software for controlled environments. The pinned raw GitHub installation commands below target <code>v0.3.0</code>; use them only after that tag is published. A checked-out repository can be installed directly.
+CommandBridge MCP is pre-1.0 software for controlled environments. The pinned raw GitHub installation commands below target <code>v0.3.1</code>; use them only after that tag is published. A checked-out repository can be installed directly.
 
 ## Why CommandBridge?
 
@@ -71,11 +71,11 @@ curl -fsS http://127.0.0.1:8800/health
 ~~~
 
 <details>
-<summary>Install a published <code>v0.3.0</code> release without cloning</summary>
+<summary>Install a published <code>v0.3.1</code> release without cloning</summary>
 
 ~~~bash
 installer=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/install.sh -o "$installer"
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o "$installer"
 sudo bash "$installer" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp"
 rm -f "$installer"
 ~~~
@@ -88,6 +88,14 @@ See the [Linux systemd guide](docs/linux-systemd.md) for prerequisites, rollback
 > Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package instead.
 
 ### Windows service
+
+Open Windows PowerShell as administrator and paste this one-line command to download and install from GitHub. Git and Node.js do not need to be preinstalled. Use this command only after the `v0.3.1` tag is published.
+
+~~~powershell
+$installer = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/windows/install.ps1" -OutFile $installer; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "Installation failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
+~~~
+
+The installer prints connection settings, using a URL placeholder when `-CodexUrl` is omitted. Configure HTTPS/tunneling separately. `ExecutionPolicy Bypass` applies only to this child process and does not change system settings.
 
 From an elevated PowerShell session in a checked-out repository:
 
@@ -201,7 +209,7 @@ The Linux standard uninstall removes the service, application, Audit reader, and
 
 ~~~bash
 uninstaller=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
 sudo bash "$uninstaller" --yes
 rm -f "$uninstaller"
 ~~~
@@ -211,7 +219,7 @@ rm -f "$uninstaller"
 
 ~~~bash
 uninstaller=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.0/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "$uninstaller"
 sudo bash "$uninstaller" --purge --yes
 rm -f "$uninstaller"
 ~~~

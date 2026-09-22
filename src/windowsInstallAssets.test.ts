@@ -2,8 +2,23 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
+test("Windows installer config, health, runtime PATH and audit checks work under StrictMode", {
+  skip: process.platform !== "win32"
+}, () => {
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+    resolve(projectRoot, "scripts/windows/tests/install.tests.ps1")
+  ], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 30_000,
+    env: { ...process.env, COMMAND_BRIDGE_TEST_NODE: process.execPath }
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+});
 const installer = readFileSync(resolve(projectRoot, "scripts/windows/install.ps1"), "utf8");
 const uninstaller = readFileSync(resolve(projectRoot, "scripts/windows/uninstall.ps1"), "utf8");
 const writer = readFileSync(
