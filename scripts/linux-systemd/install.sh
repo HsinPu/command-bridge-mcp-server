@@ -20,7 +20,7 @@ readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
 readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
 readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
-readonly SOURCE_REF="v0.3.1"
+readonly SOURCE_REF="v0.4.0"
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
 readonly SOURCE_ARCHIVE_URL="https://github.com/HsinPu/command-bridge-mcp-server/archive/refs/tags/${SOURCE_REF}.tar.gz"
@@ -28,7 +28,6 @@ readonly SYSTEMD_UNIT_SHA256="39faaea6008bbabcba0c6133a1936cc34273f91df0e1cb5c1d
 readonly AUDIT_READER_SHA256="3c5542591db8ffe3a75f14448d3c57be0f4f8a0d85ac68a355ae59906536acf7"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
-readonly CODEX_SETUP_URL_PLACEHOLDER="https://REPLACE_WITH_PRIVATE_HOSTNAME/mcp"
 
 TEMP_DIR=""
 PREVIOUS_RELEASE=""
@@ -58,7 +57,7 @@ usage() {
     'Usage: sudo bash scripts/linux-systemd/install.sh [options]' \
     '' \
     'Options:' \
-    '  --print-codex-setup       Print a copy-ready Codex setup block after installation.' \
+    '  --print-codex-setup       Print Codex setup, using the listener IP when no URL is given.' \
     '                            The block contains the bearer token.' \
     '  --codex-url URL           Use this private HTTPS MCP URL in the setup block.' \
     '                            The URL must end in /mcp. Implies --print-codex-setup.' \
@@ -111,20 +110,58 @@ validate_codex_setup_url() {
 }
 
 collect_codex_setup_url() {
-  [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return
-
-  if [[ -z "${CODEX_SETUP_URL}" && -t 0 ]]; then
-    printf '\n'
-    printf 'Private HTTPS MCP URL used by Codex (must end in /mcp).\n'
-    printf 'Press Enter to print a placeholder instead: '
-    IFS= read -r CODEX_SETUP_URL || true
-  fi
-
   if [[ -n "${CODEX_SETUP_URL}" ]]; then
     validate_codex_setup_url "${CODEX_SETUP_URL}"
-  else
-    CODEX_SETUP_URL="${CODEX_SETUP_URL_PLACEHOLDER}"
   fi
+}
+
+is_private_ipv4() {
+  local address=$1 a b c d
+  [[ "${address}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  IFS=. read -r a b c d <<< "${address}"
+  a=$((10#$a)); b=$((10#$b)); c=$((10#$c)); d=$((10#$d))
+  (( a <= 255 && b <= 255 && c <= 255 && d <= 255 )) || return 1
+  (( a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 100 && b >= 64 && b <= 127) ))
+}
+
+detect_private_ipv4() {
+  local address interface candidates=""
+  if command -v ip >/dev/null 2>&1; then
+    interface=$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="dev") {print $(i+1); exit}}')
+    if [[ -n "${interface}" ]]; then
+      candidates=$(ip -4 -o addr show dev "${interface}" scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]}')
+    fi
+    candidates+=$'\n'$(ip -4 -o addr show up scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]}')
+  elif command -v hostname >/dev/null 2>&1; then
+    candidates=$(hostname -I 2>/dev/null || true)
+  fi
+  for address in ${candidates}; do
+    if is_private_ipv4 "${address}"; then
+      printf '%s\n' "${address}"
+      return
+    fi
+  done
+  printf '127.0.0.1\n'
+}
+
+default_http_host() {
+  if [[ -n "${CODEX_SETUP_URL}" ]]; then
+    printf '127.0.0.1\n'
+  else
+    detect_private_ipv4
+  fi
+}
+
+automatic_codex_url() {
+  local host port
+  host=$(read_config_value COMMAND_BRIDGE_HTTP_HOST)
+  port=$(read_config_value COMMAND_BRIDGE_HTTP_PORT)
+  case "${host}" in
+    0.0.0.0) host=$(detect_private_ipv4) ;;
+    ::) host='[::1]' ;;
+    *:*) host="[${host}]" ;;
+  esac
+  printf 'http://%s:%s/mcp\n' "${host}" "${port}"
 }
 
 cleanup() {
@@ -621,9 +658,12 @@ install_configuration() {
   fi
 
   token=${COMMAND_BRIDGE_BEARER_TOKEN:-$(generate_token)}
-  host=${COMMAND_BRIDGE_HTTP_HOST:-127.0.0.1}
+  host=${COMMAND_BRIDGE_HTTP_HOST:-$(default_http_host)}
   port=${COMMAND_BRIDGE_HTTP_PORT:-8800}
   allowed_hosts=${COMMAND_BRIDGE_ALLOWED_HOSTS:-}
+  if [[ -z "${allowed_hosts}" && "${host}" != "127.0.0.1" && "${host}" != "localhost" && "${host}" != "::1" && "${host}" != "0.0.0.0" && "${host}" != "::" ]]; then
+    allowed_hosts=${host}
+  fi
   execution_mode=${COMMAND_BRIDGE_EXECUTION_MODE:-allowlist}
   validate_new_configuration "${token}" "${host}" "${port}" "${allowed_hosts}" "${execution_mode}"
 
@@ -771,6 +811,9 @@ print_codex_setup() {
   local token
 
   [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return
+  if [[ -z "${CODEX_SETUP_URL}" ]]; then
+    CODEX_SETUP_URL=$(automatic_codex_url)
+  fi
   token=$(read_config_value COMMAND_BRIDGE_BEARER_TOKEN)
   if [[ ! "${token}" =~ ^[A-Za-z0-9._~-]{32,}$ ]]; then
     printf '[CommandBridge] WARNING: The bearer token is missing or unsafe to print; the Codex setup block was not printed.\n' >&2
@@ -790,10 +833,12 @@ print_codex_setup() {
     "Bearer token (secret): ${token}" \
     ''
 
-  if [[ "${CODEX_SETUP_URL}" == "${CODEX_SETUP_URL_PLACEHOLDER}" ]]; then
+  if [[ "${CODEX_SETUP_URL}" == http://* ]]; then
     printf '%s\n' \
-      'The MCP URL above is a placeholder. Before changing any files, ask me for the' \
-      'private HTTPS URL that reaches this server and ends in /mcp.' \
+      'This HTTP URL comes from the saved listener configuration; it does not provide TLS.' \
+      'Use it only over a trusted LAN or VPN. Firewall rules are not changed automatically.' \
+      'Loopback addresses work only on this host. Existing configuration is preserved.' \
+      'If DHCP changes this IP, update the listener, allowed hosts and client URL.' \
       ''
   fi
 

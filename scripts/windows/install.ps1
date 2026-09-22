@@ -10,8 +10,8 @@ $ErrorActionPreference = "Stop"
 $ServiceName = "CommandBridgeMCP"
 $EventSource = "CommandBridgeMCP"
 $PackageName = "command-bridge-mcp-server"
-$PackageVersion = "0.3.1"
-$SourceRef = "v0.3.1"
+$PackageVersion = "0.4.0"
+$SourceRef = "v0.4.0"
 $NodeVersion = "24.18.0"
 $WinSwVersion = "2.12.0"
 $WinSwUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
@@ -175,6 +175,44 @@ function Build-Source {
   }
 }
 
+function Test-PrivateIPv4 {
+  param([string]$Address)
+  $parsed = $null
+  if ($Address -notmatch '^(\d{1,3}\.){3}\d{1,3}$' -or -not [Net.IPAddress]::TryParse($Address, [ref]$parsed)) { return $false }
+  $bytes = $parsed.GetAddressBytes()
+  return ($bytes.Length -eq 4 -and ($bytes[0] -eq 10 -or
+    ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31) -or
+    ($bytes[0] -eq 192 -and $bytes[1] -eq 168) -or
+    ($bytes[0] -eq 100 -and $bytes[1] -ge 64 -and $bytes[1] -le 127)))
+}
+
+function Get-AutomaticHttpHost {
+  try {
+    $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred -ErrorAction Stop |
+      Where-Object { -not $_.SkipAsSource -and (Test-PrivateIPv4 $_.IPAddress) } |
+      Sort-Object InterfaceIndex, IPAddress)
+    $routes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+      Sort-Object RouteMetric, InterfaceIndex)
+    foreach ($route in $routes) {
+      $match = @($addresses | Where-Object { $_.InterfaceIndex -eq $route.InterfaceIndex })
+      if ($match.Count -gt 0) { return $match[0].IPAddress }
+    }
+    if ($addresses.Count -gt 0) { return $addresses[0].IPAddress }
+  } catch {
+    Write-Warning "Could not detect a private IPv4 address; using loopback."
+  }
+  return "127.0.0.1"
+}
+
+function Get-AutomaticCodexUrl {
+  $httpHost = Get-ConfigValue "COMMAND_BRIDGE_HTTP_HOST"
+  $port = Get-ConfigValue "COMMAND_BRIDGE_HTTP_PORT"
+  if ($httpHost -eq "0.0.0.0") { $httpHost = Get-AutomaticHttpHost }
+  if ($httpHost -eq "::") { $httpHost = "::1" }
+  if ($httpHost.Contains(":")) { $httpHost = "[$httpHost]" }
+  return "http://{0}:{1}/mcp" -f $httpHost, $port
+}
+
 function New-SecureConfiguration {
   $newLine = [Environment]::NewLine
   New-Item -ItemType Directory -Path $ConfigRoot -Force | Out-Null
@@ -196,10 +234,13 @@ function New-SecureConfiguration {
     throw "COMMAND_BRIDGE_BEARER_TOKEN must contain at least 32 safe characters."
   }
 
-  $httpHost = if ($env:COMMAND_BRIDGE_HTTP_HOST) { $env:COMMAND_BRIDGE_HTTP_HOST } else { "127.0.0.1" }
+  $httpHost = if ($env:COMMAND_BRIDGE_HTTP_HOST) { $env:COMMAND_BRIDGE_HTTP_HOST } elseif ($CodexUrl) { "127.0.0.1" } else { Get-AutomaticHttpHost }
   $port = if ($env:COMMAND_BRIDGE_HTTP_PORT) { $env:COMMAND_BRIDGE_HTTP_PORT } else { "8800" }
   $mode = if ($env:COMMAND_BRIDGE_EXECUTION_MODE) { $env:COMMAND_BRIDGE_EXECUTION_MODE } else { "allowlist" }
   $allowedHosts = if ($env:COMMAND_BRIDGE_ALLOWED_HOSTS) { $env:COMMAND_BRIDGE_ALLOWED_HOSTS } else { "" }
+  if (-not $allowedHosts -and $httpHost -notin @("127.0.0.1", "localhost", "::1", "0.0.0.0", "::")) {
+    $allowedHosts = $httpHost
+  }
   if ($httpHost -notmatch "^[A-Za-z0-9._:%-]+$") {
     throw "Invalid COMMAND_BRIDGE_HTTP_HOST."
   }
@@ -353,20 +394,23 @@ function Invoke-AuditVerification {
 }
 
 function Print-CodexSetup {
-  if (-not $PrintCodexSetup) {
+  if (-not $PrintCodexSetup -and -not $CodexUrl) {
     return
   }
   if ([string]::IsNullOrWhiteSpace($CodexUrl)) {
-    $CodexUrl = "https://REPLACE_WITH_PRIVATE_HOSTNAME/mcp"
-  }
-  if ($CodexUrl -notmatch "^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?(/[A-Za-z0-9._~:@%+-]+)*/mcp/?$") {
-    throw "CodexUrl must be a private HTTPS URL ending in /mcp."
+    $CodexUrl = Get-AutomaticCodexUrl
   }
   $token = Get-ConfigValue "COMMAND_BRIDGE_BEARER_TOKEN"
   Write-Output ""
   Write-Output "SECURITY WARNING: The block below contains a bearer token."
   Write-Output "========== BEGIN COPY FOR CODEX =========="
   Write-Output "MCP URL: $CodexUrl"
+  if ($CodexUrl.StartsWith("http://")) {
+    Write-Output "This HTTP URL comes from the saved listener configuration; it does not provide TLS."
+    Write-Output "Use it only over a trusted LAN or VPN. Firewall rules are not changed automatically."
+    Write-Output "Loopback addresses work only on this host. Existing configuration is preserved."
+    Write-Output "If DHCP changes this IP, update the listener, allowed hosts and client URL."
+  }
   Write-Output "Bearer token (secret): $token"
   Write-Output "[mcp_servers.command_bridge]"
   Write-Output "enabled = true"
@@ -407,6 +451,9 @@ function Rollback-Installation {
 
 try {
   Assert-Administrator
+  if ($CodexUrl -and $CodexUrl -notmatch "^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?(/[A-Za-z0-9._~:@%+-]+)*/mcp/?$") {
+    throw "CodexUrl must be a private HTTPS URL ending in /mcp."
+  }
   New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
   $existingService = Get-ManagedService
   Assert-ManagedServicePath $existingService

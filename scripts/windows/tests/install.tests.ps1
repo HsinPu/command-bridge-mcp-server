@@ -24,6 +24,22 @@ $LogsDirectory = "TestDrive:\logs"
 $ConfigFile = Join-Path $env:TEMP ("command-bridge-test-" + [guid]::NewGuid() + ".env")
 function New-Item { param($ItemType, $Path, [switch]$Force) }
 function Test-Path { param($LiteralPath) return $false }
+$CodexUrl = ""
+$PrintCodexSetup = $true
+$script:addresses = @(
+  [pscustomobject]@{ IPAddress = '8.8.8.8'; InterfaceIndex = 1; SkipAsSource = $false },
+  [pscustomobject]@{ IPAddress = '10.0.0.2'; InterfaceIndex = 2; SkipAsSource = $false },
+  [pscustomobject]@{ IPAddress = '192.168.1.20'; InterfaceIndex = 3; SkipAsSource = $false }
+)
+function Get-NetIPAddress { param($AddressFamily, $AddressState, $ErrorAction) return $script:addresses }
+function Get-NetRoute { param($AddressFamily, $DestinationPrefix, $ErrorAction) return [pscustomobject]@{ InterfaceIndex = 3; RouteMetric = 5 } }
+Assert-True ((Get-AutomaticHttpHost) -eq '192.168.1.20') "Default route should be preferred."
+foreach ($address in @('10.0.0.1', '172.16.0.1', '172.31.255.1', '192.168.1.1', '100.64.0.1', '100.127.255.1')) {
+  Assert-True (Test-PrivateIPv4 $address) "Expected private address: $address"
+}
+foreach ($address in @('8.8.8.8', '127.0.0.1', '169.254.1.1', '172.32.0.1', '100.128.0.1', '192.168.999.1', '::1')) {
+  Assert-True (-not (Test-PrivateIPv4 $address)) "Unexpected private address: $address"
+}
 $savedEnvironment = @{}
 foreach ($key in @("COMMAND_BRIDGE_BEARER_TOKEN", "COMMAND_BRIDGE_HTTP_HOST", "COMMAND_BRIDGE_HTTP_PORT", "COMMAND_BRIDGE_EXECUTION_MODE", "COMMAND_BRIDGE_ALLOWED_HOSTS")) {
   $savedEnvironment[$key] = [Environment]::GetEnvironmentVariable($key)
@@ -32,14 +48,33 @@ foreach ($key in @("COMMAND_BRIDGE_BEARER_TOKEN", "COMMAND_BRIDGE_HTTP_HOST", "C
 try {
   New-SecureConfiguration
   $configuration = [IO.File]::ReadAllText($ConfigFile)
-  Assert-True ($configuration -match 'COMMAND_BRIDGE_HTTP_HOST=127\.0\.0\.1') "Default HTTP host missing."
+  Assert-True ($configuration -match 'COMMAND_BRIDGE_HTTP_HOST=192\.168\.1\.20') "Detected HTTP host missing."
+  Assert-True ($configuration -match 'COMMAND_BRIDGE_ALLOWED_HOSTS=192\.168\.1\.20') "Allowed host missing."
   Assert-True ($configuration -match 'COMMAND_BRIDGE_BEARER_TOKEN=[a-f0-9]{64}') "Generated token missing."
   function Invoke-WebRequest {
     param([switch]$UseBasicParsing, $Uri, $TimeoutSec)
-    Assert-True ($Uri -eq 'http://127.0.0.1:8800/health') "Unexpected health URL."
+    Assert-True ($Uri -eq 'http://192.168.1.20:8800/health') "Unexpected health URL."
     return @{ Content = '{"status":"ok"}' }
   }
   Wait-ForHealth
+  Assert-True ((Get-AutomaticCodexUrl) -eq 'http://192.168.1.20:8800/mcp') "Automatic URL did not match listener."
+  Assert-True (((Print-CodexSetup) -join "`n") -match 'url = "http://192.168.1.20:8800/mcp"') "Printed URL missing."
+  # Reinstallation must preserve saved config even if the detected address changes.
+  function Test-Path { param($LiteralPath) return $true }
+  $script:addresses = @()
+  New-SecureConfiguration
+  Assert-True ([IO.File]::ReadAllText($ConfigFile) -eq $configuration) "Existing configuration changed."
+  Assert-True ((Get-AutomaticHttpHost) -eq '127.0.0.1') "No-address fallback missing."
+  function Test-Path { param($LiteralPath) return $false }
+  $CodexUrl = 'https://mcp.example.com/mcp'
+  New-SecureConfiguration
+  Assert-True ((Get-AutomaticCodexUrl) -eq 'http://127.0.0.1:8800/mcp') "HTTPS setup should default to loopback."
+  Assert-True (((Print-CodexSetup) -join "`n") -match 'url = "https://mcp.example.com/mcp"') "Explicit URL was overridden."
+  $CodexUrl = ''
+  $env:COMMAND_BRIDGE_HTTP_HOST = '10.20.30.40'
+  $env:COMMAND_BRIDGE_HTTP_PORT = '9900'
+  New-SecureConfiguration
+  Assert-True ((Get-AutomaticCodexUrl) -eq 'http://10.20.30.40:9900/mcp') "Explicit host/port ignored."
 } finally {
   foreach ($key in $savedEnvironment.Keys) {
     [Environment]::SetEnvironmentVariable($key, $savedEnvironment[$key])

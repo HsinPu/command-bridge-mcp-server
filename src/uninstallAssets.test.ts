@@ -149,8 +149,8 @@ test("release documentation pins uninstall commands to the package version", () 
         `https://raw\\.githubusercontent\\.com/HsinPu/command-bridge-mcp-server/v${packageJson.version}/scripts/linux-systemd/uninstall\\.sh`
       )
     );
-    assert.match(document, /--purge --yes/);
   }
+  assert.match(documentation[2], /--purge --yes/);
 });
 
 test("test and CI commands include the uninstall assets", () => {

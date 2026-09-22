@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
 
 const projectRoot = process.cwd();
+const bash = process.platform === "win32"
+  ? resolve(process.env.ProgramFiles ?? "C:/Program Files", "Git/bin/bash.exe")
+  : "bash";
+test("Linux automatic IP setup selects private interfaces and preserves explicit URLs", {
+  skip: process.platform === "win32" && !existsSync(bash)
+}, () => {
+  const result = spawnSync(bash, ["scripts/linux-systemd/tests/install.test.sh"], {
+    encoding: "utf8", windowsHide: true, timeout: 30_000
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+});
 const installer = readFileSync(
   resolve(projectRoot, "scripts/linux-systemd/install.sh"),
   "utf8"
@@ -104,10 +116,8 @@ test("Codex setup output requires explicit opt-in and supports a private URL", (
     installer,
     /--codex-url must be a private HTTPS URL ending in \/mcp/
   );
-  assert.match(
-    installer,
-    /readonly CODEX_SETUP_URL_PLACEHOLDER="https:\/\/REPLACE_WITH_PRIVATE_HOSTNAME\/mcp"/
-  );
+  assert.match(installer, /CODEX_SETUP_URL=\$\(automatic_codex_url\)/);
+  assert.doesNotMatch(installer, /REPLACE_WITH_PRIVATE_HOSTNAME/);
 });
 
 test("copy-ready Codex block keeps the bearer token out of config.toml", () => {
@@ -134,6 +144,5 @@ test("copy-ready Codex block keeps the bearer token out of config.toml", () => {
 test("installation documentation enables the copy-ready Codex setup block", () => {
   for (const document of documentation) {
     assert.match(document, /--print-codex-setup/);
-    assert.match(document, /--codex-url/);
   }
 });

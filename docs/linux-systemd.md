@@ -15,22 +15,22 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 
 Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package there instead.
 
-## Install v0.3.1
+## Install v0.4.0
 
-Use the remote commands below only after the `v0.3.1` tag is published. Until then, run the installer from a checked-out repository. Git and Node.js are not required for the remote installation; the installer downloads the source archive and a private runtime.
+Use the remote commands below only after the `v0.4.0` tag is published. Until then, run the installer from a checked-out repository. Git and Node.js are not required for the remote installation; the installer downloads the source archive and a private runtime.
 
 One command:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
 ```
 
-This command asks for the private HTTPS MCP URL ending in `/mcp`. After a successful installation, it prints a marked block containing the URL, generated or preserved bearer token, and exact instructions to paste into a trusted Codex task. Press Enter at the URL prompt to use a placeholder when the private route is not ready.
+No URL prompt is required. A fresh installation selects a private IPv4 address, preferring the default-route interface, and configures both the listener and allowed Host. It prints `http://<IP>:<port>/mcp` and the generated or preserved bearer token in a marked Codex setup block. Detection accepts RFC1918 and 100.64.0.0/10 addresses (including Tailscale); without one it falls back to `127.0.0.1`, usable only on this host. Existing configuration is preserved, and the printed URL uses its saved host and port. A wildcard IPv4 bind uses the detected private IP; a wildcard IPv6 bind prints IPv6 loopback for local setup.
 
-To skip the prompt:
+To use an existing private HTTPS route instead:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/install.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
 ```
 
 > [!CAUTION]
@@ -39,7 +39,7 @@ installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/com
 For a review-first installation:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/install.sh -o command-bridge-install.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/install.sh -o command-bridge-install.sh
 less command-bridge-install.sh
 sudo bash command-bridge-install.sh --print-codex-setup
 ```
@@ -49,7 +49,7 @@ The installer performs these steps:
 1. Rejects non-Linux, non-systemd, musl, and unsupported CPU environments.
 2. Takes an installation lock so two upgrades cannot run at the same time.
 3. Downloads pinned Node.js 24.18.0 and verifies its official SHA-256 checksum.
-4. Downloads the pinned CommandBridge MCP v0.3.1 source.
+4. Downloads the pinned CommandBridge MCP v0.4.0 source.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
 7. Creates the low-privilege <code>command-bridge</code> service account and root-only environment file.
@@ -62,8 +62,8 @@ The installer performs these steps:
 
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v0.3.1
-├── releases/v0.3.1/
+├── current -> releases/v0.4.0
+├── releases/v0.4.0/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -94,9 +94,9 @@ The installer generates `/etc/command-bridge-mcp-server/command-bridge.env` only
 ```dotenv
 COMMAND_BRIDGE_TRANSPORT=http
 COMMAND_BRIDGE_BEARER_TOKEN=<generated-64-character-token>
-COMMAND_BRIDGE_HTTP_HOST=127.0.0.1
+COMMAND_BRIDGE_HTTP_HOST=<detected-private-ip-or-127.0.0.1>
 COMMAND_BRIDGE_HTTP_PORT=8800
-COMMAND_BRIDGE_ALLOWED_HOSTS=
+COMMAND_BRIDGE_ALLOWED_HOSTS=<selected-ip-for-non-loopback>
 COMMAND_BRIDGE_EXECUTION_MODE=allowlist
 COMMAND_BRIDGE_ALLOWED_SHELLS=bash
 COMMAND_BRIDGE_ALLOWED_COMMANDS=uname,hostname,whoami,uptime,date,df,free,ps,pwd
@@ -123,7 +123,7 @@ The output between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` is a prompt, 
 3. Reference the token through `bearer_token_env_var` instead of placing the secret in TOML.
 4. Preserve unrelated settings, report restart requirements, and verify the MCP connection after restart.
 
-`--codex-url` accepts only an HTTPS URL ending in `/mcp`, without embedded credentials, a query, or a fragment. The built-in CommandBridge listener remains plain HTTP on loopback; the HTTPS URL must therefore come from a private route such as Tailscale Serve, Cloudflare Tunnel, or an authenticated TLS reverse proxy.
+`--codex-url` accepts only an HTTPS URL ending in `/mcp`, without embedded credentials, a query, or a fragment. When provided, a fresh install defaults to loopback for use behind a private HTTPS route. An explicit `COMMAND_BRIDGE_HTTP_HOST` overrides detection. For a concrete non-loopback host, allowed Hosts default to that host unless explicitly configured. Wildcard binds still require an explicit allowed Hosts list. Existing configuration is never overwritten. The built-in listener does not provide TLS.
 
 After editing the environment file, restart the service:
 
@@ -141,7 +141,8 @@ sudo systemctl start command-bridge-mcp-server
 sudo systemctl is-enabled command-bridge-mcp-server
 sudo journalctl -u command-bridge-mcp-server -n 100 --no-pager
 sudo journalctl -u command-bridge-mcp-server -f
-curl -fsS http://127.0.0.1:8800/health
+# Replace HOST and PORT with the values in command-bridge.env:
+curl -fsS http://HOST:PORT/health
 ```
 
 ## Audit log
@@ -166,7 +167,7 @@ Journald retention is a host policy. This installer does not change global journ
 The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge-mcp-server.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge-mcp-server</code>:
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --yes && rm -f "${uninstaller}"
 ```
 
 It preserves these resources for a future reinstall:
@@ -178,7 +179,7 @@ It preserves these resources for a future reinstall:
 For review and a no-change preview:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o command-bridge-uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/uninstall.sh -o command-bridge-uninstall.sh
 less command-bridge-uninstall.sh
 sudo bash command-bridge-uninstall.sh --dry-run
 sudo bash command-bridge-uninstall.sh --yes
@@ -190,14 +191,14 @@ For a permanent full purge:
 > This deletes the bearer token, configuration, all work data, and the dedicated service identity. The uninstaller refuses to delete an identity whose home, shell, group membership, or running processes do not match the expected low-privilege service account.
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
+uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/linux-systemd/uninstall.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --purge --yes && rm -f "${uninstaller}"
 ```
 
 Both modes use the same lock as the installer, accept only the fixed CommandBridge paths, verify that the service is inactive and disabled before deleting application files, and can be run repeatedly.
 
 ## Remote access
 
-The default endpoint listens only on loopback. Keep that setting when a same-host TLS reverse proxy, Cloudflare Tunnel, or Tailscale Serve forwards requests to CommandBridge.
+Automatic IP setup binds the selected private interface, not every interface. Use its HTTP URL only on a trusted LAN or VPN; the installer does not open the firewall or provision TLS. The client must be able to reach the selected address and port. Reserve the IP in DHCP, or update the listener, allowed Hosts, and client URL if it changes. To use a same-host HTTPS proxy or tunnel, pass `--codex-url` on a fresh install, or explicitly configure loopback for an existing installation.
 
 For a direct private-interface bind, edit the root-owned environment file and set both an exact interface address and allowed Host values:
 
@@ -220,7 +221,7 @@ If a future workflow needs one privileged operation, add a purpose-built helper 
 
 ## Reinstall and upgrade behavior
 
-Running the v0.3.1 installer again is idempotent: it reuses the pinned runtime and release, preserves configuration, reloads the unit, and rechecks service health.
+Running the v0.4.0 installer again is idempotent: it reuses the pinned runtime and release, preserves configuration, reloads the unit, and rechecks service health.
 
 Future versions will use their own versioned release directory. The installer records the current application and runtime symlinks before activation. If the new process cannot become active and pass `/health`, the symlinks are restored and the previous service is restarted.
 

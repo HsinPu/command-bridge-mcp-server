@@ -11,15 +11,17 @@ The Windows installer deploys CommandBridge as a WinSW-managed Windows service n
 
 ARM64 is intentionally deferred until a stable compatible service wrapper is selected.
 
-## Install v0.3.1
+## Install v0.4.0
 
-No clone, Git, or preinstalled Node.js is required. After the `v0.3.1` tag is published, open Windows PowerShell as administrator and paste:
+No clone, Git, or preinstalled Node.js is required. After the `v0.4.0` tag is published, open Windows PowerShell as administrator and paste:
 
 ~~~powershell
-$installer = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.3.1/scripts/windows/install.ps1" -OutFile $installer; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "Installation failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
+$installer = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/v0.4.0/scripts/windows/install.ps1" -OutFile $installer; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "Installation failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
 ~~~
 
-Download failures stop before execution. The temporary installer is removed on success or failure, and a nonzero installer exit code is reported as an error. Execution-policy bypass is limited to the child process. Add `-CodexUrl "https://your-private-host/mcp"` after `-PrintCodexSetup` to print your URL instead of a placeholder; the installer does not provision HTTPS or a tunnel.
+Download failures stop before execution. The temporary installer is removed on success or failure, and a nonzero installer exit code is reported as an error. Execution-policy bypass is limited to the child process. Without a URL, a fresh install selects a private IPv4 address (preferring a default-route interface), sets the listener and allowed Host, and prints `http://<IP>:<port>/mcp`. It accepts RFC1918 and 100.64.0.0/10 addresses (including Tailscale), falling back to `127.0.0.1` for local-only use if none is found. Existing configuration and tokens are preserved; the output uses the saved listener host and port. A wildcard IPv4 listener uses the detected private IP; wildcard IPv6 uses IPv6 loopback for local setup.
+
+Add `-CodexUrl "https://your-private-host/mcp"` to use an existing HTTPS route; a fresh install then defaults to loopback. Explicit `COMMAND_BRIDGE_HTTP_HOST` and `COMMAND_BRIDGE_HTTP_PORT` override detection. A concrete non-loopback host is also used as the allowed Host unless separately configured; wildcard binds still require an explicit allowed Hosts list. The installer does not provision HTTPS or a tunnel.
 
 Clone or download the release, open an elevated PowerShell session, and run:
 
@@ -31,7 +33,7 @@ Set-Location C:\path\to\command-bridge-mcp-server
 The installer:
 
 1. Requires an administrator session and x64 Windows.
-2. Uses the checked-out source when present, otherwise downloads the <code>v0.3.1</code> source archive.
+2. Uses the checked-out source when present, otherwise downloads the <code>v0.4.0</code> source archive.
 3. Downloads Node.js <code>v24.18.0</code> and verifies the official SHA-256 manifest entry.
 4. Downloads only WinSW <code>v2.12.0</code> from its fixed release URL and verifies SHA-256 <code>05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da</code>.
 5. Builds and tests the source, then removes development dependencies before deployment.
@@ -71,10 +73,11 @@ Get-Service CommandBridgeMCP
 Restart-Service CommandBridgeMCP
 Stop-Service CommandBridgeMCP
 Start-Service CommandBridgeMCP
-Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8800/health
+# Replace HOST and PORT with the values in command-bridge.env:
+Invoke-WebRequest -UseBasicParsing http://HOST:PORT/health
 ~~~
 
-Keep the default loopback HTTP bind unless a private network path and host firewall rule are deliberately configured. The built-in listener has no TLS and must not be exposed directly to the public internet.
+Automatic IP setup binds the selected private interface. Use HTTP only on a trusted LAN or VPN. Firewall rules are not opened automatically; the client must be able to reach this address and port. Reserve the IP in DHCP, or update the listener, allowed Hosts, and client URL if it changes. The built-in listener has no TLS and must not be exposed directly to the public internet. Explicit HTTPS URLs retain the loopback default on fresh installs for a same-host proxy/tunnel.
 
 ## Audit log
 
