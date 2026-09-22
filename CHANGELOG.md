@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1 — 2026-09-22 (unreleased)
+
+Patch release from 1.0.0: fixes CI timing and rollback test coverage without changing the MCP interface, command policies or production deadlines.
+
+- Give successful PowerShell execution tests a consistent 15-second budget and report detailed results on failure; retain dedicated short-timeout tests and always shut down the executor.
+- Inject verification failure only after real MCP/Audit verification in the deployed test SHA. Require activation evidence so earlier build failures cannot pass rollback tests.
+- Test a genuinely changed loopback listener and Host, then verify configuration, token, release identity, working data and real MCP/Audit access after rollback on both platforms.
+- Require startup evidence for health-failure tests and add injection boundary checks. Channel publication remains gated by all cross-platform checks and service tests.
+
 ## 1.0.0 — 2026-09-22 (unreleased)
 
 Major release from the 0.5.0 implementation stage: allowlist mode no longer accepts arbitrary shell argument syntax. The existing MCP tools and result fields remain, but custom allowlists require explicit policies.

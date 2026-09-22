@@ -67,6 +67,8 @@ The installer removes inherited ACLs and grants the application directory read/e
 
 ## Service operations
 
+The 1.0.1 disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
+
 Run these commands from an elevated PowerShell session:
 
 ~~~powershell

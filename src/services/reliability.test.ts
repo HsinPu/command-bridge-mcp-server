@@ -112,13 +112,22 @@ test("Linux timeout forcibly stops a process ignoring SIGTERM", { skip: process.
 test("safe execution launches native programs and fixed PowerShell wrappers", async () => {
   const cfg = config();
   cfg.executionMode = "allowlist";
+  cfg.defaultTimeoutMs = cfg.maxTimeoutMs = 15_000;
   cfg.allowedShells = [process.platform === "win32" ? "powershell" : "bash"];
   cfg.allowedCommands = new Set(process.platform === "win32" ? ["hostname", "get-date"] : ["hostname"]);
   cfg.commandProfiles = loadCommandProfiles();
   const executor = new CommandExecutor(cfg, new MemoryAudit());
-  assert.equal((await executor.execute({ command: "hostname" })).ok, true);
-  if (process.platform === "win32") assert.equal((await executor.execute({ command: "Get-Date", timeoutMs: 3000 })).ok, true);
-  await assert.rejects(executor.execute({ command: 'hostname "-unexpected"' }), /Arguments/);
+  try {
+    for (const command of process.platform === "win32" ? ["hostname", "Get-Date"] : ["hostname"]) {
+      const result = await executor.execute({ command, timeoutMs: 15_000 });
+      const detail = JSON.stringify({ command, ...result });
+      assert.equal(result.ok, true, detail);
+      assert.equal(result.exitCode, 0, detail);
+      assert.equal(result.timedOut, false, detail);
+      assert.equal(result.truncated, false, detail);
+    }
+    await assert.rejects(executor.execute({ command: 'hostname "-unexpected"' }), /Arguments/);
+  } finally { await executor.shutdown(); }
 });
 
 test("cancellation is bounded and releases the concurrency slot", async () => {

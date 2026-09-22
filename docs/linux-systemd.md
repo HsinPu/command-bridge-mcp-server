@@ -60,10 +60,12 @@ The installer performs these steps:
 
 ## Installed layout
 
+The 1.0.1 disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
+
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v1.0.0-<source-sha>
-├── releases/v1.0.0-<source-sha>/
+├── current -> releases/v1.0.1-<source-sha>
+├── releases/v1.0.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
