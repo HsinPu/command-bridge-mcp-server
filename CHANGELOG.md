@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.3 — 2026-09-29
+
+Patch release from 2.0.2: fix SELinux label repair on Oracle Linux 8.10, whose `restorecon` does not accept `-x`. MCP interfaces, command policies, and deployment paths are unchanged.
+
+- Traverse the managed deployment tree with `find -P -xdev` and invoke `restorecon` on discovered paths. Continue verifying each path with `matchpathcon` and stop activation if repair or verification fails.
+- Make the SELinux installer test reject unsupported `restorecon` options, covering the Oracle Linux 8 failure before publication.
+
 ## 2.0.2 — 2026-09-29
 
 Patch release from 2.0.1: fix Linux deployment SELinux contexts that caused systemd `203/EXEC` on Oracle Linux 8.10 Enforcing, without changing command policies or MCP interfaces.

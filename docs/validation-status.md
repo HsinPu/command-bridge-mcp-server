@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 2.0.2, repairing SELinux deployment contexts. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.0.3, repairing Oracle Linux 8.10 `restorecon` compatibility. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.0.3 validation
+
+The user's Oracle Linux 8.10 Enforcing retry built and tested 2.0.2 successfully, then stopped before activation while repairing the existing Node.js runtime: `restorecon: invalid option -- 'x'`. Its `restorecon` usage lists recursive `-R` but not `-x`. This is a distinct installer failure after the original `user_tmp_t`/`203/EXEC` issue; successful Ubuntu/Windows CI for 2.0.2 did not prove Oracle Linux compatibility.
+
+Local validation: Windows `npm test` passed 61/65 with four Linux-only skips. Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 59/65 with six Windows-only skips, including the modified SELinux behavior test, and all Bash syntax checks passed. Eight PowerShell scripts and WinSW XML parsed; `git diff --check` passed. The fake `restorecon` rejects all options, including Oracle Linux 8's unsupported `-x`, and exercises reuse of an existing runtime, activation failure, and rollback. The local WSL environments do not run SELinux Enforcing. Hosted CI/channel publication, an Oracle Linux 8.10 Enforcing installation, and an actual reboot are separate pending checks at the time of this source change.
 
 ## 2.0.2 validation
 

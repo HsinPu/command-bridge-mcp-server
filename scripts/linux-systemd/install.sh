@@ -308,11 +308,12 @@ restore_selinux_path() {
   [[ -e "${path}" || -L "${path}" ]] || return 0
   if [[ "${recursive}" == 1 ]]; then
     [[ -d "${path}" && ! -L "${path}" ]] || { log "ERROR: Refusing recursive SELinux repair of a non-directory: ${path}" >&2; return 1; }
-    # Physical traversal: do not follow release symlinks or cross mount points.
-    restorecon -R -x -- "${path}" || { log "ERROR: SELinux label restore failed: ${path}" >&2; return 1; }
+    # Keep traversal in find: Oracle Linux 8 restorecon does not support -x.
+    # Physical traversal does not follow release symlinks or cross mount points.
+    find -P "${path}" -xdev -exec restorecon {} + || { log "ERROR: SELinux label restore failed: ${path}" >&2; return 1; }
     find -P "${path}" -xdev -exec matchpathcon -V {} + >/dev/null || { log "ERROR: SELinux label verification failed: ${path}" >&2; return 1; }
   else
-    restorecon -- "${path}" || { log "ERROR: SELinux label restore failed: ${path}" >&2; return 1; }
+    restorecon "${path}" || { log "ERROR: SELinux label restore failed: ${path}" >&2; return 1; }
     matchpathcon -V "${path}" >/dev/null || { log "ERROR: SELinux label verification failed: ${path}" >&2; return 1; }
   fi
 }

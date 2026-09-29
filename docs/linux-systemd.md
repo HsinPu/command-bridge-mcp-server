@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.0.2. This patch repairs SELinux deployment labels, including reused runtimes left by a failed installation. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 1.0.5 rollback fix remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.0.3. This patch makes SELinux label repair compatible with Oracle Linux 8.10 while preserving repair of runtimes left by a failed installation. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 1.0.5 rollback fix remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -66,8 +66,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.0.2-<source-sha>
-├── releases/v2.0.2-<source-sha>/
+├── current -> releases/v2.0.3-<source-sha>
+├── releases/v2.0.3-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -106,7 +106,7 @@ The service account is not added to <code>sudo</code> or <code>systemd-journal</
 
 On SELinux Enforcing or Permissive hosts, `getenforce`, `restorecon` and `matchpathcon` must be available (Oracle Linux/RHEL packages: `policycoreutils` and `libselinux-utils`). The installer checks these tools before changing the deployment. Disabled/non-SELinux hosts do not need them. Missing tools, an unknown mode, or failed label restoration/verification stops activation with a concrete error.
 
-Version 2.0.1 and earlier copied temporary SELinux labels into `/opt`; an Oracle Linux 8.10 report showed systemd denied execution of Node.js labeled `user_tmp_t`, producing `203/EXEC`. Version 2.0.2 copies without preserving the temporary context, restores final-path labels with `restorecon`, and verifies them with `matchpathcon`. Existing runtimes are repaired before reuse. Rerun the same bootstrap after the corrected SHA is published to the channel; a full uninstall is unnecessary and the saved token/configuration/work data remain preserved.
+Version 2.0.1 and earlier copied temporary SELinux labels into `/opt`; an Oracle Linux 8.10 report showed systemd denied execution of Node.js labeled `user_tmp_t`, producing `203/EXEC`. Version 2.0.2 began repairing final-path labels, but its recursive `restorecon -x` invocation fails on Oracle Linux 8.10 because that option is unavailable. Version 2.0.3 traverses the managed tree with `find -P -xdev`, passes each discovered path to `restorecon`, and verifies labels with `matchpathcon`. Existing runtimes are repaired before reuse. Rerun the same bootstrap after the corrected SHA is published to the channel; a full uninstall is unnecessary and the saved token/configuration/work data remain preserved.
 
 Label repair uses host policy, including administrator-defined file-context mappings. It covers the managed application tree, configuration files, service unit and Audit assets. It does not follow application symlinks into external trees, cross mount points during recursive traversal, recursively relabel work data, disable SELinux, force a universal executable type, or generate allow rules. Rollback repairs restored paths before restarting the old service; a label failure is reported rather than claiming successful recovery. A remaining health failure reports bounded execution-file labels/permissions and mount type/noexec status, without dumping configuration or tokens.
 

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.0.2-blue)
+![Version](https://img.shields.io/badge/version-2.0.3-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -57,7 +57,7 @@ HTTP connections use bearer-token authentication. The service executes commands 
 
 Alpine/musl is not supported. The systemd installer cannot run directly on Synology DSM. See the [Linux guide](docs/linux-systemd.md) and [Windows guide](docs/windows-service.md) for complete prerequisites.
 
-On SELinux Enforcing/Permissive hosts, the installer requires `restorecon` and `matchpathcon` and repairs deployment labels before starting the service. Version 2.0.2 addresses temporary labels causing `203/EXEC`; see the [SELinux recovery guide](docs/linux-systemd.md#selinux-hosts-and-recovery-from-203exec) and [validation status](docs/validation-status.md) before retrying.
+On SELinux Enforcing/Permissive hosts, the installer requires `restorecon` and `matchpathcon` and repairs deployment labels before starting the service. Version 2.0.3 fixes label repair for Oracle Linux 8.10's `restorecon` options; see the [SELinux recovery guide](docs/linux-systemd.md#selinux-hosts-and-recovery-from-203exec) and [validation status](docs/validation-status.md) before retrying.
 
 ## One-command installation
 

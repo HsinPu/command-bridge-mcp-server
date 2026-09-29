@@ -25,11 +25,14 @@ SH
 cat > "$work/bin/restorecon" <<'SH'
 #!/usr/bin/env bash
 set -eu
-path=${!#}
-printf 'restore %s\n' "$path" >> "$LABEL_EVENTS"
-[[ "$path" != "$MOCK_FAIL_RESTORE" ]] || exit 1
-if [[ "$1" == -R ]]; then find -P "$path" -xdev -print >> "$LABEL_STATE"
-else printf '%s\n' "$path" >> "$LABEL_STATE"; fi
+for path do
+  # Oracle Linux 8 restorecon has no -x option. Reject recursive/unknown flags
+  # so this fixture catches host compatibility errors before activation.
+  [[ "$path" != -* ]] || { echo "unsupported restorecon option: $path" >&2; exit 2; }
+  printf 'restore %s\n' "$path" >> "$LABEL_EVENTS"
+  [[ "$path" != "$MOCK_FAIL_RESTORE" ]] || exit 1
+  printf '%s\n' "$path" >> "$LABEL_STATE"
+done
 SH
 cat > "$work/bin/matchpathcon" <<'SH'
 #!/usr/bin/env bash
@@ -71,7 +74,7 @@ MOCK_MODE=Enforcing
 expect_failure bash -c 'source "$1"; trap - EXIT ERR; command() { if [[ "$1 $2" == "-v restorecon" ]]; then return 1; fi; builtin command "$@"; }; detect_selinux' _ "$work/installer.sh"
 detect_selinux
 
-BUILT_PACKAGE_VERSION=2.0.2
+BUILT_PACKAGE_VERSION=2.0.3
 SOURCE_REF=1111111111111111111111111111111111111111
 runtime="$RUNTIME_DIR/node-v${NODE_VERSION}-linux-x64"
 release="$RELEASES_DIR/v${BUILT_PACKAGE_VERSION}-${SOURCE_REF}"
