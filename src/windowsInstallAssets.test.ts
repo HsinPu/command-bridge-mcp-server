@@ -1,10 +1,53 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { createServer } from "node:http";
 import { resolve } from "node:path";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
+test("Windows health probe reaches the local listener with a virtual Host and unusable default proxy", {
+  skip: process.platform !== "win32"
+}, async () => {
+  const directory = mkdtempSync(resolve(tmpdir(), "command-bridge-health-"));
+  let observedHost = "";
+  const server = createServer((request, response) => {
+    observedHost = request.headers.host ?? "";
+    response.end('{"status":"ok"}');
+  });
+  try {
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    const script = resolve(directory, "probe.ps1");
+    writeFileSync(script, `
+$ErrorActionPreference = 'Stop'
+$ast = [Management.Automation.Language.Parser]::ParseFile($env:TEST_INSTALLER, [ref]$null, [ref]$null)
+foreach ($statement in $ast.EndBlock.Statements) {
+  if ($statement -is [Management.Automation.Language.FunctionDefinitionAst]) { . ([scriptblock]::Create($statement.Extent.Text)) }
+}
+[Net.WebRequest]::DefaultWebProxy = New-Object Net.WebProxy('http://127.0.0.1:1')
+$result = Invoke-LocalHealthRequest -Uri $env:TEST_HEALTH_URL -HostHeader 'diagnostic.local'
+if ($result -ne '{"status":"ok"}') { throw 'Invalid health response.' }
+`);
+    const result = await new Promise<{ code: number | null; output: string }>((resolvePromise, reject) => {
+      const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], {
+        windowsHide: true, timeout: 15_000,
+        env: { ...process.env, TEST_INSTALLER: resolve(projectRoot, "scripts/windows/install.ps1"), TEST_HEALTH_URL: `http://127.0.0.1:${port}/health` }
+      });
+      let output = "";
+      child.stdout.on("data", data => { output += data; });
+      child.stderr.on("data", data => { output += data; });
+      child.once("error", reject);
+      child.once("close", code => resolvePromise({ code, output }));
+    });
+    assert.equal(result.code, 0, result.output);
+    assert.equal(observedHost, "diagnostic.local");
+  } finally {
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 test("Windows installer config, health, runtime PATH and audit checks work under StrictMode", {
   skip: process.platform !== "win32"
 }, () => {

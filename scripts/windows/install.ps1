@@ -361,8 +361,12 @@ function Write-ServiceStartupDiagnostics {
   try {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($service) { Write-Log "Service state: $($service.Status)" }
-    foreach ($file in @(Get-ChildItem -LiteralPath $LogsDirectory -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 6)) {
+    $files = @(Get-ChildItem -LiteralPath $LogsDirectory -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 6)
+    Write-Log "Startup log files found: $($files.Count)"
+    foreach ($file in $files) {
       foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 80 -ErrorAction SilentlyContinue)) {
+        if ($line.Contains('CommandBridge MCP listening on http://')) { Write-Log 'HTTP listener startup was logged.' }
+        if ($line.Contains('CommandBridge MCP running via stdio.')) { Write-Log 'Unexpected stdio startup was logged.' }
         if ($line -match 'Startup dependency checks failed: ([A-Za-z, ]+)') {
           foreach ($check in $Matches[1].Split(',').Trim()) {
             if ($check -in @('accepting', 'workingDirectory', 'shells', 'audit', 'policyReadable', 'policyReadOnly')) { Write-Log "Startup dependency failed: $check" }
@@ -373,29 +377,66 @@ function Write-ServiceStartupDiagnostics {
         }
       }
     }
+    $managed = Get-ManagedService
+    if ($null -ne $managed -and $managed.ProcessId -gt 0) {
+      $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($managed.ProcessId)" -ErrorAction SilentlyContinue)
+      Write-Log "Service has Node child: $(@($children | Where-Object Name -eq 'node.exe').Count -gt 0)"
+      $port = [int](Get-ConfigValue 'COMMAND_BRIDGE_HTTP_PORT')
+      $listeners = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+      Write-Log "Configured port has listener: $($listeners.Count -gt 0)"
+    }
   } catch { Write-Log 'Startup diagnostics unavailable.' }
+}
+
+function Invoke-LocalHealthRequest {
+  param([string]$Uri, [string]$HostHeader)
+  # A local service probe must not use the caller's Internet proxy or WPAD.
+  $request = [Net.HttpWebRequest]::Create($Uri)
+  $request.Proxy = $null
+  $request.Timeout = 2000
+  $request.ReadWriteTimeout = 2000
+  $request.AllowAutoRedirect = $false
+  if ($HostHeader) { $request.Host = $HostHeader }
+  $response = $null
+  $reader = $null
+  try {
+    $response = $request.GetResponse()
+    if ([int]$response.StatusCode -ne 200) { throw 'Unexpected health status.' }
+    $reader = New-Object IO.StreamReader($response.GetResponseStream())
+    $buffer = New-Object char[] 1024
+    $count = $reader.Read($buffer, 0, $buffer.Length)
+    if ($count -eq 0) { return '' }
+    return (-join $buffer[0..($count - 1)])
+  } finally {
+    if ($null -ne $reader) { $reader.Dispose() }
+    if ($null -ne $response) { $response.Dispose() }
+  }
 }
 
 function Wait-ForHealth {
   $httpHost = Get-ConfigValue "COMMAND_BRIDGE_HTTP_HOST"
   $port = Get-ConfigValue "COMMAND_BRIDGE_HTTP_PORT"
-  if ($httpHost -eq "0.0.0.0" -or $httpHost -eq "::") {
+  if ($httpHost -eq "0.0.0.0") {
     $httpHost = "127.0.0.1"
   }
-  if ($httpHost -eq "::1") {
-    $httpHost = "[::1]"
-  }
+  if ($httpHost -eq '::') { $httpHost = '::1' }
+  if ($httpHost.Contains(':')) { $httpHost = "[$httpHost]" }
   $uri = "http://{0}:{1}/health" -f $httpHost, $port
+  $hostHeader = ((Get-ConfigValue 'COMMAND_BRIDGE_ALLOWED_HOSTS') -split ',')[0].Trim()
+  $lastFailure = 'UnexpectedContent'
   for ($attempt = 1; $attempt -le 20; $attempt += 1) {
     try {
-      $response = Invoke-WebRequest -UseBasicParsing -Uri $uri -TimeoutSec 2
-      if ($response.Content -match '"status"\s*:\s*"ok"') {
+      $content = Invoke-LocalHealthRequest -Uri $uri -HostHeader $hostHeader
+      if ($content -match '"status"\s*:\s*"ok"') {
         return
       }
     } catch {
-      Start-Sleep -Seconds 1
+      $lastFailure = $_.Exception.GetType().Name
+      if ($_.Exception.InnerException -is [Net.WebException]) { $lastFailure = [string]$_.Exception.InnerException.Status }
     }
+    Start-Sleep -Seconds 1
   }
+  Write-Log "Health probe failure category: $lastFailure"
   Write-ServiceStartupDiagnostics
   throw "Service health check failed."
 }

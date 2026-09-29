@@ -2,9 +2,11 @@
 
 The current package is 1.0.5 (unreleased), addressing hosted service lifecycle failures. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Local validation does not publish the installation channel.
 
-## 1.0.5 release validation in progress
+## 1.0.5 validation history and release gate
 
 [The 1.0.4 run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36521866541) passed both general test jobs. Linux failed during health-failure rollback after earlier real MCP/Audit checks passed; Windows failed its initial service health check. Both service jobs failed and channel publication was skipped. The current patch clears failed-candidate systemd start limits and adds bounded, category-only Windows startup diagnostics. Updated service CI and channel publication are required before claiming this version installable through the public bootstrap.
+
+[The first 1.0.5 run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36524158857) passed both general test jobs and the complete Linux service lifecycle. Windows reported Running but failed its initial health probe, with no known startup error category; publication remained skipped. Follow-up work adds a direct, proxy-free Windows health probe with configured Host headers and a real HTTP regression test. The authoritative release gate remains successful jobs for both platforms plus publication of the matching full SHA/version in channel.txt; consult the CI run for the installed source SHA.
 
 ## Previous CI result
 

@@ -2,6 +2,8 @@
 
 Version 1.0.5 reports known startup dependency/error categories when service health validation fails, without printing raw logs, environment values or the bearer token. Downloads suppress PowerShell progress rendering and still verify checksums.
 
+The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
+
 The Windows installer deploys CommandBridge as a WinSW-managed Windows service named <code>CommandBridgeMCP</code>. The service runs as the low-privilege <code>NT AUTHORITY\LocalService</code> account, not as LocalSystem.
 
 ## Supported hosts

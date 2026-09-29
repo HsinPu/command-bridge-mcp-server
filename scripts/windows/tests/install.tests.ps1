@@ -53,10 +53,11 @@ try {
   Assert-True ($configuration -match 'COMMAND_BRIDGE_HTTP_HOST=192\.168\.1\.20') "Detected HTTP host missing."
   Assert-True ($configuration -match 'COMMAND_BRIDGE_ALLOWED_HOSTS=192\.168\.1\.20') "Allowed host missing."
   Assert-True ($configuration -match 'COMMAND_BRIDGE_BEARER_TOKEN=[a-f0-9]{64}') "Generated token missing."
-  function Invoke-WebRequest {
-    param([switch]$UseBasicParsing, $Uri, $TimeoutSec)
+  function Invoke-LocalHealthRequest {
+    param($Uri, $HostHeader)
     Assert-True ($Uri -eq 'http://192.168.1.20:8800/health') "Unexpected health URL."
-    return @{ Content = '{"status":"ok"}' }
+    Assert-True ($HostHeader -eq '192.168.1.20') 'Missing configured Host header.'
+    return '{"status":"ok"}'
   }
   Wait-ForHealth
   Assert-True ((Get-AutomaticCodexUrl) -eq 'http://192.168.1.20:8800/mcp') "Automatic URL did not match listener."
@@ -138,7 +139,7 @@ $ServicePreviouslyInstalled = $true
 $PreviousMoved = $false
 $ServiceName = 'TestService'
 $script:restarted = $false
-function Get-ManagedService { return [pscustomobject]@{ Name = 'TestService' } }
+function Get-ManagedService { return [pscustomobject]@{ Name = 'TestService'; ProcessId = 0 } }
 function Start-Service { param($Name, $ErrorAction) $script:restarted = $true }
 function Remove-Item { param($LiteralPath, [switch]$Recurse, [switch]$Force) throw 'Rollback attempted to delete the unchanged installation.' }
 Rollback-Installation
