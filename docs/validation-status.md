@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 1.0.5, addressing hosted service lifecycle failures. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number.
+The current package is 2.0.0, shortening Linux service and installation paths. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. The renamed layout must pass the full cross-platform service gate before being advertised as available from the public bootstrap.
+
+## 2.0.0 validation
+
+The Linux service and canonical paths changed. Local Ubuntu WSL testing passed the fresh installation lifecycle: enabled/active service, real MCP/Audit, reinstall, network refresh, injected verification and startup failures with rollback, default uninstall, reinstall and purge. A second disposable run installed the actual 1.0.5 source, forced a 2.0.0 post-activation verification failure, checked its deployed SHA marker and exact old configuration hash, confirmed the restored old service and MCP/Audit, then upgraded successfully to `command-bridge`. The saved token and work file were preserved, legacy paths became exact links, old Audit privileges were removed, and purge removed both layouts. These local source snapshots used synthetic SHAs; they are not channel publications or production-host validation. The public bootstrap continues to serve the last CI-approved SHA until 2.0.0 passes both platform service jobs.
+
+Local Windows validation passed 61 of 64 tests with three Linux-only skips. All seven Shell scripts and eight PowerShell scripts parsed, WinSW XML parsed, and `git diff --check` passed. Hosted Windows and Ubuntu service jobs remain the release gate; no actual host reboot is claimed.
 
 ## 1.0.5 validation history and release gate
 
@@ -66,4 +72,4 @@ The GitHub workflow requires Windows/Linux service lifecycle jobs before channel
 
 Actual machine reboot, native Audit backend failure injection, every fresh-install failure boundary and exhaustive permission/race scenarios are not fully covered by the current automated suite. Successful service restart and automatic-start configuration checks do not prove recovery after an actual reboot.
 
-The fixed bootstrap must not be advertised as available until its files have been pushed and a successful main workflow has published `install-channel/channel.txt`. Missing or invalid channel data stops installation. No fallback to unverified main is provided.
+A new version must not be advertised as available through the fixed bootstrap until a successful main workflow publishes its exact SHA and version to `install-channel/channel.txt`. Missing or invalid channel data stops installation. No fallback to unverified main is provided.

@@ -3,19 +3,24 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly SERVICE_NAME="command-bridge-mcp-server"
+readonly SERVICE_NAME="command-bridge"
 readonly SERVICE_USER="command-bridge"
 readonly SERVICE_GROUP="command-bridge"
 readonly SERVICE_HOME="/var/empty/command-bridge"
-readonly INSTALL_ROOT="/opt/command-bridge-mcp-server"
-readonly CONFIG_DIR="/etc/command-bridge-mcp-server"
-readonly STATE_DIR="/var/lib/command-bridge-mcp-server"
+readonly INSTALL_ROOT="/opt/command-bridge"
+readonly CONFIG_DIR="/etc/command-bridge"
+readonly STATE_DIR="/var/lib/command-bridge"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
+readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge"
 readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
-readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
+readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-audit-reader"
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
 readonly LOCK_FILE="${LOCK_DIR}/install.lock"
+readonly LEGACY_INSTALL_ROOT="/opt/command-bridge-mcp-server"
+readonly LEGACY_CONFIG_DIR="/etc/command-bridge-mcp-server"
+readonly LEGACY_STATE_DIR="/var/lib/command-bridge-mcp-server"
+readonly LEGACY_AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
+readonly LEGACY_AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
 
 PURGE=0
 ASSUME_YES=0
@@ -49,8 +54,8 @@ usage() {
     '  --help, -h  Show this help text.' \
     '' \
     'Without --purge, the uninstaller preserves:' \
-    '  /etc/command-bridge-mcp-server' \
-    '  /var/lib/command-bridge-mcp-server' \
+    '  /etc/command-bridge' \
+    '  /var/lib/command-bridge' \
     '  command-bridge service account and group'
 }
 
@@ -196,6 +201,21 @@ remove_tree() {
   else
     run_command rm -rf --one-file-system -- "${path}"
   fi
+}
+
+assert_legacy_alias() {
+  local old=$1 new=$2
+  if [[ -L "${old}" ]]; then
+    [[ "$(readlink "${old}")" == "${new}" ]] || fail "Unexpected legacy alias: ${old}"
+  elif [[ -e "${old}" ]]; then
+    fail "A separate legacy installation remains at ${old}; refusing to remove it."
+  fi
+}
+
+remove_legacy_alias() {
+  local old=$1 new=$2
+  assert_legacy_alias "${old}" "${new}"
+  if [[ -L "${old}" ]]; then run_command rm -f -- "${old}"; fi
 }
 
 assert_tree_is_not_mounted() {
@@ -405,7 +425,7 @@ main() {
   fi
 
   require_root_systemd_linux
-  for command_name in chmod flock install rm rmdir systemctl uname; do
+  for command_name in chmod flock install readlink rm rmdir systemctl uname; do
     require_command "${command_name}"
   done
   if [[ "${PURGE}" == "1" ]]; then
@@ -417,6 +437,10 @@ main() {
   acquire_lock
   print_plan
   confirm_removal
+
+  assert_legacy_alias "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
+  assert_legacy_alias "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
+  assert_legacy_alias "${LEGACY_STATE_DIR}" "${STATE_DIR}"
 
   assert_tree_is_not_mounted "${INSTALL_ROOT}"
   if [[ "${PURGE}" == "1" ]]; then
@@ -431,12 +455,15 @@ main() {
     validate_service_identity_for_purge
   fi
   remove_tree "${INSTALL_ROOT}"
+  remove_legacy_alias "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
 
   if [[ "${PURGE}" == "1" ]]; then
     remove_service_identity
     remove_tree "${CONFIG_DIR}"
     remove_tree "${STATE_DIR}"
     remove_tree "${SERVICE_HOME}"
+    remove_legacy_alias "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
+    remove_legacy_alias "${LEGACY_STATE_DIR}" "${STATE_DIR}"
   fi
 
   print_summary

@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 1.0.5 resets the failed candidate's systemd start-limit counter before restarting a restored release, so repeated failed candidate starts do not prevent recovery. Recovery failures are reported; successful recovery still requires real service verification.
+Version 2.0.0 shortens the Linux service and installation paths to `command-bridge`. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 1.0.5 rollback fix remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -55,51 +55,59 @@ The installer performs these steps:
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment and distinct empty user/global npm configuration files, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
 7. Creates the low-privilege <code>command-bridge</code> service account and root-only environment file.
-8. Verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
-9. Enables and starts <code>command-bridge-mcp-server.service</code>.
+8. Verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
+9. Enables and starts <code>command-bridge.service</code>.
 10. Checks <code>/health</code> and authenticated <code>/ready</code>, executes hostname through a real MCP connection, and reads its matching Audit lifecycle. Failure restores the prior release, network configuration and audit-reader assets.
 11. When explicitly requested, prints the copy-ready Codex configuration block.
 
 ## Installed layout
 
-The 1.0.1 disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
+Disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
 
 ```text
-/opt/command-bridge-mcp-server/
-├── current -> releases/v1.0.5-<source-sha>
-├── releases/v1.0.5-<source-sha>/
+/opt/command-bridge/
+├── current -> releases/v2.0.0-<source-sha>
+├── releases/v2.0.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
 
-/etc/command-bridge-mcp-server/
+/etc/command-bridge/
 ├── command-bridge.env                 root:root 0600
 └── policy.json                        root:command-bridge 0640
 
-/var/lib/command-bridge-mcp-server/
+/var/lib/command-bridge/
 └── work/                              command-bridge:command-bridge 0750
 
 /etc/systemd/system/
-└── command-bridge-mcp-server.service
+└── command-bridge.service
 ```
 
 The application and Node.js runtime are owned by root. The service account can write only to its state directory and private temporary directory under the default systemd policy.
 
+### Upgrading an existing 1.x Linux installation
+
+Use the same one-line install command. The installer builds and tests 2.0.0 and validates the saved policy before it stops the old `command-bridge-mcp-server` service. It moves the application, configuration and work directories to the shorter paths, updates the two managed configuration paths (`COMMAND_BRIDGE_POLICY_FILE` and `COMMAND_BRIDGE_ALLOWED_ROOTS`), and leaves the old directory names as links to the moved data. The bearer token and other custom settings are preserved. It then verifies the new `command-bridge` service with a real MCP command and matching Audit records before disabling and removing the old unit.
+
+If the new service fails validation, the installer stops it, restores the old directories, release and configuration, and restarts the old service. Existing automation should switch to `systemctl ... command-bridge` and `journalctl -u command-bridge`; the old service name is removed after a successful upgrade. The GitHub download URL and Codex MCP tool names do not change.
+
+The earlier service's journal entries remain under `journalctl -u command-bridge-mcp-server`. The MCP Audit reader queries the current `command-bridge` service journal after migration.
+
 The installer also creates these root-owned audit access assets:
 
-- <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that reads the latest 1,000 service journal entries and uses a fixed filter to emit only CommandBridge Audit JSON. Empty journals succeed; journal read failures propagate through Bash pipefail. Unrelated service logs are not returned.
-- <code>/etc/sudoers.d/command-bridge-mcp-server-audit-reader</code> (<code>root:root 0440</code>), which permits <code>command-bridge ALL=(root) NOPASSWD: /usr/local/libexec/command-bridge-mcp-server/audit-reader ""</code> and nothing else
+- <code>/usr/local/libexec/command-bridge/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that reads the latest 1,000 service journal entries and uses a fixed filter to emit only CommandBridge Audit JSON. Empty journals succeed; journal read failures propagate through Bash pipefail. Unrelated service logs are not returned.
+- <code>/etc/sudoers.d/command-bridge-audit-reader</code> (<code>root:root 0440</code>), which permits <code>command-bridge ALL=(root) NOPASSWD: /usr/local/libexec/command-bridge/audit-reader ""</code> and nothing else
 
 The service account is not added to <code>sudo</code> or <code>systemd-journal</code> groups.
 
 ## Default configuration
 
-The installer generates `/etc/command-bridge-mcp-server/command-bridge.env` only when it does not already exist, and it never replaces an existing bearer token. It prints the token only when `--print-codex-setup` or `--codex-url` is explicitly supplied.
+The installer generates `/etc/command-bridge/command-bridge.env` only when it does not already exist, and it never replaces an existing bearer token. It prints the token only when `--print-codex-setup` or `--codex-url` is explicitly supplied.
 
 ```dotenv
 COMMAND_BRIDGE_TRANSPORT=http
 COMMAND_BRIDGE_AUDIT_BACKEND=journal
-COMMAND_BRIDGE_POLICY_FILE=/etc/command-bridge-mcp-server/policy.json
+COMMAND_BRIDGE_POLICY_FILE=/etc/command-bridge/policy.json
 COMMAND_BRIDGE_BEARER_TOKEN=<generated-64-character-token>
 COMMAND_BRIDGE_HTTP_HOST=<detected-private-ip-or-127.0.0.1>
 COMMAND_BRIDGE_HTTP_PORT=8800
@@ -107,7 +115,7 @@ COMMAND_BRIDGE_ALLOWED_HOSTS=<selected-ip-for-non-loopback>
 COMMAND_BRIDGE_EXECUTION_MODE=allowlist
 COMMAND_BRIDGE_ALLOWED_SHELLS=bash
 COMMAND_BRIDGE_ALLOWED_COMMANDS=uname,hostname,whoami,uptime,date,df,free,ps,pwd
-COMMAND_BRIDGE_ALLOWED_ROOTS=/var/lib/command-bridge-mcp-server/work
+COMMAND_BRIDGE_ALLOWED_ROOTS=/var/lib/command-bridge/work
 COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS=15000
 COMMAND_BRIDGE_MAX_TIMEOUT_MS=60000
 COMMAND_BRIDGE_MAX_OUTPUT_CHARS=50000
@@ -118,7 +126,7 @@ COMMAND_BRIDGE_PASSTHROUGH_ENV=
 Read the token locally as root:
 
 ```bash
-sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "=") + 1) }' /etc/command-bridge-mcp-server/command-bridge.env
+sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "=") + 1) }' /etc/command-bridge/command-bridge.env
 ```
 
 ## Copy-ready Codex setup
@@ -135,19 +143,19 @@ The output between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` is a prompt, 
 After editing the environment file, restart the service:
 
 ```bash
-sudo systemctl restart command-bridge-mcp-server
+sudo systemctl restart command-bridge
 ```
 
 ## Service operations
 
 ```bash
-sudo systemctl status command-bridge-mcp-server
-sudo systemctl restart command-bridge-mcp-server
-sudo systemctl stop command-bridge-mcp-server
-sudo systemctl start command-bridge-mcp-server
-sudo systemctl is-enabled command-bridge-mcp-server
-sudo journalctl -u command-bridge-mcp-server -n 100 --no-pager
-sudo journalctl -u command-bridge-mcp-server -f
+sudo systemctl status command-bridge
+sudo systemctl restart command-bridge
+sudo systemctl stop command-bridge
+sudo systemctl start command-bridge
+sudo systemctl is-enabled command-bridge
+sudo journalctl -u command-bridge -n 100 --no-pager
+sudo journalctl -u command-bridge -f
 # Replace HOST and PORT with the values in command-bridge.env:
 curl -fsS http://HOST:PORT/health
 ```
@@ -159,8 +167,8 @@ For every <code>command_bridge_run_command</code> request, CommandBridge writes 
 Host administrators can inspect the records with:
 
 ~~~bash
-sudo journalctl --unit command-bridge-mcp-server.service --output=json --no-pager --lines 1000
-sudo journalctl --unit command-bridge-mcp-server.service --no-pager --lines 100
+sudo journalctl --unit command-bridge.service --output=json --no-pager --lines 1000
+sudo journalctl --unit command-bridge.service --no-pager --lines 100
 ~~~
 
 Codex can call the read-only <code>command_bridge_list_audit_events</code> MCP tool with a <code>limit</code> from 1 through 100. The server invokes only the installed fixed reader through non-interactive sudo; it cannot pass journal units, query strings, paths, or other arguments from the MCP client.
@@ -171,7 +179,7 @@ Journald retention is a host policy. This installer does not change global journ
 
 ## Uninstall
 
-The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge-mcp-server.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge-mcp-server</code>:
+The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge</code>:
 
 ```bash
 uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --yes && rm -f "${uninstaller}"
@@ -179,8 +187,8 @@ uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/c
 
 It preserves these resources for a future reinstall:
 
-- `/etc/command-bridge-mcp-server`, including the bearer token
-- `/var/lib/command-bridge-mcp-server`, including all work data
+- `/etc/command-bridge`, including the bearer token
+- `/var/lib/command-bridge`, including all work data
 - The `command-bridge` account, group, and `/var/empty/command-bridge` home
 
 For review and a no-change preview:

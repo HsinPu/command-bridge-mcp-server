@@ -28,15 +28,15 @@ const documentation = [
 test("uninstaller is restricted to the installed CommandBridge resources", () => {
   assert.match(
     uninstaller,
-    /readonly INSTALL_ROOT="\/opt\/command-bridge-mcp-server"/
+    /readonly INSTALL_ROOT="\/opt\/command-bridge"/
   );
   assert.match(
     uninstaller,
-    /readonly CONFIG_DIR="\/etc\/command-bridge-mcp-server"/
+    /readonly CONFIG_DIR="\/etc\/command-bridge"/
   );
   assert.match(
     uninstaller,
-    /readonly STATE_DIR="\/var\/lib\/command-bridge-mcp-server"/
+    /readonly STATE_DIR="\/var\/lib\/command-bridge"/
   );
   assert.match(
     uninstaller,
@@ -52,7 +52,7 @@ test("uninstaller is restricted to the installed CommandBridge resources", () =>
 test("uninstaller removes the restricted audit reader and sudoers entry", () => {
   assert.match(
     uninstaller,
-    /readonly AUDIT_READER_DIR="\/usr\/local\/libexec\/command-bridge-mcp-server"/
+    /readonly AUDIT_READER_DIR="\/usr\/local\/libexec\/command-bridge"/
   );
   assert.match(
     uninstaller,
@@ -60,7 +60,7 @@ test("uninstaller removes the restricted audit reader and sudoers entry", () => 
   );
   assert.match(
     uninstaller,
-    /readonly AUDIT_SUDOERS_FILE="\/etc\/sudoers\.d\/command-bridge-mcp-server-audit-reader"/
+    /readonly AUDIT_SUDOERS_FILE="\/etc\/sudoers\.d\/command-bridge-audit-reader"/
   );
   assert.match(uninstaller, /remove_audit_access\(\)/);
   assert.match(
@@ -83,13 +83,13 @@ test("default uninstall preserves configuration data and service identity", () =
   assert.match(uninstaller, /^PURGE=0$/m);
   assert.match(
     uninstaller,
-    /Without --purge, the uninstaller preserves:[\s\S]*\/etc\/command-bridge-mcp-server[\s\S]*\/var\/lib\/command-bridge-mcp-server[\s\S]*command-bridge service account and group/
+    /Without --purge, the uninstaller preserves:[\s\S]*\/etc\/command-bridge[\s\S]*\/var\/lib\/command-bridge[\s\S]*command-bridge service account and group/
   );
 
   const main = uninstaller.slice(uninstaller.indexOf("main() {"));
   assert.match(
     main,
-    /remove_tree "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+fi/
+    /remove_tree "\$\{INSTALL_ROOT\}"\s+remove_legacy_alias "\$\{LEGACY_INSTALL_ROOT\}" "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+remove_legacy_alias "\$\{LEGACY_CONFIG_DIR\}" "\$\{CONFIG_DIR\}"\s+remove_legacy_alias "\$\{LEGACY_STATE_DIR\}" "\$\{STATE_DIR\}"\s+fi/
   );
 });
 

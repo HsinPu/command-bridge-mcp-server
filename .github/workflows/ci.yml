@@ -73,17 +73,17 @@ jobs:
           sudo groupadd --system command-bridge
           sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
           sudo install -d -m 0555 /var/empty/command-bridge
-          sudo install -d -m 0755 /opt/command-bridge-mcp-server/runtime/current/bin
-          sudo install -d -m 0755 /opt/command-bridge-mcp-server/current/dist
-          sudo install -d -m 0700 /etc/command-bridge-mcp-server
-          sudo install -d -m 0750 -o command-bridge -g command-bridge /var/lib/command-bridge-mcp-server/work
-          sudo ln -s "$(command -v node)" /opt/command-bridge-mcp-server/runtime/current/bin/node
-          sudo install -m 0600 /dev/null /etc/command-bridge-mcp-server/command-bridge.env
-          sudo install -m 0644 /dev/null /opt/command-bridge-mcp-server/current/dist/index.js
+          sudo install -d -m 0755 /opt/command-bridge/runtime/current/bin
+          sudo install -d -m 0755 /opt/command-bridge/current/dist
+          sudo install -d -m 0700 /etc/command-bridge
+          sudo install -d -m 0750 -o command-bridge -g command-bridge /var/lib/command-bridge/work
+          sudo ln -s "$(command -v node)" /opt/command-bridge/runtime/current/bin/node
+          sudo install -m 0600 /dev/null /etc/command-bridge/command-bridge.env
+          sudo install -m 0644 /dev/null /opt/command-bridge/current/dist/index.js
 
       - name: Verify systemd unit
         if: runner.os == 'Linux'
-        run: sudo systemd-analyze verify packaging/systemd/command-bridge-mcp-server.service
+        run: sudo systemd-analyze verify packaging/systemd/command-bridge.service
 
   publish-channel:
     needs: [test, service-smoke]
@@ -119,6 +119,9 @@ jobs:
       - name: Linux service lifecycle
         if: runner.os == 'Linux'
         run: bash scripts/linux-systemd/tests/service-smoke.sh
+      - name: Linux 1.0.5 migration and rollback
+        if: runner.os == 'Linux'
+        run: bash scripts/linux-systemd/tests/migration-smoke.sh
       - name: Windows service lifecycle
         if: runner.os == 'Windows'
         shell: powershell

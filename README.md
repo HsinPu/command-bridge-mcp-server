@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-1.0.5-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -77,7 +77,7 @@ On a glibc Linux host with systemd (x64/ARM64), paste:
 script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --print-codex-setup && rm -f "$script"
 ~~~
 
-Installation starts `CommandBridgeMCP` on Windows or `command-bridge-mcp-server` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds.
+Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
 ## Connect Codex
 
@@ -140,7 +140,7 @@ Each command request entering the execution flow first records `attempted`, foll
 | Platform | Where to look |
 | --- | --- |
 | Windows | Event Viewer → Windows Logs → Application, source `CommandBridgeMCP`. |
-| Linux | systemd journal for `command-bridge-mcp-server`. |
+| Linux | systemd journal for `command-bridge`. |
 | MCP client | Call `command_bridge_list_audit_events`. |
 
 Audit events do not store stdout/stderr, and common secret patterns in commands are redacted. Failure to write the initial event prevents execution; failure to write the terminal event withholds captured output. Retention is controlled by the host, and the logs are not tamper-proof.

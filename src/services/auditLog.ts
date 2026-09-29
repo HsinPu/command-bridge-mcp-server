@@ -12,7 +12,7 @@ export const AUDIT_SCHEMA_VERSION = 1;
 export const DEFAULT_AUDIT_EVENT_LIMIT = 50;
 export const MAX_AUDIT_EVENT_LIMIT = 100;
 
-const LINUX_AUDIT_READER = "/usr/local/libexec/command-bridge-mcp-server/audit-reader";
+const LINUX_AUDIT_READER = "/usr/local/libexec/command-bridge/audit-reader";
 const LINUX_JOURNAL_LINE_LIMIT = 1_000;
 const WINDOWS_EVENT_LINE_LIMIT = MAX_AUDIT_EVENT_LIMIT + 1;
 const MAX_AUDIT_READER_OUTPUT_BYTES = 4 * 1024 * 1024;

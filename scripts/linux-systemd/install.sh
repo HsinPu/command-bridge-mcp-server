@@ -2,29 +2,37 @@
 
 set -Eeuo pipefail
 
-readonly SERVICE_NAME="command-bridge-mcp-server"
+readonly SERVICE_NAME="command-bridge"
 readonly SERVICE_USER="command-bridge"
 readonly SERVICE_GROUP="command-bridge"
 readonly SERVICE_HOME="/var/empty/command-bridge"
-readonly INSTALL_ROOT="/opt/command-bridge-mcp-server"
+readonly INSTALL_ROOT="/opt/command-bridge"
 readonly RELEASES_DIR="${INSTALL_ROOT}/releases"
 readonly RUNTIME_DIR="${INSTALL_ROOT}/runtime"
 readonly CURRENT_LINK="${INSTALL_ROOT}/current"
 readonly RUNTIME_LINK="${RUNTIME_DIR}/current"
-readonly CONFIG_DIR="/etc/command-bridge-mcp-server"
+readonly CONFIG_DIR="/etc/command-bridge"
 readonly CONFIG_FILE="${CONFIG_DIR}/command-bridge.env"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-readonly STATE_DIR="/var/lib/command-bridge-mcp-server"
+readonly STATE_DIR="/var/lib/command-bridge"
 readonly WORK_DIR_PATH="${STATE_DIR}/work"
-readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
+readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge"
 readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
-readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
+readonly AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-audit-reader"
+# The existing lock name is kept so an older installer cannot race migration.
 readonly LOCK_DIR="/run/command-bridge-mcp-server"
+readonly LEGACY_SERVICE_NAME="command-bridge-mcp-server"
+readonly LEGACY_UNIT_FILE="/etc/systemd/system/${LEGACY_SERVICE_NAME}.service"
+readonly LEGACY_INSTALL_ROOT="/opt/command-bridge-mcp-server"
+readonly LEGACY_CONFIG_DIR="/etc/command-bridge-mcp-server"
+readonly LEGACY_STATE_DIR="/var/lib/command-bridge-mcp-server"
+readonly LEGACY_AUDIT_READER_DIR="/usr/local/libexec/command-bridge-mcp-server"
+readonly LEGACY_AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-audit-reader"
 SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SYSTEMD_UNIT_SHA256="c1063a5b2d47a988423a776fd850bd6ae6438e781b50f2f10d9fcd9e083e246b"
-readonly AUDIT_READER_SHA256="61a73d27a59846523d324faa4d1cd3964bd3221186895d26f5b5df6c0d335345"
+readonly SYSTEMD_UNIT_SHA256="1745d6fc446b0af776e45b76d648cef21938da44e39b0c3730c36cf1c21a5e00"
+readonly AUDIT_READER_SHA256="58b2381e2a5ff3284f81c6916fca9d8bac80eaaa836fa2b4b7c851519acc7e49"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 
@@ -49,6 +57,17 @@ CODEX_SETUP_URL=""
 REFRESH_NETWORK=0
 CONFIG_BACKUP=""
 INSTALL_SUCCEEDED=0
+LEGACY_MIGRATION=0
+LEGACY_WAS_ACTIVE=0
+LEGACY_WAS_ENABLED=0
+LEGACY_UNIT_BACKUP=""
+LEGACY_CONFIG_BACKUP=""
+LEGACY_CURRENT_TARGET=""
+LEGACY_RUNTIME_TARGET=""
+LEGACY_ROLLBACK_DONE=0
+LEGACY_APP_PRESENT=0
+LEGACY_CONFIG_PRESENT=0
+LEGACY_STATE_PRESENT=0
 
 log() {
   printf '[CommandBridge] %s\n' "$*"
@@ -171,8 +190,12 @@ automatic_codex_url() {
 }
 
 cleanup() {
-  if [[ "${INSTALL_SUCCEEDED}" == 0 && -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
-    install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
+  if [[ "${INSTALL_SUCCEEDED}" == 0 && "${LEGACY_ROLLBACK_DONE}" == 0 ]]; then
+    if [[ "${LEGACY_MIGRATION}" == 1 && -n "${LEGACY_CONFIG_BACKUP}" && -f "${LEGACY_CONFIG_BACKUP}" ]]; then
+      install -m 0600 "${LEGACY_CONFIG_BACKUP}" "${CONFIG_FILE}"
+    elif [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
+      install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
+    fi
   fi
   cleanup_build_account || true
   if [[ -n "${TEMP_DIR}" && -d "${TEMP_DIR}" ]]; then
@@ -267,6 +290,24 @@ require_root_systemd_linux() {
 
   if ldd --version 2>&1 | grep -qi musl; then
     fail "The bundled Node.js runtime requires glibc; musl/Alpine is not supported."
+  fi
+}
+
+assert_new_installation_paths() {
+  local path
+  for path in "${INSTALL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" "${AUDIT_READER_DIR}"; do
+    if [[ -e "${path}" || -L "${path}" ]]; then
+      [[ -d "${path}" && ! -L "${path}" ]] || fail "Installation path is not a regular directory: ${path}"
+    fi
+  done
+  if [[ -e "${CONFIG_FILE}" || -L "${CONFIG_FILE}" ]]; then
+    [[ -f "${CONFIG_FILE}" && ! -L "${CONFIG_FILE}" ]] || fail "Configuration is not a regular file."
+  fi
+  if [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
+    [[ -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || fail "Service unit is not a regular file."
+    grep -Fxq "ExecStart=${RUNTIME_LINK}/bin/node ${CURRENT_LINK}/dist/index.js" "${UNIT_FILE}" ||
+      fail "An unrelated ${SERVICE_NAME}.service already exists; it was not replaced."
+    grep -Fxq "User=${SERVICE_USER}" "${UNIT_FILE}" || fail "Service unit has an unexpected account."
   fi
 }
 
@@ -488,6 +529,108 @@ ensure_service_account() {
   install -d -m 0555 -o root -g root "${SERVICE_HOME}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${STATE_DIR}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${WORK_DIR_PATH}"
+}
+
+check_legacy_tree() {
+  local old=$1 new=$2
+  if [[ -L "${old}" ]]; then
+    [[ "$(readlink "${old}")" == "${new}" && -d "${new}" && ! -L "${new}" ]] || \
+      fail "Legacy path is not the expected CommandBridge alias: ${old}"
+  elif [[ -e "${old}" ]]; then
+    [[ -d "${old}" && ! -e "${new}" && ! -L "${new}" ]] || \
+      fail "Both old and new installation paths exist; resolve the conflict before upgrading: ${old}"
+    if command -v mountpoint >/dev/null 2>&1 && mountpoint -q "${old}"; then
+      fail "Refusing to migrate a mounted path: ${old}"
+    fi
+  fi
+}
+
+move_legacy_tree() {
+  local old=$1 new=$2
+  if [[ -d "${old}" && ! -L "${old}" ]]; then
+    mv -T -- "${old}" "${new}"
+    ln -s "${new}" "${old}"
+  fi
+}
+
+restore_legacy_tree() {
+  local old=$1 new=$2
+  if [[ -L "${old}" && "$(readlink "${old}")" == "${new}" ]]; then
+    unlink "${old}"
+  fi
+  if [[ ! -e "${old}" && ! -L "${old}" && -d "${new}" ]]; then
+    mv -T -- "${new}" "${old}"
+  fi
+}
+
+migrate_legacy_layout() {
+  local old new
+  if [[ ! -e "${LEGACY_UNIT_FILE}" && ! -L "${LEGACY_UNIT_FILE}" && \
+        ( ! -e "${LEGACY_INSTALL_ROOT}" || -L "${LEGACY_INSTALL_ROOT}" ) && \
+        ( ! -e "${LEGACY_CONFIG_DIR}" || -L "${LEGACY_CONFIG_DIR}" ) && \
+        ( ! -e "${LEGACY_STATE_DIR}" || -L "${LEGACY_STATE_DIR}" ) ]]; then
+    check_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
+    check_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
+    check_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
+    return
+  fi
+
+  [[ ! -L "${LEGACY_UNIT_FILE}" ]] || fail "Legacy service unit must be a regular file."
+  if [[ -e "${LEGACY_UNIT_FILE}" ]]; then
+    [[ -f "${LEGACY_UNIT_FILE}" ]] || fail "Legacy service unit is not a regular file."
+    [[ -d "${LEGACY_INSTALL_ROOT}" && -f "${LEGACY_CONFIG_DIR}/command-bridge.env" && \
+       -d "${LEGACY_STATE_DIR}/work" ]] || fail "Legacy service files are incomplete; the existing service was not changed."
+    [[ ! -e "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || \
+      fail "Both old and new service units exist; inspect them before upgrading."
+    [[ ! -L "${LEGACY_CONFIG_DIR}/command-bridge.env" ]] || fail "Legacy configuration is a symbolic link."
+    for old in "${LEGACY_AUDIT_SUDOERS_FILE}" "${LEGACY_AUDIT_READER_DIR}/audit-reader"; do
+      if [[ -e "${old}" || -L "${old}" ]]; then
+        [[ -f "${old}" && ! -L "${old}" ]] || fail "Legacy audit access file is not regular: ${old}"
+      fi
+    done
+    old=$(systemctl show --property=FragmentPath --value "${LEGACY_SERVICE_NAME}.service")
+    [[ "${old}" == "${LEGACY_UNIT_FILE}" ]] || fail "Legacy service unit path is unexpected."
+    LEGACY_CURRENT_TARGET=$(readlink "${LEGACY_INSTALL_ROOT}/current")
+    LEGACY_RUNTIME_TARGET=$(readlink "${LEGACY_INSTALL_ROOT}/runtime/current")
+    [[ "${LEGACY_CURRENT_TARGET}" == "${LEGACY_INSTALL_ROOT}/releases/"* &&
+       "${LEGACY_RUNTIME_TARGET}" == "${LEGACY_INSTALL_ROOT}/runtime/"* ]] ||
+      fail "Legacy release links are unexpected; the existing service was not changed."
+  fi
+  check_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
+  check_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
+  check_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
+
+  if [[ -e "${LEGACY_INSTALL_ROOT}" || -L "${LEGACY_INSTALL_ROOT}" ]]; then LEGACY_APP_PRESENT=1; fi
+  if [[ -e "${LEGACY_CONFIG_DIR}" || -L "${LEGACY_CONFIG_DIR}" ]]; then LEGACY_CONFIG_PRESENT=1; fi
+  if [[ -e "${LEGACY_STATE_DIR}" || -L "${LEGACY_STATE_DIR}" ]]; then LEGACY_STATE_PRESENT=1; fi
+
+  LEGACY_MIGRATION=1
+  ACTIVATION_STARTED=1
+  if [[ -f "${LEGACY_UNIT_FILE}" ]]; then
+    LEGACY_UNIT_BACKUP="${TEMP_DIR}/legacy-unit.service"
+    install -m 0600 "${LEGACY_UNIT_FILE}" "${LEGACY_UNIT_BACKUP}"
+    if systemctl is-enabled --quiet "${LEGACY_SERVICE_NAME}.service"; then LEGACY_WAS_ENABLED=1; fi
+    if systemctl is-active --quiet "${LEGACY_SERVICE_NAME}.service"; then
+      LEGACY_WAS_ACTIVE=1
+      systemctl stop "${LEGACY_SERVICE_NAME}.service"
+    fi
+  fi
+  log "Migrating the Linux service and paths to ${SERVICE_NAME}; preserving legacy path aliases."
+  move_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
+  move_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
+  move_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
+
+  if [[ -f "${CONFIG_FILE}" ]]; then
+    LEGACY_CONFIG_BACKUP="${TEMP_DIR}/legacy-config.env"
+    install -m 0600 "${CONFIG_FILE}" "${LEGACY_CONFIG_BACKUP}"
+    awk -v old_config="${LEGACY_CONFIG_DIR}" -v new_config="${CONFIG_DIR}" \
+        -v old_state="${LEGACY_STATE_DIR}" -v new_state="${STATE_DIR}" '
+      /^COMMAND_BRIDGE_POLICY_FILE=/ { gsub(old_config, new_config) }
+      /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ { gsub(old_state, new_state) }
+      { print }
+    ' "${CONFIG_FILE}" > "${TEMP_DIR}/migrated-config.env"
+    install -m 0600 -o root -g root "${TEMP_DIR}/migrated-config.env" "${CONFIG_FILE}"
+  fi
 }
 
 backup_audit_access() {
@@ -749,12 +892,18 @@ health_url() {
 rollback_activation() {
   ROLLBACK_IN_PROGRESS=1
   log "Rolling back the activated release..."
+  if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
+    systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+  fi
   if [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
     install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
   fi
+  if [[ "${LEGACY_MIGRATION}" == "1" && -n "${LEGACY_CONFIG_BACKUP}" && -f "${LEGACY_CONFIG_BACKUP}" ]]; then
+    install -m 0600 "${LEGACY_CONFIG_BACKUP}" "${CONFIG_FILE}"
+  fi
 
   rollback_audit_access
-  if [[ -z "${PREVIOUS_RELEASE}" ]]; then
+  if [[ "${LEGACY_MIGRATION}" == "0" && -z "${PREVIOUS_RELEASE}" ]]; then
     systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
   fi
   if [[ -n "${PREVIOUS_RUNTIME}" && -d "${PREVIOUS_RUNTIME}" ]]; then
@@ -772,14 +921,36 @@ rollback_activation() {
   elif [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
     unlink "${UNIT_FILE}" || true
   fi
+  if [[ "${LEGACY_MIGRATION}" == "1" && -n "${LEGACY_UNIT_BACKUP}" && \
+        -f "${LEGACY_UNIT_BACKUP}" && ! -f "${LEGACY_UNIT_FILE}" ]]; then
+    install -m 0644 "${LEGACY_UNIT_BACKUP}" "${LEGACY_UNIT_FILE}" || true
+  fi
   systemctl daemon-reload >/dev/null 2>&1 || true
-  if [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" ]]; then
+  if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
+    if [[ "${LEGACY_APP_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}" || true; fi
+    if [[ "${LEGACY_CONFIG_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}" || true; fi
+    if [[ "${LEGACY_STATE_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}" || true; fi
+    if [[ -n "${LEGACY_CURRENT_TARGET}" && -d "${LEGACY_INSTALL_ROOT}" ]]; then
+      ln -sfnT "${LEGACY_CURRENT_TARGET}" "${LEGACY_INSTALL_ROOT}/current" || true
+    fi
+    if [[ -n "${LEGACY_RUNTIME_TARGET}" && -d "${LEGACY_INSTALL_ROOT}/runtime" ]]; then
+      ln -sfnT "${LEGACY_RUNTIME_TARGET}" "${LEGACY_INSTALL_ROOT}/runtime/current" || true
+    fi
+    if [[ "${LEGACY_WAS_ENABLED}" == "1" ]]; then
+      systemctl enable "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || true
+    fi
+    if [[ "${LEGACY_WAS_ACTIVE}" == "1" ]]; then
+      systemctl reset-failed "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || true
+      systemctl restart "${LEGACY_SERVICE_NAME}.service" || log "WARNING: Legacy service could not be restarted."
+    fi
+  elif [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" ]]; then
     # Failed candidate starts can exhaust StartLimitBurst. Clear that candidate's
     # failure counter before restarting the restored, previously verified release.
     systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
     systemctl restart "${SERVICE_NAME}.service" || log "WARNING: Restored service could not be restarted."
   fi
   ACTIVATION_STARTED=0
+  if [[ "${LEGACY_MIGRATION}" == "1" ]]; then LEGACY_ROLLBACK_DONE=1; fi
   ROLLBACK_IN_PROGRESS=0
 }
 
@@ -789,7 +960,9 @@ install_and_start_service() {
 
   install -m 0644 "${TEMP_DIR}/${SERVICE_NAME}.service" "${UNIT_FILE}"
   systemctl daemon-reload
-  systemctl enable "${SERVICE_NAME}.service" >/dev/null
+  if [[ "${LEGACY_MIGRATION}" == "0" ]]; then
+    systemctl enable "${SERVICE_NAME}.service" >/dev/null
+  fi
 
   if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
     systemctl restart "${SERVICE_NAME}.service"
@@ -822,6 +995,28 @@ install_and_start_service() {
       rollback_activation
     fi
     fail "Service health check failed. Review the journal output above."
+  fi
+}
+
+finish_legacy_migration() {
+  [[ "${LEGACY_MIGRATION}" == "1" ]] || return 0
+  if [[ -f "${LEGACY_UNIT_FILE}" ]]; then
+    systemctl enable "${SERVICE_NAME}.service" >/dev/null
+    systemctl disable "${LEGACY_SERVICE_NAME}.service" >/dev/null
+    systemctl is-active --quiet "${SERVICE_NAME}.service" || fail "New service stopped during migration."
+    rm -f -- "${LEGACY_UNIT_FILE}"
+    systemctl daemon-reload
+  else
+    systemctl enable "${SERVICE_NAME}.service" >/dev/null
+  fi
+  # The old paths remain as exact aliases for existing configuration and local
+  # scripts, but the obsolete privileged Audit helper must not remain enabled.
+  if [[ -f "${LEGACY_AUDIT_SUDOERS_FILE}" && ! -L "${LEGACY_AUDIT_SUDOERS_FILE}" ]]; then
+    rm -f -- "${LEGACY_AUDIT_SUDOERS_FILE}" || log "WARNING: Old audit sudoers rule could not be removed."
+  fi
+  if [[ -f "${LEGACY_AUDIT_READER_DIR}/audit-reader" && ! -L "${LEGACY_AUDIT_READER_DIR}/audit-reader" ]]; then
+    rm -f -- "${LEGACY_AUDIT_READER_DIR}/audit-reader" || log "WARNING: Old audit reader could not be removed."
+    rmdir -- "${LEGACY_AUDIT_READER_DIR}" >/dev/null 2>&1 || true
   fi
 }
 
@@ -920,6 +1115,7 @@ main() {
   exec 9>"${LOCK_DIR}/install.lock"
   chmod 0600 "${LOCK_DIR}/install.lock"
   flock -n 9 || fail "Another CommandBridge installation is already running."
+  assert_new_installation_paths
 
   available_kb=$(df -Pk /opt | awk 'NR == 2 { print $4 }')
   if [[ "${available_kb}" =~ ^[0-9]+$ ]] && (( available_kb < 400000 )); then
@@ -935,7 +1131,10 @@ main() {
   build_source
   if [[ -f "${CONFIG_FILE}" ]]; then
     DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
+  elif [[ -f "${LEGACY_CONFIG_DIR}/command-bridge.env" ]]; then
+    DOTENV_CONFIG_PATH="${LEGACY_CONFIG_DIR}/command-bridge.env" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   fi
+  migrate_legacy_layout
   ensure_service_account
   install_configuration
   DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
@@ -943,6 +1142,7 @@ main() {
   install_audit_access
   install_and_start_service
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
+  finish_legacy_migration
   ACTIVATION_STARTED=0
   INSTALL_SUCCEEDED=1
   print_summary

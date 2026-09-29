@@ -24,7 +24,7 @@ const installer = readFileSync(
   "utf8"
 );
 const unit = readFileSync(
-  resolve(projectRoot, "packaging/systemd/command-bridge-mcp-server.service")
+  resolve(projectRoot, "packaging/systemd/command-bridge.service")
 );
 const auditReader = readFileSync(resolve(projectRoot, "packaging/linux/audit-reader"));
 const documentation = [
@@ -48,7 +48,7 @@ test("installer pins and deploys the fixed Linux audit reader", () => {
   assert.match(installer, /readonly AUDIT_READER_PATH="\$\{AUDIT_READER_DIR\}\/audit-reader"/);
   assert.match(
     installer,
-    /readonly AUDIT_SUDOERS_FILE="\/etc\/sudoers\.d\/command-bridge-mcp-server-audit-reader"/
+    /readonly AUDIT_SUDOERS_FILE="\/etc\/sudoers\.d\/command-bridge-audit-reader"/
   );
   assert.match(installer, /packaging\/linux\/audit-reader/);
   assert.match(installer, /install -m 0755 -o root -g root "\$\{TEMP_DIR\}\/audit-reader"/);
@@ -60,7 +60,7 @@ test("installer pins and deploys the fixed Linux audit reader", () => {
   assert.match(installer, /visudo -cf "\$\{AUDIT_SUDOERS_FILE\}"/);
   assert.match(installer, /runuser -u "\$\{SERVICE_USER\}" -- \/usr\/bin\/sudo -n "\$\{AUDIT_READER_PATH\}"/);
   assert.match(auditReader.toString("utf8"), /set -euo pipefail/);
-  assert.match(auditReader.toString("utf8"), /--unit command-bridge-mcp-server\.service/);
+  assert.match(auditReader.toString("utf8"), /--unit command-bridge\.service/);
   assert.match(auditReader.toString("utf8"), /--output=cat/);
   assert.match(auditReader.toString("utf8"), /--lines=1000/);
   assert.match(auditReader.toString("utf8"), /\/usr\/bin\/awk/);
@@ -120,7 +120,7 @@ test("systemd unit uses the versioned application and runtime symlinks", () => {
 
   assert.match(
     unitText,
-    /ExecStart=\/opt\/command-bridge-mcp-server\/runtime\/current\/bin\/node \/opt\/command-bridge-mcp-server\/current\/dist\/index\.js/
+    /ExecStart=\/opt\/command-bridge\/runtime\/current\/bin\/node \/opt\/command-bridge\/current\/dist\/index\.js/
   );
   assert.match(unitText, /User=command-bridge/);
   assert.match(unitText, /NoNewPrivileges=false/);

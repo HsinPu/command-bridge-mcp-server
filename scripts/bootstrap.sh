@@ -2,9 +2,13 @@
 set -Eeuo pipefail
 mode=install
 if [[ "${1:-}" == "--uninstall" ]]; then mode=uninstall; shift; fi
-if [[ "$mode" == uninstall && -f /opt/command-bridge-mcp-server/current/uninstall.sh ]]; then
-  [[ "$(stat -c '%u' /opt/command-bridge-mcp-server/current/uninstall.sh)" == 0 ]] || { echo 'Installed uninstaller is not root-owned.' >&2; exit 1; }
-  exec bash /opt/command-bridge-mcp-server/current/uninstall.sh "$@"
+if [[ "$mode" == uninstall ]]; then
+  for installed_root in /opt/command-bridge /opt/command-bridge-mcp-server; do
+    if [[ -f "$installed_root/current/uninstall.sh" ]]; then
+      [[ "$(stat -c '%u' "$installed_root/current/uninstall.sh")" == 0 ]] || { echo 'Installed uninstaller is not root-owned.' >&2; exit 1; }
+      exec bash "$installed_root/current/uninstall.sh" "$@"
+    fi
+  done
 fi
 work=$(mktemp -d /tmp/command-bridge-bootstrap.XXXXXX)
 trap 'rm -rf -- "$work"' EXIT

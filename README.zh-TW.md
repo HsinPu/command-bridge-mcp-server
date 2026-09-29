@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-1.0.5-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -77,7 +77,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --print-codex-setup && rm -f "$script"
 ~~~
 
-安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge-mcp-server` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。
+安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
 ## 連線 Codex
 
@@ -140,7 +140,7 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 | 平台 | 查看位置 |
 | --- | --- |
 | Windows | 事件檢視器 → Windows 記錄 → 應用程式，來源 `CommandBridgeMCP`。 |
-| Linux | systemd journal，服務 `command-bridge-mcp-server`。 |
+| Linux | systemd journal，服務 `command-bridge`。 |
 | MCP 用戶端 | 呼叫 `command_bridge_list_audit_events`。 |
 
 Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初始寫入失敗時不執行指令；終結事件寫入失敗時不回傳擷取的輸出。保存期限由主機設定決定，日誌不具不可竄改保證。

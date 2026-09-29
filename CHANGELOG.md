@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0 — 2026-09-29
+
+Major release from 1.0.5: the Linux systemd service and canonical application, configuration and state paths change from `command-bridge-mcp-server` to `command-bridge`. Existing scripts that reference the old service name must use `command-bridge`; the GitHub repository, npm package, MCP tools and Windows service are unchanged.
+
+- New Linux installations use `/opt/command-bridge`, `/etc/command-bridge`, `/var/lib/command-bridge` and `command-bridge.service`.
+- On upgrade, the installer validates the old configuration before switching services, moves the existing directories without replacing the token or working data, and keeps old directory names as links for existing absolute paths. A failed new-service activation moves the directories back and restores the old release and service.
+- The bootstrap still uses the fixed repository URL and the CI-verified full source SHA. This version is not available through the public bootstrap until Windows/Linux CI and service validation publish its SHA to `install-channel`.
+- Local Ubuntu WSL service checks passed for a fresh installation and a real 1.0.5 upgrade, including a forced post-activation failure, old-service recovery, MCP/Audit checks and purge. Hosted CI remains the publication gate.
+
 ## 1.0.5 — 2026-09-29
 
 Patch release from 1.0.4: repair service deployment validation and recovery without changing MCP interfaces or command policies.

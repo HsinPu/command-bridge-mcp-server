@@ -10,7 +10,7 @@ set -euo pipefail
 # preserves actual journal read failures while awk accepts an empty result.
 /usr/bin/journalctl \
   --no-pager \
-  --unit command-bridge-mcp-server.service \
+  --unit command-bridge.service \
   --output=cat \
   --lines=1000 |
   /usr/bin/awk '/^{"schemaVersion":1,"event":"command_bridge\.audit",/'
