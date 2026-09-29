@@ -3,6 +3,10 @@ param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$PSModuleAutoLoadingPreference = 'None'
+$env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
+Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')) -ErrorAction Stop
+Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Diagnostics\Microsoft.PowerShell.Diagnostics.psd1')) -ErrorAction Stop
 
 $records = Get-WinEvent -FilterHashtable @{
   LogName = "Application"

@@ -5,6 +5,22 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildChildEnvironment } from "./commandExecutor.js";
+import { buildWindowsAuditEnvironment } from "./auditLog.js";
+
+test("Windows Audit startup excludes secrets and rejects invalid payload without module discovery", { skip: process.platform !== "win32" }, () => {
+  const environment = buildWindowsAuditEnvironment(process.env.SystemRoot ?? "C:\\Windows", '{}');
+  assert.equal(environment.COMMAND_BRIDGE_BEARER_TOKEN, undefined);
+  assert.equal(environment.NODE_OPTIONS, undefined);
+  assert.equal(environment.COMMAND_BRIDGE_CMDLET_REQUEST, undefined);
+  assert.match(environment.PSModulePath ?? '', /WindowsPowerShell[\\/]v1\.0[\\/]Modules$/);
+  const result = spawnSync(join(process.env.SystemRoot ?? "C:\\Windows", 'System32/WindowsPowerShell/v1.0/powershell.exe'), [
+    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', resolve('scripts/windows/audit/write-audit-event.ps1')
+  ], { env: environment, encoding: 'utf8', windowsHide: true, timeout: 5000 });
+  assert.equal(result.error, undefined);
+  assert.notEqual(result.status, 0);
+  // StrictMode rejects missing fields before any Event Log write.
+  assert.match(result.stderr, /schemaVersion|payload is invalid/);
+});
 
 test("Windows environment keeps startup directories but excludes unrelated secrets", { skip: process.platform !== "win32" }, () => {
   const secretKey = "COMMAND_BRIDGE_ENV_TEST_SECRET";

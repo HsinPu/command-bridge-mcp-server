@@ -371,7 +371,7 @@ function Write-ServiceStartupDiagnostics {
     $token = Get-ConfigValue 'COMMAND_BRIDGE_BEARER_TOKEN'
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($service) { Write-Log "Service state: $($service.Status)" }
-    $files = @(Get-ChildItem -LiteralPath $LogsDirectory -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 6)
+    $files = @(Get-ChildItem -LiteralPath $LogsDirectory -Filter '*.log*' -ErrorAction SilentlyContinue | Select-Object -First 12)
     Write-Log "Startup log files found: $($files.Count)"
     foreach ($file in $files) {
       Write-Log "Startup log: $($file.Name) ($($file.Length) bytes)"

@@ -115,7 +115,13 @@ export class CommandExecutor {
     try {
       await this.auditLog.write(createAuditEvent({ command: "CommandBridge readiness verification", phase: "completed", executionMode: this.config.executionMode, source: this.auditSource() }));
       await this.auditLog.list(1);
-    } catch { checks.audit = false; }
+    } catch (error) {
+      checks.audit = false;
+      if (error instanceof AppError && ["AUDIT_LOG_WRITE_FAILED", "AUDIT_LOG_READ_FAILED"].includes(error.code)) {
+        const timeout = error.cause instanceof Error && error.cause.message === "Audit helper timed out.";
+        console.error("CommandBridge readiness audit failure: " + error.code + (timeout ? " (helper timeout)" : ""));
+      }
+    }
     return { ready: Object.values(checks).every(Boolean), checks };
   }
 

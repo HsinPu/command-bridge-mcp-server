@@ -4,6 +4,8 @@ Version 1.0.5 reports startup dependency/error categories, child-process/listene
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
+Audit helpers receive only standard Windows directory variables and load fixed built-in PowerShell modules, without inheriting arbitrary environment secrets or external module paths. Their five-second deadline remains unchanged. Startup diagnostics include rotated log files because WinSW restarts can leave the current error log empty.
+
 The Windows installer deploys CommandBridge as a WinSW-managed Windows service named <code>CommandBridgeMCP</code>. The service runs as the low-privilege <code>NT AUTHORITY\LocalService</code> account, not as LocalSystem.
 
 ## Supported hosts

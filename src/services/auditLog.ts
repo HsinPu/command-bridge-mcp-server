@@ -489,12 +489,7 @@ function runWindowsAuditScript(
     "powershell.exe"
   );
   const scriptPath = fileURLToPath(new URL("../../scripts/windows/audit/" + scriptName, import.meta.url));
-  const environment: NodeJS.ProcessEnv = {
-    SystemRoot: systemRoot,
-    WINDIR: systemRoot,
-    SystemDrive: process.env.SystemDrive ?? "C:",
-    ...(eventJson ? { COMMAND_BRIDGE_AUDIT_EVENT: eventJson } : {})
-  };
+  const environment = buildWindowsAuditEnvironment(systemRoot, eventJson);
 
   return runFixedProcess(
     powershell,
@@ -510,6 +505,22 @@ function runWindowsAuditScript(
     environment,
     scriptName === "read-audit-events.ps1"
   );
+}
+
+export function buildWindowsAuditEnvironment(systemRoot: string, eventJson?: string): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {};
+  // Preserve only standard directory variables needed by PowerShell/.NET under
+  // service identities. Never inherit tokens, arbitrary module paths or options.
+  for (const key of ["SystemDrive", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "CommonProgramFiles", "CommonProgramFiles(x86)", "CommonProgramW6432", "ALLUSERSPROFILE", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "HOMEDRIVE", "HOMEPATH"]) {
+    const actual = Object.keys(process.env).find(name => name.toLowerCase() === key.toLowerCase());
+    if (actual && process.env[actual] !== undefined) environment[actual] = process.env[actual];
+  }
+  environment.SystemRoot = systemRoot;
+  environment.WINDIR = systemRoot;
+  environment.PATH = resolve(systemRoot, "System32");
+  environment.PSModulePath = resolve(systemRoot, "System32/WindowsPowerShell/v1.0/Modules");
+  if (eventJson) environment.COMMAND_BRIDGE_AUDIT_EVENT = eventJson;
+  return environment;
 }
 
 export function runFixedProcess(

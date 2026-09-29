@@ -8,6 +8,7 @@ Patch release from 1.0.4: repair service deployment validation and recovery with
 - Report Linux smoke failure line and service state without printing configuration. Add Windows startup categories, listener/child-process presence and bounded log excerpts; redact the configured token and credential fields, and exclude Audit payloads, configuration and environment dumps.
 - Suppress PowerShell download progress rendering while retaining checksum verification.
 - Probe Windows service health directly without Internet proxy/WPAD, preserve the configured Host header and handle IPv6 listener URLs. Exercise the probe against a real local HTTP server.
+- Preserve only standard Windows directory variables for Audit PowerShell helpers and load their trusted built-in modules explicitly; retain the five-second helper limit. Include rotated startup logs and safe Audit failure categories in diagnostics. Wait for restored Windows listeners before mandatory MCP/Audit checks.
 - Validation is in progress. Both general test jobs passed for 1.0.4, but service jobs failed and channel publication was skipped; local WSL success alone did not meet the release gate.
 
 ## 1.0.4 — 2026-09-29 (unreleased)

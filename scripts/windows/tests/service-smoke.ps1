@@ -44,6 +44,8 @@ try {
     if ([IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml')) -ne $xmlBefore) { throw 'Rollback changed release.' }
     if ([IO.File]::ReadAllText((Join-Path $release 'install-info.json')) -ne $infoBefore) { throw 'Rollback changed source identity.' }
     if ([IO.File]::ReadAllText($preserved) -ne 'keep') { throw 'Rollback changed working data.' }
+    & $node (Join-Path $root 'scripts\tests\wait-for-listener.mjs') $config
+    if ($LASTEXITCODE -ne 0) { throw 'Restored service listener did not start.' }
     & $node (Join-Path $release 'scripts\verify-install.mjs') $config
     if ($LASTEXITCODE -ne 0) { throw 'Restored service failed MCP/Audit verification.' }
   }
