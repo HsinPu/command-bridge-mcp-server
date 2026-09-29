@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.2 — 2026-09-29 (unreleased)
+
+Patch release from 1.0.1: documentation and working-rule maintenance with no runtime behavior changes.
+
+- Require a version bump and CHANGELOG entry for every delivered batch of changes, including AGENTS.md, README, validation records, comments and formatting. Documentation-only changes use PATCH.
+- Remove the previous documentation-only version exemption and synchronize current version references. Existing Linux installation and Windows CI blockers are unchanged.
+
 ## 1.0.1 — 2026-09-22 (unreleased)
 
 Patch release from 1.0.0: fixes CI timing and rollback test coverage without changing the MCP interface, command policies or production deadlines.

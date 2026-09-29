@@ -1,6 +1,6 @@
 # Architecture implementation validation
 
-The current package is 1.0.1 (unreleased), a patch to the 1.0.0 CI timing and rollback tests. The existing v0.4.0 tag is unchanged.
+The current package is 1.0.2 (unreleased), a documentation and version-policy update. Runtime behavior is unchanged from 1.0.1; historical test results below retain their tested versions. The Linux npm installation blocker remains unresolved. The existing v0.4.0 tag is unchanged.
 
 ## Previous CI result
 
