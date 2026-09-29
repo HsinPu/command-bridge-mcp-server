@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.2 — 2026-09-29
+
+Patch release from 2.0.1: fix Linux deployment SELinux contexts that caused systemd `203/EXEC` on Oracle Linux 8.10 Enforcing, without changing command policies or MCP interfaces.
+
+- Do not preserve temporary contexts when copying runtime/application assets. Restore and verify final-path labels against host policy before activation, including reused runtimes from failed installs.
+- Validate required tools on Enforcing/Permissive hosts; fail closed on labeling errors. Repair restored configuration, runtime, service and Audit asset labels before rollback restart, without recursively relabeling user work data or changing SELinux policy/mode.
+- Add behavior tests for fresh/reused deployments, labeling failures, symlink/work-data boundaries and normal/legacy rollback. Add an explicitly opted-in disposable Enforcing VM test that reproduces `user_tmp_t`/203, repairs it, and checks real MCP/Audit and lifecycle behavior.
+- Include restricted startup diagnostics and document retry prerequisites and verification limits. Full Oracle Linux 8.10 Enforcing validation is separately recorded; Ubuntu/Windows CI alone does not establish it.
+
 ## 2.0.1 — 2026-09-29
 
 Patch release from 2.0.0: document the established Linux service and path naming rules for future changes, with no runtime behavior changes.

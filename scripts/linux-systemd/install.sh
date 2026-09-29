@@ -68,6 +68,7 @@ LEGACY_ROLLBACK_DONE=0
 LEGACY_APP_PRESENT=0
 LEGACY_CONFIG_PRESENT=0
 LEGACY_STATE_PRESENT=0
+SELINUX_ACTIVE=0
 
 log() {
   printf '[CommandBridge] %s\n' "$*"
@@ -196,6 +197,9 @@ cleanup() {
     elif [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
       install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
     fi
+    if [[ -n "${CONFIG_BACKUP}" || -n "${LEGACY_CONFIG_BACKUP}" ]]; then
+      restore_selinux_path "${CONFIG_FILE}" || log "WARNING: Restored configuration SELinux label could not be verified."
+    fi
   fi
   cleanup_build_account || true
   if [[ -n "${TEMP_DIR}" && -d "${TEMP_DIR}" ]]; then
@@ -275,6 +279,74 @@ trap on_error ERR
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+detect_selinux() {
+  local mode
+  SELINUX_ACTIVE=0
+  if ! command -v getenforce >/dev/null 2>&1; then
+    [[ ! -e /sys/fs/selinux/enforce ]] || fail "SELinux is enabled but getenforce is missing; install policycoreutils and libselinux-utils."
+    return 0
+  fi
+  mode=$(getenforce) || fail "Could not determine SELinux mode."
+  case "${mode}" in
+    Disabled) return 0 ;;
+    Enforcing|Permissive) SELINUX_ACTIVE=1 ;;
+    *) fail "Unexpected SELinux mode; refusing to activate the service." ;;
+  esac
+  require_command restorecon
+  require_command matchpathcon
+  require_command find
+  log "SELinux ${mode}: deployment labels will be restored and verified against host policy."
+}
+
+# Return failures instead of exiting: rollback must finish restoring files even
+# if the host's labeling tools fail. Never force a type or modify host policy.
+restore_selinux_path() {
+  local path=$1 recursive=${2:-0}
+  [[ "${SELINUX_ACTIVE}" == 1 ]] || return 0
+  [[ -e "${path}" || -L "${path}" ]] || return 0
+  if [[ "${recursive}" == 1 ]]; then
+    [[ -d "${path}" && ! -L "${path}" ]] || { log "ERROR: Refusing recursive SELinux repair of a non-directory: ${path}" >&2; return 1; }
+    # Physical traversal: do not follow release symlinks or cross mount points.
+    restorecon -R -x -- "${path}" || { log "ERROR: SELinux label restore failed: ${path}" >&2; return 1; }
+    find -P "${path}" -xdev -exec matchpathcon -V {} + >/dev/null || { log "ERROR: SELinux label verification failed: ${path}" >&2; return 1; }
+  else
+    restorecon -- "${path}" || { log "ERROR: SELinux label restore failed: ${path}" >&2; return 1; }
+    matchpathcon -V "${path}" >/dev/null || { log "ERROR: SELinux label verification failed: ${path}" >&2; return 1; }
+  fi
+}
+
+restore_selinux_layout() {
+  local app=$1 config=$2 state=$3 unit=$4 reader=$5 sudoers=$6 path failed=0
+  [[ "${SELINUX_ACTIVE}" == 1 ]] || return 0
+  restore_selinux_path "${app}" 1 || failed=1
+  # Only managed files/directories: never recursively relabel user work data or
+  # administrator-selected policy paths outside the installation.
+  for path in "${config}" "${config}/command-bridge.env" "${config}/policy.json" \
+      "${state}" "${state}/work" "${SERVICE_HOME}" "${unit}" \
+      "${reader}" "${reader}/audit-reader" "${sudoers}"; do
+    restore_selinux_path "${path}" || failed=1
+  done
+  return "${failed}"
+}
+
+restore_current_selinux_layout() {
+  restore_selinux_layout "${INSTALL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" \
+    "${UNIT_FILE}" "${AUDIT_READER_DIR}" "${AUDIT_SUDOERS_FILE}"
+}
+
+report_execution_context() {
+  local node
+  node=$(readlink -f "${RUNTIME_LINK}/bin/node") || return 0
+  log "Service execution diagnostics (no configuration contents):" >&2
+  ls -ldZ -- "${INSTALL_ROOT}" "${RUNTIME_DIR}" "${node}" >&2 || true
+  if command -v findmnt >/dev/null 2>&1; then
+    findmnt -T "${node}" -o TARGET,FSTYPE >&2 || true
+    case ",$(findmnt -n -T "${node}" -o OPTIONS)," in
+      *,noexec,*) log "Runtime mount has noexec enabled." >&2 ;;
+    esac
+  fi
 }
 
 require_root_systemd_linux() {
@@ -658,7 +730,7 @@ backup_audit_access() {
 }
 
 install_audit_access() {
-  local sudoers_staging
+  local sudoers_staging path
 
   backup_audit_access
   AUDIT_ACCESS_INSTALLED=1
@@ -678,6 +750,9 @@ install_audit_access() {
   [[ "$(stat -c '%U:%G:%a' "${AUDIT_SUDOERS_FILE}")" == "root:root:440" ]] || \
     fail "Audit sudoers ownership or mode verification failed."
 
+  for path in "${AUDIT_READER_DIR}" "${AUDIT_READER_PATH}" "${AUDIT_SUDOERS_FILE}"; do
+    restore_selinux_path "${path}" || fail "Could not prepare SELinux labels for Audit access."
+  done
   runuser -u "${SERVICE_USER}" -- /usr/bin/sudo -n "${AUDIT_READER_PATH}" >/dev/null
 }
 
@@ -710,7 +785,7 @@ install_runtime_and_release() {
   local runtime_name="node-v${NODE_VERSION}-linux-${node_arch}"
   local runtime_final="${RUNTIME_DIR}/${runtime_name}"
   local runtime_staging="${RUNTIME_DIR}/.${runtime_name}.new.$$"
-  local package_version release_name release_final release_staging
+  local package_version release_name release_final release_staging path
 
   package_version=${BUILT_PACKAGE_VERSION}
   [[ -n "${package_version}" ]] || fail "Built package version was not recorded."
@@ -719,14 +794,18 @@ install_runtime_and_release() {
   release_staging="${RELEASES_DIR}/.${release_name}.new.$$"
 
   install -d -m 0755 -o root -g root "${INSTALL_ROOT}" "${RELEASES_DIR}" "${RUNTIME_DIR}"
+  for path in "${INSTALL_ROOT}" "${RELEASES_DIR}" "${RUNTIME_DIR}"; do
+    restore_selinux_path "${path}" || fail "Could not prepare SELinux deployment directory labels."
+  done
 
   if [[ -e "${runtime_final}" ]]; then
+    restore_selinux_path "${runtime_final}" 1 || fail "Could not repair the existing runtime's SELinux labels."
     [[ -x "${runtime_final}/bin/node" ]] || fail "Existing runtime is incomplete: ${runtime_final}"
     [[ "$("${runtime_final}/bin/node" --version)" == "v${NODE_VERSION}" ]] || \
       fail "Existing runtime has an unexpected Node.js version."
   else
     install -d -m 0755 "${runtime_staging}"
-    cp -a "${TEMP_DIR}/node-runtime/." "${runtime_staging}/"
+    cp -a --no-preserve=context "${TEMP_DIR}/node-runtime/." "${runtime_staging}/"
     chown -R root:root "${runtime_staging}"
     chmod -R go-w "${runtime_staging}"
     mv "${runtime_staging}" "${runtime_final}"
@@ -737,7 +816,7 @@ install_runtime_and_release() {
       fail "Existing release is incomplete: ${release_final}"
   else
     install -d -m 0755 "${release_staging}"
-    cp -a \
+    cp -a --no-preserve=context \
       "${source_dir}/dist" \
       "${source_dir}/node_modules" \
       "${source_dir}/package.json" \
@@ -755,6 +834,9 @@ install_runtime_and_release() {
     mv "${release_staging}" "${release_final}"
   fi
 
+  # Also repair reused runtimes/releases left behind by a failed installation.
+  restore_current_selinux_layout || fail "SELinux deployment labels could not be prepared; service activation stopped."
+
   if [[ -L "${CURRENT_LINK}" ]]; then
     PREVIOUS_RELEASE=$(readlink -f "${CURRENT_LINK}" || true)
   fi
@@ -771,6 +853,8 @@ install_runtime_and_release() {
   ACTIVATION_STARTED=1
   ln -sfnT "${runtime_final}" "${RUNTIME_LINK}"
   ln -sfnT "${release_final}" "${CURRENT_LINK}"
+  restore_selinux_path "${RUNTIME_LINK}" || fail "Could not label the active runtime link."
+  restore_selinux_path "${CURRENT_LINK}" || fail "Could not label the active release link."
 }
 
 generate_token() {
@@ -890,10 +974,14 @@ health_url() {
 }
 
 rollback_activation() {
+  local labels_ok=1
   ROLLBACK_IN_PROGRESS=1
   log "Rolling back the activated release..."
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
     systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+  elif [[ -n "${PREVIOUS_RELEASE}" ]]; then
+    # A failed label repair below must not leave the rejected candidate running.
+    systemctl stop "${SERVICE_NAME}.service" || log "WARNING: Candidate service could not be stopped during rollback."
   fi
   if [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
     install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
@@ -925,7 +1013,6 @@ rollback_activation() {
         -f "${LEGACY_UNIT_BACKUP}" && ! -f "${LEGACY_UNIT_FILE}" ]]; then
     install -m 0644 "${LEGACY_UNIT_BACKUP}" "${LEGACY_UNIT_FILE}" || true
   fi
-  systemctl daemon-reload >/dev/null 2>&1 || true
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
     if [[ "${LEGACY_APP_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}" || true; fi
     if [[ "${LEGACY_CONFIG_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}" || true; fi
@@ -936,19 +1023,27 @@ rollback_activation() {
     if [[ -n "${LEGACY_RUNTIME_TARGET}" && -d "${LEGACY_INSTALL_ROOT}/runtime" ]]; then
       ln -sfnT "${LEGACY_RUNTIME_TARGET}" "${LEGACY_INSTALL_ROOT}/runtime/current" || true
     fi
+    restore_selinux_layout "${LEGACY_INSTALL_ROOT}" "${LEGACY_CONFIG_DIR}" "${LEGACY_STATE_DIR}" \
+      "${LEGACY_UNIT_FILE}" "${LEGACY_AUDIT_READER_DIR}" "${LEGACY_AUDIT_SUDOERS_FILE}" || labels_ok=0
+    systemctl daemon-reload >/dev/null 2>&1 || true
     if [[ "${LEGACY_WAS_ENABLED}" == "1" ]]; then
       systemctl enable "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || true
     fi
-    if [[ "${LEGACY_WAS_ACTIVE}" == "1" ]]; then
+    if [[ "${LEGACY_WAS_ACTIVE}" == "1" && "${labels_ok}" == 1 ]]; then
       systemctl reset-failed "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || true
       systemctl restart "${LEGACY_SERVICE_NAME}.service" || log "WARNING: Legacy service could not be restarted."
     fi
-  elif [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" ]]; then
-    # Failed candidate starts can exhaust StartLimitBurst. Clear that candidate's
-    # failure counter before restarting the restored, previously verified release.
-    systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
-    systemctl restart "${SERVICE_NAME}.service" || log "WARNING: Restored service could not be restarted."
+  else
+    restore_current_selinux_layout || labels_ok=0
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    if [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" && "${labels_ok}" == 1 ]]; then
+      # Failed candidate starts can exhaust StartLimitBurst. Clear that candidate's
+      # failure counter before restarting the restored, previously verified release.
+      systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+      systemctl restart "${SERVICE_NAME}.service" || log "WARNING: Restored service could not be restarted."
+    fi
   fi
+  [[ "${labels_ok}" == 1 ]] || log "WARNING: Rollback files restored, but SELinux label repair failed; restored service was not restarted."
   ACTIVATION_STARTED=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then LEGACY_ROLLBACK_DONE=1; fi
   ROLLBACK_IN_PROGRESS=0
@@ -959,6 +1054,7 @@ install_and_start_service() {
   local -a curl_options
 
   install -m 0644 "${TEMP_DIR}/${SERVICE_NAME}.service" "${UNIT_FILE}"
+  restore_selinux_path "${UNIT_FILE}" || fail "Could not prepare SELinux label for the systemd unit."
   systemctl daemon-reload
   if [[ "${LEGACY_MIGRATION}" == "0" ]]; then
     systemctl enable "${SERVICE_NAME}.service" >/dev/null
@@ -990,6 +1086,7 @@ install_and_start_service() {
   done
 
   if [[ "${healthy}" != "1" ]]; then
+    report_execution_context
     journalctl --no-pager --unit "${SERVICE_NAME}.service" --lines 30 >&2 || true
     if [[ "${ACTIVATION_STARTED}" == "1" ]]; then
       rollback_activation
@@ -1109,6 +1206,7 @@ main() {
     require_command "${command_name}"
   done
 
+  detect_selinux
   collect_codex_setup_url
 
   install -d -m 0700 -o root -g root "${LOCK_DIR}"

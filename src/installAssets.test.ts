@@ -8,6 +8,14 @@ import test from "node:test";
 import { version } from "./version.js";
 
 const projectRoot = process.cwd();
+test("SELinux deployment repairs reused runtimes and fails closed before activation", {
+  skip: process.platform !== "linux"
+}, () => {
+  const result = spawnSync("bash", ["scripts/linux-systemd/tests/selinux.test.sh"], {
+    encoding: "utf8", timeout: 30_000
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+});
 const bash = process.platform === "win32"
   ? resolve(process.env.ProgramFiles ?? "C:/Program Files", "Git/bin/bash.exe")
   : "bash";

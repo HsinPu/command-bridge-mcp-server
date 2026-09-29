@@ -1,6 +1,14 @@
 # Architecture implementation validation
 
-The current package is 2.0.1, a documentation-only patch recording the Linux names and migration rules in AGENTS.md. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.0.2, repairing SELinux deployment contexts. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.0.2 validation
+
+The user supplied Oracle Linux 8.10 Enforcing evidence: Node.js retained `user_tmp_t`, systemd `init_t` was denied execute, and the service exited with `203/EXEC`. File mode permitted execution and the mount did not have `noexec`. This is the observed failure, not evidence that the corrected installer has passed on that host.
+
+Local validation: Windows `npm test` passed 61/65 with four Linux-only skips; Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 59/65 with six Windows-only skips. All eight Bash scripts plus the Audit reader passed syntax checks; eight PowerShell scripts and WinSW XML parsed. Package/lockfile versions and `git diff --check` passed. Hosted CI and channel publication must be checked against the final commit separately.
+
+Behavior tests exercise new copies and runtime reuse, Disabled/Permissive/Enforcing detection, missing tools, label/verification failure before activation, symlink and work-data boundaries, and regular/1.x rollback ordering. These use mocked SELinux commands. The local Oracle Linux WSL is 9.4 with SELinux Disabled; its policy lookup maps the runtime Node path to `bin_t`, but it cannot validate enforcement. No Oracle Linux 8.10 Enforcing VM run or actual reboot has been performed. The opt-in `scripts/linux-systemd/tests/selinux-enforcing-smoke.sh` provides that separate lifecycle check. Hosted Ubuntu/Windows checks are also distinct from Enforcing validation.
 
 ## 2.0.1 validation
 
