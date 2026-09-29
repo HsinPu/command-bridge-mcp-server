@@ -1,12 +1,16 @@
 # Architecture implementation validation
 
-The current package is 1.0.5 (unreleased), addressing hosted service lifecycle failures. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Local validation does not publish the installation channel.
+The current package is 1.0.5, addressing hosted service lifecycle failures. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number.
 
 ## 1.0.5 validation history and release gate
 
 [The 1.0.4 run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36521866541) passed both general test jobs. Linux failed during health-failure rollback after earlier real MCP/Audit checks passed; Windows failed its initial service health check. Both service jobs failed and channel publication was skipped. The current patch clears failed-candidate systemd start limits and adds bounded, category-only Windows startup diagnostics. Updated service CI and channel publication are required before claiming this version installable through the public bootstrap.
 
 [The first 1.0.5 run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36524158857) passed both general test jobs and the complete Linux service lifecycle. Windows reported Running but failed its initial health probe, with no known startup error category; publication remained skipped. Follow-up work adds a direct, proxy-free Windows health probe with configured Host headers and a real HTTP regression test. The authoritative release gate remains successful jobs for both platforms plus publication of the matching full SHA/version in channel.txt; consult the CI run for the installed source SHA.
+
+Later Windows diagnostics revealed repeated Node restarts and empty current logs; rotated logs must also be retained. Audit helpers now preserve only standard Windows startup directories and explicitly load trusted built-in modules while keeping the five-second deadline. Windows recovery tests wait for the restored listener before requiring authenticated readiness, real MCP hostname and matching Audit lifecycle. [The service-account validation run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36525934746) and [subsequent main runs](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml?query=branch%3Amain) provide the hosted results for each exact source SHA.
+
+Local 1.0.5 validation: Node.js 20.15.1 on Windows, 64 tests, 61 passed and three Linux skips; all PowerShell scripts parsed, Bash scripts passed syntax checks, and git diff --check passed. Tests include real Windows HTTP probing with a virtual Host/unusable proxy, Audit helper startup with invalid payloads before Event Log writes, credential exclusion, diagnostic redaction/Audit filtering and output bounds. Hosted Linux service lifecycle passed in multiple follow-up runs. Local Windows service installation was not attempted because the current desktop process is not an administrator; CI uses the real LocalService account.
 
 ## Previous CI result
 
@@ -58,7 +62,7 @@ The subsequent [1.0.1 run 35695812805](https://github.com/HsinPu/command-bridge-
 
 ## Remaining validation
 
-The GitHub workflow includes Windows/Linux service lifecycle jobs before channel publication. No hosted CI or channel publication is claimed for this unpushed 1.0.4 delivery. Linux service lifecycle checks passed locally as described above; Windows service lifecycle and the previously failing hosted Windows execution test remain pending. No production skip-verification flag is introduced.
+The GitHub workflow requires Windows/Linux service lifecycle jobs before channel publication. Verify the completed run for the full SHA in `install-channel/channel.txt`, rather than assuming that an earlier local result or a version badge validates a newer commit. Successful general tests alone are insufficient. No production skip-verification flag is introduced.
 
 Actual machine reboot, native Audit backend failure injection, every fresh-install failure boundary and exhaustive permission/race scenarios are not fully covered by the current automated suite. Successful service restart and automatic-start configuration checks do not prove recovery after an actual reboot.
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.5 — 2026-09-29 (unreleased)
+## 1.0.5 — 2026-09-29
 
 Patch release from 1.0.4: repair service deployment validation and recovery without changing MCP interfaces or command policies.
 
@@ -9,7 +9,7 @@ Patch release from 1.0.4: repair service deployment validation and recovery with
 - Suppress PowerShell download progress rendering while retaining checksum verification.
 - Probe Windows service health directly without Internet proxy/WPAD, preserve the configured Host header and handle IPv6 listener URLs. Exercise the probe against a real local HTTP server.
 - Preserve only standard Windows directory variables for Audit PowerShell helpers and load their trusted built-in modules explicitly; retain the five-second helper limit. Include rotated startup logs and safe Audit failure categories in diagnostics. Wait for restored Windows listeners before mandatory MCP/Audit checks.
-- Validation is in progress. Both general test jobs passed for 1.0.4, but service jobs failed and channel publication was skipped; local WSL success alone did not meet the release gate.
+- Local Windows validation passed 61/64 tests with three Linux skips; hosted Linux service lifecycle passed after the rollback fix. Full cross-platform service verification controls channel publication; see docs/validation-status.md and the CI run for the channel's source SHA. A version entry alone does not publish an installation snapshot.
 
 ## 1.0.4 — 2026-09-29 (unreleased)
 
