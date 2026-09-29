@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortens the Linux service and installation paths to `command-bridge`. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 1.0.5 rollback fix remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.0.1. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 1.0.5 rollback fix remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -66,8 +66,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.0.0-<source-sha>
-├── releases/v2.0.0-<source-sha>/
+├── current -> releases/v2.0.1-<source-sha>
+├── releases/v2.0.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -87,7 +87,7 @@ The application and Node.js runtime are owned by root. The service account can w
 
 ### Upgrading an existing 1.x Linux installation
 
-Use the same one-line install command. The installer builds and tests 2.0.0 and validates the saved policy before it stops the old `command-bridge-mcp-server` service. It moves the application, configuration and work directories to the shorter paths, updates the two managed configuration paths (`COMMAND_BRIDGE_POLICY_FILE` and `COMMAND_BRIDGE_ALLOWED_ROOTS`), and leaves the old directory names as links to the moved data. The bearer token and other custom settings are preserved. It then verifies the new `command-bridge` service with a real MCP command and matching Audit records before disabling and removing the old unit.
+Use the same one-line install command. The installer builds and tests the selected CI-verified source and validates the saved policy before it stops the old `command-bridge-mcp-server` service. It moves the application, configuration and work directories to the shorter paths, updates the two managed configuration paths (`COMMAND_BRIDGE_POLICY_FILE` and `COMMAND_BRIDGE_ALLOWED_ROOTS`), and leaves the old directory names as links to the moved data. The bearer token and other custom settings are preserved. It then verifies the new `command-bridge` service with a real MCP command and matching Audit records before disabling and removing the old unit.
 
 If the new service fails validation, the installer stops it, restores the old directories, release and configuration, and restarts the old service. Existing automation should switch to `systemctl ... command-bridge` and `journalctl -u command-bridge`; the old service name is removed after a successful upgrade. The GitHub download URL and Codex MCP tool names do not change.
 

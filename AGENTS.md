@@ -102,6 +102,13 @@ npm start
 - HTTP listener 本身不提供 TLS；自動 IP 連線用於可信任區網／VPN，也可透過私有 HTTPS 路由存取受驗證端點。
 - 更動使用方式或部署行為時，同步檢查 README.md、README.zh-TW.md 與相關 docs/ 文件。
 
+## Linux 服務與安裝路徑命名（2.0.0 起）
+
+- Linux 的正式 systemd 單元為 `command-bridge.service`；主要部署、設定與工作資料目錄分別為 `/opt/command-bridge`、`/etc/command-bridge`、`/var/lib/command-bridge`。服務帳號為 `command-bridge`。後續文件、測試與操作指令應以這些名稱為準。
+- 縮短名稱只涵蓋 Linux 服務與主機上的安裝配置；GitHub 倉庫及固定 bootstrap 網址、npm 套件名稱、Windows 的 `CommandBridgeMCP` 服務與路徑，以及三個 MCP 工具名稱維持原樣，不應為了統一字面名稱而連帶改動。
+- 從 1.x 升級時，安裝器須先驗證舊設定，再切換服務；保留 Bearer Token、政策與工作資料，只調整既有設定中由安裝器管理的 `COMMAND_BRIDGE_POLICY_FILE` 與 `COMMAND_BRIDGE_ALLOWED_ROOTS` 路徑。成功後舊目錄名稱保留為指向新目錄的相容連結，舊 systemd 單元移除；失敗則恢復原目錄、設定、版本與舊服務。不能把相容連結誤認為仍有舊服務在執行。
+- 以後修改 Linux 安裝／卸載或路徑時，須檢查新安裝、1.x 遷移、失敗回復、資料與 Token 保留、真實 MCP／Audit 驗證，以及一般解除安裝和 `--purge`。僅驗證 systemd 啟用與服務重啟時，不宣稱已完成實際主機重開機測試。
+
 ## 初步檢查紀錄（2026-09-22）
 
 初次觀察已在 1.0.0 實作中處理；以下不代表完整安全稽核認證。

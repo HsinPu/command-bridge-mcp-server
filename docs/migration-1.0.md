@@ -10,7 +10,7 @@ Built-in commands accept `[]`. On Windows, `Get-CimInstance` with no arguments q
 
 ## Custom native policies / 自訂原生程式政策
 
-Set `COMMAND_BRIDGE_POLICY_FILE` to an absolute JSON path. Installers create an empty schemaVersion 1 template beside the environment configuration. Existing configuration files are preserved; add the setting yourself when migrating custom commands. Linux uses `/etc/command-bridge-mcp-server/policy.json`; Windows uses `%ProgramData%\CommandBridgeMCP\policy.json`.
+Set `COMMAND_BRIDGE_POLICY_FILE` to an absolute JSON path. Installers create an empty schemaVersion 1 template beside the environment configuration. Existing configuration files are preserved; add the setting yourself when migrating custom commands. Current Linux installations use `/etc/command-bridge/policy.json` (1.x used `/etc/command-bridge-mcp-server/policy.json`); Windows uses `%ProgramData%\CommandBridgeMCP\policy.json`.
 
 Example Linux policy:
 

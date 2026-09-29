@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 — 2026-09-29
+
+Patch release from 2.0.0: document the established Linux service and path naming rules for future changes, with no runtime behavior changes.
+
+- Record the canonical Linux `command-bridge.service` and `/opt`, `/etc`, `/var/lib` locations, the unchanged repository/npm/Windows/MCP names, and the required 1.x migration, rollback and data-preservation checks in AGENTS.md.
+- Synchronize package metadata, README version badges and current-version examples in the platform guide; clarify current and historical Linux policy paths in the migration guide. The fixed bootstrap URL and historical 2.0.0 migration record are unchanged.
+
 ## 2.0.0 — 2026-09-29
 
 Major release from 1.0.5: the Linux systemd service and canonical application, configuration and state paths change from `command-bridge-mcp-server` to `command-bridge`. Existing scripts that reference the old service name must use `command-bridge`; the GitHub repository, npm package, MCP tools and Windows service are unchanged.
