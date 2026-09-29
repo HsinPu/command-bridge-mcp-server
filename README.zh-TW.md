@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.0.3-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -81,6 +81,8 @@ script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/comman
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
+Linux 可選擇讓服務以執行 `sudo` 安裝的原始非 root 帳號運作。全新安裝加上 `--run-as-installer` 仍保留白名單；再加 `--unrestricted` 才允許以該帳號自由執行 Shell 指令，包括既有免密的 `sudo -n` 權限。重新安裝會保留已儲存的執行模式。此模式使用私有輪替檔案記錄 Audit，不新增 sudoers 授權。使用前請閱讀 [Linux 安裝者帳號指南](docs/linux-systemd.md#installer-account-mode)。
+
 ## 連線 Codex
 
 安裝成功後，終端機會印出以下標記區塊，包含實際連線網址、Bearer Token 與 MCP 設定：
@@ -124,6 +126,8 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 > [!IMPORTANT]
 > 管理員必須信任所核准的程式與每組參數；服務帳號不應能修改政策或核准的程式。工作目錄檢查會解析 symlink，但參數仍可存取其他有權限的路徑。請保留低權限帳號與網路限制，不要把服務直接公開到網際網路。詳見 [安全政策](SECURITY.md)。
 
+選用 Linux 安裝者帳號模式時，MCP 指令具有該登入帳號既有權限；`--unrestricted` 還會移除指令白名單。持有 Bearer Token 的人便能觸發該帳號可非互動執行的指令。背景服務無法輸入 sudo 密碼。
+
 服務安裝的預設限制：
 
 | 項目 | 預設值 |
@@ -142,12 +146,12 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 | 平台 | 查看位置 |
 | --- | --- |
 | Windows | 事件檢視器 → Windows 記錄 → 應用程式，來源 `CommandBridgeMCP`。 |
-| Linux | systemd journal，服務 `command-bridge`。 |
+| Linux | 預設服務：`command-bridge` 的 systemd journal；安裝者帳號模式：`/var/lib/command-bridge-installer/CommandBridgeMCP/audit/events.jsonl`（輪替檔案）。 |
 | MCP 用戶端 | 呼叫 `command_bridge_list_audit_events`。 |
 
 Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初始寫入失敗時不執行指令；終結事件寫入失敗時不回傳擷取的輸出。保存期限由主機設定決定，日誌不具不可竄改保證。
 
-本機 stdio 預設改用使用者資料目錄內的私有 JSONL 檔案，每檔 10 MiB、保留五份；服務安裝則明確選用 journal／Event Log。需驗證 Token 的 `/ready` 會檢查服務依賴；安裝器還會透過真實 MCP 執行指令並核對 Audit lifecycle，通過後才移除升級備份。
+本機 stdio 預設使用使用者資料目錄內的私有 JSONL 檔案，每檔 10 MiB、保留五份；服務依模式選用 journal、Event Log 或 Linux 安裝者帳號的檔案後端。需驗證 Token 的 `/ready` 會檢查服務依賴；安裝器還會透過真實 MCP 執行指令並核對 Audit lifecycle，通過後才移除升級備份。
 
 ## 一鍵解除安裝
 

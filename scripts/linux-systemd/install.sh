@@ -15,6 +15,7 @@ readonly CONFIG_DIR="/etc/command-bridge"
 readonly CONFIG_FILE="${CONFIG_DIR}/command-bridge.env"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly STATE_DIR="/var/lib/command-bridge"
+readonly INSTALLER_STATE_DIR="/var/lib/command-bridge-installer"
 readonly WORK_DIR_PATH="${STATE_DIR}/work"
 readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge"
 readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
@@ -32,6 +33,7 @@ SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
 readonly SYSTEMD_UNIT_SHA256="1745d6fc446b0af776e45b76d648cef21938da44e39b0c3730c36cf1c21a5e00"
+readonly INSTALLER_UNIT_SHA256="9b1cc2cc158be63113fe5f30d832ab81de8377aceaf5d0d7ca3a2d3047f8519d"
 readonly AUDIT_READER_SHA256="58b2381e2a5ff3284f81c6916fca9d8bac80eaaa836fa2b4b7c851519acc7e49"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
@@ -55,6 +57,12 @@ BUILT_PACKAGE_VERSION=""
 PRINT_CODEX_SETUP=0
 CODEX_SETUP_URL=""
 REFRESH_NETWORK=0
+RUN_AS_INSTALLER=0
+ENABLE_UNRESTRICTED=0
+EXISTING_INSTALLER_MODE=0
+INSTALLER_UID=""
+INSTALLER_GID=""
+INSTALLER_HOME=""
 CONFIG_BACKUP=""
 INSTALL_SUCCEEDED=0
 LEGACY_MIGRATION=0
@@ -83,6 +91,9 @@ usage() {
     '                            The block contains the bearer token.' \
     '  --codex-url URL           Use this private HTTPS MCP URL in the setup block.' \
     '                            The URL must end in /mcp. Implies --print-codex-setup.' \
+    '  --run-as-installer        Run the Linux service as the original sudo login account.' \
+    "                            Uses file Audit and the account's existing sudo policy." \
+    '  --unrestricted            With --run-as-installer, allow free shell commands.' \
     '  -h, --help                Show this help and exit.'
 }
 
@@ -103,6 +114,12 @@ parse_arguments() {
       --refresh-network)
         REFRESH_NETWORK=1
         PRINT_CODEX_SETUP=1
+        ;;
+      --run-as-installer)
+        RUN_AS_INSTALLER=1
+        ;;
+      --unrestricted)
+        ENABLE_UNRESTRICTED=1
         ;;
       --codex-url)
         (( $# >= 2 )) || fail "--codex-url requires a URL."
@@ -126,6 +143,30 @@ parse_arguments() {
     esac
     shift
   done
+}
+
+select_service_identity() {
+  local account_entry account_name account_uid account_gid account_home
+  [[ "${ENABLE_UNRESTRICTED}" == 0 || "${RUN_AS_INSTALLER}" == 1 ]] || \
+    fail "--unrestricted requires --run-as-installer."
+  [[ "${RUN_AS_INSTALLER}" == 1 ]] || return 0
+  [[ -n "${SUDO_USER:-}" && -n "${SUDO_UID:-}" ]] || \
+    fail "--run-as-installer requires sudo from a login account; direct root execution has no installer identity."
+  [[ "${SUDO_UID}" =~ ^[0-9]+$ && "${SUDO_UID}" != 0 ]] || \
+    fail "--run-as-installer requires a non-root sudo login account."
+  account_entry=$(getent passwd "${SUDO_USER}") || fail "The original sudo account cannot be resolved."
+  IFS=: read -r account_name _ account_uid account_gid _ account_home _ <<< "${account_entry}"
+  [[ "${account_name}" == "${SUDO_USER}" && "${account_uid}" == "${SUDO_UID}" ]] || \
+    fail "The original sudo account no longer matches SUDO_UID."
+  [[ "${account_gid}" =~ ^[0-9]+$ && "${account_uid}" =~ ^[0-9]+$ ]] || \
+    fail "The original sudo account has invalid numeric IDs."
+  [[ "${account_home}" == /* && -d "${account_home}" ]] || \
+    fail "The original sudo account must have an existing absolute home directory."
+  INSTALLER_UID=${account_uid}
+  INSTALLER_GID=${account_gid}
+  INSTALLER_HOME=$(readlink -f -- "${account_home}")
+  [[ "${INSTALLER_HOME}" =~ ^/[A-Za-z0-9._/-]+$ ]] || \
+    fail "The installer account home path cannot be stored safely in the service configuration."
 }
 
 validate_codex_setup_url() {
@@ -334,7 +375,10 @@ restore_selinux_layout() {
 
 restore_current_selinux_layout() {
   restore_selinux_layout "${INSTALL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" \
-    "${UNIT_FILE}" "${AUDIT_READER_DIR}" "${AUDIT_SUDOERS_FILE}"
+    "${UNIT_FILE}" "${AUDIT_READER_DIR}" "${AUDIT_SUDOERS_FILE}" || return 1
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
+    restore_selinux_path "${INSTALLER_STATE_DIR}" || return 1
+  fi
 }
 
 report_execution_context() {
@@ -355,10 +399,12 @@ require_root_systemd_linux() {
   [[ "$(uname -s)" == "Linux" ]] || fail "This installer supports Linux only."
 
   require_command systemctl
-  require_command visudo
-  [[ -x /usr/bin/sudo ]] || fail "Expected sudo at /usr/bin/sudo for the fixed audit reader."
-  [[ -x /usr/bin/journalctl ]] || \
-    fail "Expected journalctl at /usr/bin/journalctl for the fixed audit reader."
+  [[ -x /usr/bin/sudo ]] || fail "Expected sudo at /usr/bin/sudo."
+  if [[ "${RUN_AS_INSTALLER}" == 0 ]]; then
+    require_command visudo
+    [[ -x /usr/bin/journalctl ]] || \
+      fail "Expected journalctl at /usr/bin/journalctl for the fixed audit reader."
+  fi
   [[ -d /run/systemd/system ]] || fail "systemd is not running as PID 1 on this host."
 
   if ldd --version 2>&1 | grep -qi musl; then
@@ -380,7 +426,24 @@ assert_new_installation_paths() {
     [[ -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || fail "Service unit is not a regular file."
     grep -Fxq "ExecStart=${RUNTIME_LINK}/bin/node ${CURRENT_LINK}/dist/index.js" "${UNIT_FILE}" ||
       fail "An unrelated ${SERVICE_NAME}.service already exists; it was not replaced."
-    grep -Fxq "User=${SERVICE_USER}" "${UNIT_FILE}" || fail "Service unit has an unexpected account."
+    if grep -Fxq "User=${SERVICE_USER}" "${UNIT_FILE}"; then
+      : # A dedicated-account installation may switch to the opt-in account.
+    elif grep -Eq '^User=[0-9]+$' "${UNIT_FILE}" &&
+         grep -Fxq "Environment=XDG_DATA_HOME=${INSTALLER_STATE_DIR}" "${UNIT_FILE}"; then
+      EXISTING_INSTALLER_MODE=1
+      [[ "${RUN_AS_INSTALLER}" == 1 ]] || \
+        fail "This service runs as an installer account; reinstall with --run-as-installer."
+      grep -Fxq "User=${INSTALLER_UID}" "${UNIT_FILE}" || \
+        fail "The existing service belongs to a different installer account."
+    else
+      fail "Service unit has an unexpected account."
+    fi
+  fi
+  if [[ "${RUN_AS_INSTALLER}" == 1 && ( -e "${INSTALLER_STATE_DIR}" || -L "${INSTALLER_STATE_DIR}" ) ]]; then
+    [[ -d "${INSTALLER_STATE_DIR}" && ! -L "${INSTALLER_STATE_DIR}" ]] || \
+      fail "Installer account state path is not a regular directory."
+    [[ "$(stat -c '%u' "${INSTALLER_STATE_DIR}")" == "${INSTALLER_UID}" ]] || \
+      fail "Installer account state directory belongs to another account."
   fi
 }
 
@@ -455,7 +518,7 @@ prepare_node_runtime() {
 prepare_source() {
   local source_dir="${TEMP_DIR}/source"
   local local_source=""
-  local unit_hash audit_reader_hash
+  local unit_hash installer_unit_hash audit_reader_hash
 
   install -d -m 0755 "${source_dir}"
 
@@ -485,19 +548,32 @@ prepare_source() {
   [[ -f "${source_dir}/src/index.ts" ]] || fail "Downloaded source is missing src/index.ts."
   [[ -f "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" ]] || \
     fail "Downloaded source is missing the systemd unit."
+  [[ -f "${source_dir}/packaging/systemd/${SERVICE_NAME}-installer.service" ]] || \
+    fail "Downloaded source is missing the installer-account systemd unit."
   [[ -f "${source_dir}/packaging/linux/audit-reader" ]] || \
     fail "Downloaded source is missing the audit reader."
 
   unit_hash=$(sha256sum "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" | awk '{ print $1 }')
   [[ "${unit_hash}" == "${SYSTEMD_UNIT_SHA256}" ]] || \
     fail "The systemd unit does not match the installer-pinned SHA-256 digest."
+  installer_unit_hash=$(sha256sum "${source_dir}/packaging/systemd/${SERVICE_NAME}-installer.service" | awk '{ print $1 }')
+  [[ "${installer_unit_hash}" == "${INSTALLER_UNIT_SHA256}" ]] || \
+    fail "The installer-account systemd unit does not match the installer-pinned SHA-256 digest."
   audit_reader_hash=$(sha256sum "${source_dir}/packaging/linux/audit-reader" | awk '{ print $1 }')
   [[ "${audit_reader_hash}" == "${AUDIT_READER_SHA256}" ]] || \
     fail "The audit reader does not match the installer-pinned SHA-256 digest."
 
-  install -m 0600 \
-    "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" \
-    "${TEMP_DIR}/${SERVICE_NAME}.service"
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
+    sed -e "s/__INSTALLER_UID__/${INSTALLER_UID}/g" \
+        -e "s/__INSTALLER_GID__/${INSTALLER_GID}/g" \
+      "${source_dir}/packaging/systemd/${SERVICE_NAME}-installer.service" > "${TEMP_DIR}/${SERVICE_NAME}.service"
+    grep -Fxq "User=${INSTALLER_UID}" "${TEMP_DIR}/${SERVICE_NAME}.service" || \
+      fail "Installer-account systemd unit rendering failed."
+  else
+    install -m 0600 \
+      "${source_dir}/packaging/systemd/${SERVICE_NAME}.service" \
+      "${TEMP_DIR}/${SERVICE_NAME}.service"
+  fi
   install -m 0755 \
     "${source_dir}/packaging/linux/audit-reader" \
     "${TEMP_DIR}/audit-reader"
@@ -602,6 +678,14 @@ ensure_service_account() {
   install -d -m 0555 -o root -g root "${SERVICE_HOME}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${STATE_DIR}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${WORK_DIR_PATH}"
+}
+
+ensure_installer_state() {
+  [[ "${RUN_AS_INSTALLER}" == 1 ]] || return 0
+  # /var/lib is root-owned. Do not run privileged install/chown recursively
+  # inside this user-writable directory; Node creates its own Audit children.
+  install -d -m 0700 -o "${INSTALLER_UID}" -g "${INSTALLER_GID}" "${INSTALLER_STATE_DIR}"
+  restore_current_selinux_layout || fail "Could not prepare installer-account state labels."
 }
 
 check_legacy_tree() {
@@ -757,8 +841,22 @@ install_audit_access() {
   runuser -u "${SERVICE_USER}" -- /usr/bin/sudo -n "${AUDIT_READER_PATH}" >/dev/null
 }
 
+remove_audit_access_for_installer() {
+  [[ "${RUN_AS_INSTALLER}" == 1 ]] || return 0
+  backup_audit_access
+  AUDIT_ACCESS_INSTALLED=1
+  rm -f -- "${AUDIT_SUDOERS_FILE}" "${AUDIT_READER_PATH}"
+  if [[ "${AUDIT_READER_DIR_WAS_PRESENT}" == 1 ]]; then
+    rmdir "${AUDIT_READER_DIR}" >/dev/null 2>&1 || true
+  fi
+}
+
 rollback_audit_access() {
   [[ "${AUDIT_ACCESS_INSTALLED}" == "1" ]] || return
+
+  if [[ "${AUDIT_READER_DIR_WAS_PRESENT}" == "1" ]]; then
+    install -d -m 0755 -o root -g root "${AUDIT_READER_DIR}" || true
+  fi
 
   if [[ "${AUDIT_SUDOERS_WAS_PRESENT}" == "1" && -f "${PREVIOUS_AUDIT_SUDOERS_BACKUP}" ]]; then
     install -m 0440 -o root -g root \
@@ -894,7 +992,7 @@ validate_new_configuration() {
 }
 
 install_configuration() {
-  local token host port allowed_hosts execution_mode
+  local token host port allowed_hosts execution_mode audit_backend allowed_roots
 
   install -d -m 0750 -o root -g "${SERVICE_GROUP}" "${CONFIG_DIR}"
   if [[ ! -e "${CONFIG_DIR}/policy.json" ]]; then
@@ -905,11 +1003,26 @@ install_configuration() {
     log "Preserving existing configuration and bearer token at ${CONFIG_FILE}."
     chown root:root "${CONFIG_FILE}"
     chmod 0600 "${CONFIG_FILE}"
-    if [[ "${REFRESH_NETWORK}" == 1 ]]; then
+    if [[ "${REFRESH_NETWORK}" == 1 || "${ENABLE_UNRESTRICTED}" == 1 || ( "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ) ]]; then
       CONFIG_BACKUP="${TEMP_DIR}/previous-config.env"
       cp -p "${CONFIG_FILE}" "${CONFIG_BACKUP}"
-      host=$(detect_private_ipv4)
-      awk -v host="${host}" '/^COMMAND_BRIDGE_HTTP_HOST=/{print "COMMAND_BRIDGE_HTTP_HOST=" host;next} /^COMMAND_BRIDGE_ALLOWED_HOSTS=/{print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host;next} {print}' "${CONFIG_FILE}" > "${CONFIG_FILE}.new"
+      if [[ "${REFRESH_NETWORK}" == 1 ]]; then host=$(detect_private_ipv4); fi
+      if [[ "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ]]; then
+        allowed_roots="${INSTALLER_HOME}:/"
+      fi
+      awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v unrestricted="${ENABLE_UNRESTRICTED}" '
+        /^COMMAND_BRIDGE_HTTP_HOST=/ && host != "" { print "COMMAND_BRIDGE_HTTP_HOST=" host; next }
+        /^COMMAND_BRIDGE_ALLOWED_HOSTS=/ && host != "" { print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host; next }
+        /^COMMAND_BRIDGE_AUDIT_BACKEND=/ && roots != "" { print "COMMAND_BRIDGE_AUDIT_BACKEND=file"; audit_seen=1; next }
+        /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ && roots != "" { print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots; roots_seen=1; next }
+        /^COMMAND_BRIDGE_EXECUTION_MODE=/ && unrestricted == "1" { print "COMMAND_BRIDGE_EXECUTION_MODE=unrestricted"; mode_seen=1; next }
+        { print }
+        END {
+          if (roots != "" && !audit_seen) print "COMMAND_BRIDGE_AUDIT_BACKEND=file"
+          if (roots != "" && !roots_seen) print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots
+          if (unrestricted == "1" && !mode_seen) print "COMMAND_BRIDGE_EXECUTION_MODE=unrestricted"
+        }
+      ' "${CONFIG_FILE}" > "${CONFIG_FILE}.new"
       chmod 0600 "${CONFIG_FILE}.new"
       mv "${CONFIG_FILE}.new" "${CONFIG_FILE}"
     fi
@@ -924,12 +1037,19 @@ install_configuration() {
     allowed_hosts=${host}
   fi
   execution_mode=${COMMAND_BRIDGE_EXECUTION_MODE:-allowlist}
+  if [[ "${ENABLE_UNRESTRICTED}" == 1 ]]; then execution_mode=unrestricted; fi
+  audit_backend=journal
+  allowed_roots=${WORK_DIR_PATH}
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
+    audit_backend=file
+    allowed_roots="${INSTALLER_HOME}:/"
+  fi
   validate_new_configuration "${token}" "${host}" "${port}" "${allowed_hosts}" "${execution_mode}"
 
   umask 077
   {
     printf 'COMMAND_BRIDGE_TRANSPORT=http\n'
-    printf 'COMMAND_BRIDGE_AUDIT_BACKEND=journal\n'
+    printf 'COMMAND_BRIDGE_AUDIT_BACKEND=%s\n' "${audit_backend}"
     printf 'COMMAND_BRIDGE_POLICY_FILE=%s/policy.json\n' "${CONFIG_DIR}"
     printf 'COMMAND_BRIDGE_BEARER_TOKEN=%s\n' "${token}"
     printf 'COMMAND_BRIDGE_HTTP_HOST=%s\n' "${host}"
@@ -938,7 +1058,7 @@ install_configuration() {
     printf 'COMMAND_BRIDGE_EXECUTION_MODE=%s\n' "${execution_mode}"
     printf 'COMMAND_BRIDGE_ALLOWED_SHELLS=bash\n'
     printf 'COMMAND_BRIDGE_ALLOWED_COMMANDS=uname,hostname,whoami,uptime,date,df,free,ps,pwd\n'
-    printf 'COMMAND_BRIDGE_ALLOWED_ROOTS=%s\n' "${WORK_DIR_PATH}"
+    printf 'COMMAND_BRIDGE_ALLOWED_ROOTS=%s\n' "${allowed_roots}"
     printf 'COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS=15000\n'
     printf 'COMMAND_BRIDGE_MAX_TIMEOUT_MS=60000\n'
     printf 'COMMAND_BRIDGE_MAX_OUTPUT_CHARS=50000\n'
@@ -1123,8 +1243,13 @@ print_summary() {
   printf '\n'
   printf '  Application: %s\n' "${CURRENT_LINK}"
   printf '  Configuration: %s\n' "${CONFIG_FILE}"
-  printf '  Working root: %s\n' "${WORK_DIR_PATH}"
+  printf '  Working roots: %s\n' "$(read_config_value COMMAND_BRIDGE_ALLOWED_ROOTS)"
   printf '  Service: %s.service (enabled and active)\n' "${SERVICE_NAME}"
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
+    printf '  Service UID: %s (the original sudo login account)\n' "${INSTALLER_UID}"
+    printf '  File Audit: %s/CommandBridgeMCP/audit\n' "${INSTALLER_STATE_DIR}"
+    printf '  sudo: existing non-interactive permissions only; no sudoers rule was added\n'
+  fi
   printf '\n'
   printf 'Useful commands:\n'
   printf '  sudo systemctl status %s\n' "${SERVICE_NAME}"
@@ -1200,10 +1325,11 @@ main() {
 
   parse_arguments "$@"
   require_root_systemd_linux
+  select_service_identity
   for command_name in \
     awk chown chmod cp curl df env flock getent grep groupadd groupdel gzip id install \
-    journalctl ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
-    tr uname unlink useradd userdel visudo; do
+    ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
+    tr uname unlink useradd userdel sed; do
     require_command "${command_name}"
   done
 
@@ -1235,12 +1361,14 @@ main() {
   fi
   migrate_legacy_layout
   ensure_service_account
+  ensure_installer_state
   install_configuration
   DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   install_runtime_and_release "${node_arch}"
-  install_audit_access
+  if [[ "${RUN_AS_INSTALLER}" == 0 ]]; then install_audit_access; fi
   install_and_start_service
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then remove_audit_access_for_installer; fi
   finish_legacy_migration
   ACTIVATION_STARTED=0
   INSTALL_SUCCEEDED=1

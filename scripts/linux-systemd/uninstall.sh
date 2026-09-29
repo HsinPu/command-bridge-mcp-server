@@ -10,6 +10,7 @@ readonly SERVICE_HOME="/var/empty/command-bridge"
 readonly INSTALL_ROOT="/opt/command-bridge"
 readonly CONFIG_DIR="/etc/command-bridge"
 readonly STATE_DIR="/var/lib/command-bridge"
+readonly INSTALLER_STATE_DIR="/var/lib/command-bridge-installer"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly AUDIT_READER_DIR="/usr/local/libexec/command-bridge"
 readonly AUDIT_READER_PATH="${AUDIT_READER_DIR}/audit-reader"
@@ -48,7 +49,7 @@ usage() {
     '' \
     'Options:' \
     '  --yes, -y   Skip the interactive confirmation.' \
-    '  --purge     Also permanently delete configuration, work data, the service' \
+    '  --purge     Also permanently delete configuration, work and file Audit data, the service' \
     '              account, its group, and its home directory.' \
     '  --dry-run   Print the actions without changing the host.' \
     '  --help, -h  Show this help text.' \
@@ -56,6 +57,7 @@ usage() {
     'Without --purge, the uninstaller preserves:' \
     '  /etc/command-bridge' \
     '  /var/lib/command-bridge' \
+    '  /var/lib/command-bridge-installer (when installer-account mode was used)' \
     '  command-bridge service account and group'
 }
 
@@ -140,6 +142,7 @@ print_plan() {
   if [[ "${PURGE}" == "1" ]]; then
     printf '  Configuration: %s\n' "${CONFIG_DIR}"
     printf '  Work data: %s\n' "${STATE_DIR}"
+    printf '  Installer-account state and file Audit: %s\n' "${INSTALLER_STATE_DIR}"
     printf '  Service identity: %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
     printf '  Service home: %s\n' "${SERVICE_HOME}"
     warn "--purge permanently deletes the bearer token and all CommandBridge work data."
@@ -148,6 +151,7 @@ print_plan() {
     log "Preserved:"
     printf '  Configuration: %s\n' "${CONFIG_DIR}"
     printf '  Work data: %s\n' "${STATE_DIR}"
+    printf '  Installer-account state and file Audit: %s\n' "${INSTALLER_STATE_DIR}"
     printf '  Service identity: %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
   fi
   printf '\n'
@@ -178,7 +182,7 @@ confirm_removal() {
 
 assert_safe_tree_path() {
   case "$1" in
-    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${SERVICE_HOME}")
+    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}")
       ;;
     *)
       fail "Refusing to remove an unexpected path: $1"
@@ -405,12 +409,14 @@ print_summary() {
   if [[ "${PURGE}" == "1" ]]; then
     printf '  Purged configuration: %s\n' "${CONFIG_DIR}"
     printf '  Purged work data: %s\n' "${STATE_DIR}"
+    printf '  Purged installer-account state and file Audit: %s\n' "${INSTALLER_STATE_DIR}"
     printf '  Removed service identity: %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
   else
     printf '\n'
     printf 'Preserved for a future reinstall:\n'
     printf '  %s\n' "${CONFIG_DIR}"
     printf '  %s\n' "${STATE_DIR}"
+    printf '  %s\n' "${INSTALLER_STATE_DIR}"
     printf '  %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
     printf '\n'
     printf 'To delete those items too, re-run this script with --purge --yes.\n'
@@ -446,6 +452,7 @@ main() {
   if [[ "${PURGE}" == "1" ]]; then
     assert_tree_is_not_mounted "${CONFIG_DIR}"
     assert_tree_is_not_mounted "${STATE_DIR}"
+    assert_tree_is_not_mounted "${INSTALLER_STATE_DIR}"
     assert_tree_is_not_mounted "${SERVICE_HOME}"
   fi
 
@@ -461,6 +468,7 @@ main() {
     remove_service_identity
     remove_tree "${CONFIG_DIR}"
     remove_tree "${STATE_DIR}"
+    remove_tree "${INSTALLER_STATE_DIR}"
     remove_tree "${SERVICE_HOME}"
     remove_legacy_alias "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
     remove_legacy_alias "${LEGACY_STATE_DIR}" "${STATE_DIR}"

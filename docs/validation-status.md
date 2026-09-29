@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 2.0.3, repairing Oracle Linux 8.10 `restorecon` compatibility. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.1.0, adding an opt-in Linux installer-account service mode. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.1.0 validation
+
+Local Windows `npm test` passed 62/67 tests with five Linux-only skips. Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 61/67 tests with six Windows-only skips; all Bash scripts passed syntax checks. The new installer-account behavior test passed account selection, explicit unrestricted opt-in, file Audit configuration, token/configuration preservation and Audit-reader rollback. The existing mocked SELinux repair/rollback test also passed. These local results do not establish a real installer-account service start or sudo execution.
+
+The hosted service smoke now exercises a failed dedicated-to-installer-account switch, rollback to the original service with authenticated MCP/Audit, a successful installer-account service, a real MCP `sudo -n /usr/bin/id -u` call and matching file Audit, reinstall preservation, and purge without deleting the login account. Hosted Windows/Linux CI and channel publication have not yet run for this source version. Oracle Linux 8.10 Enforcing installation, sudo behavior under its PAM/SELinux policy, and an actual reboot remain unverified.
 
 ## 2.0.3 validation
 

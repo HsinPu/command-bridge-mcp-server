@@ -1,0 +1,40 @@
+[Unit]
+Description=CommandBridge MCP Server (installer account)
+Documentation=https://github.com/HsinPu/command-bridge-mcp-server
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=__INSTALLER_UID__
+Group=__INSTALLER_GID__
+SupplementaryGroups=command-bridge
+WorkingDirectory=/opt/command-bridge/current
+Environment=NODE_ENV=production
+Environment=DOTENV_CONFIG_PATH=/dev/null
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=XDG_DATA_HOME=/var/lib/command-bridge-installer
+EnvironmentFile=/etc/command-bridge/command-bridge.env
+ExecStart=/opt/command-bridge/runtime/current/bin/node /opt/command-bridge/current/dist/index.js
+
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=20
+TimeoutStopSec=20
+KillMode=control-group
+UMask=0077
+LimitCORE=0
+
+# This opt-in service runs as the installing login account. Do not add a
+# capability ceiling or NoNewPrivileges: existing sudo policy decides whether
+# non-interactive privilege elevation is possible. No sudoers rule is created.
+NoNewPrivileges=false
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=command-bridge
+
+[Install]
+WantedBy=multi-user.target

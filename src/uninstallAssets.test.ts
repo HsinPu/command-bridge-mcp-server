@@ -38,13 +38,14 @@ test("uninstaller is restricted to the installed CommandBridge resources", () =>
     uninstaller,
     /readonly STATE_DIR="\/var\/lib\/command-bridge"/
   );
+  assert.match(uninstaller, /readonly INSTALLER_STATE_DIR="\/var\/lib\/command-bridge-installer"/);
   assert.match(
     uninstaller,
     /readonly UNIT_FILE="\/etc\/systemd\/system\/\$\{SERVICE_NAME\}\.service"/
   );
   assert.match(
     uninstaller,
-    /case "\$1" in\s+"\$\{INSTALL_ROOT\}" \| "\$\{CONFIG_DIR\}" \| "\$\{STATE_DIR\}" \| "\$\{SERVICE_HOME\}"/
+    /case "\$1" in\s+"\$\{INSTALL_ROOT\}" \| "\$\{CONFIG_DIR\}" \| "\$\{STATE_DIR\}" \| "\$\{INSTALLER_STATE_DIR\}" \| "\$\{SERVICE_HOME\}"/
   );
   assert.doesNotMatch(uninstaller, /\beval\b/);
 });
@@ -89,8 +90,9 @@ test("default uninstall preserves configuration data and service identity", () =
   const main = uninstaller.slice(uninstaller.indexOf("main() {"));
   assert.match(
     main,
-    /remove_tree "\$\{INSTALL_ROOT\}"\s+remove_legacy_alias "\$\{LEGACY_INSTALL_ROOT\}" "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+remove_legacy_alias "\$\{LEGACY_CONFIG_DIR\}" "\$\{CONFIG_DIR\}"\s+remove_legacy_alias "\$\{LEGACY_STATE_DIR\}" "\$\{STATE_DIR\}"\s+fi/
+    /remove_tree "\$\{INSTALL_ROOT\}"\s+remove_legacy_alias "\$\{LEGACY_INSTALL_ROOT\}" "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{INSTALLER_STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+remove_legacy_alias "\$\{LEGACY_CONFIG_DIR\}" "\$\{CONFIG_DIR\}"\s+remove_legacy_alias "\$\{LEGACY_STATE_DIR\}" "\$\{STATE_DIR\}"\s+fi/
   );
+  assert.doesNotMatch(uninstaller, /userdel "\$\{SUDO_USER\}"/);
 });
 
 test("purge and non-interactive execution require explicit flags", () => {

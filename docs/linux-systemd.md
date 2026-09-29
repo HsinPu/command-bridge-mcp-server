@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.0.3. This patch makes SELinux label repair compatible with Oracle Linux 8.10 while preserving repair of runtimes left by a failed installation. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 1.0.5 rollback fix remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.1.0. This release adds an opt-in installer-account service mode. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -13,7 +13,7 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 - At least 400 MB free under `/opt`
 - Outbound HTTPS access to `nodejs.org`, `github.com`, and the npm registry
 - Standard administration tools including `curl`, `tar`, `gzip`, `sha256sum`, `flock`, `useradd`, `userdel`, `groupdel`, `pgrep`, and `runuser`
-- <code>sudo</code>, <code>visudo</code>, <code>journalctl</code>, <code>stat</code>, and <code>rmdir</code> at their normal system paths; the fixed audit reader uses <code>/usr/bin/sudo</code> and <code>/usr/bin/journalctl</code>
+- <code>sudo</code>, <code>stat</code>, and <code>rmdir</code> at their normal system paths; the default dedicated-account mode also needs <code>visudo</code> and <code>/usr/bin/journalctl</code> for its fixed Audit reader
 
 Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package there instead.
 
@@ -26,6 +26,20 @@ One command:
 ```bash
 installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
 ```
+
+## Installer-account mode
+
+If MCP commands must use the same access as the non-root login account that runs the installer through `sudo`, opt in explicitly. For unrestricted shell commands under that account, including only its **existing** passwordless sudo permissions:
+
+```bash
+installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --run-as-installer --unrestricted && rm -f "${installer}"
+```
+
+On a fresh install, leave off `--unrestricted` to keep the default allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation preserves the saved execution mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
+
+The installer-account unit uses that account's UID and normal group memberships, plus the dedicated `command-bridge` group to read the root-owned policy. It allows home access and normal filesystem permissions. It does not apply the dedicated account's read-only filesystem, private temporary directory or capability ceiling, so existing sudo privileges remain usable. Anyone holding the bearer token can invoke the selected command policy using this account. Keep the endpoint on a trusted LAN/VPN or private HTTPS route and guard the token accordingly.
+
+This mode switches Audit to owner-only JSONL files under `/var/lib/command-bridge-installer/CommandBridgeMCP/audit` (10 MiB per file, five files). It removes the old dedicated-account Audit reader and exact sudoers rule only after the new service passes real MCP/Audit verification. A failed switch restores the prior unit, configuration and helper. Existing bearer token, network settings, policy and `/var/lib/command-bridge/work` data are preserved; when switching from the dedicated account, the working-directory roots become the login account's home followed by `/`. Subsequent reinstalls preserve custom roots. File Audit is writable by the service account and is not an immutable security ledger.
 
 No URL prompt is required. A fresh installation selects a private IPv4 address, preferring the default-route interface, and configures both the listener and allowed Host. It prints `http://<IP>:<port>/mcp` and the generated or preserved bearer token in a marked Codex setup block. Detection accepts RFC1918 and 100.64.0.0/10 addresses (including Tailscale); without one it falls back to `127.0.0.1`, usable only on this host. Existing configuration is preserved, and the printed URL uses its saved host and port. A wildcard IPv4 bind uses the detected private IP; a wildcard IPv6 bind prints IPv6 loopback for local setup.
 
@@ -54,8 +68,8 @@ The installer performs these steps:
 4. Uses the source archive fixed to the CI-verified commit SHA.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment and distinct empty user/global npm configuration files, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
-7. Creates the low-privilege <code>command-bridge</code> service account and root-only environment file.
-8. Verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
+7. Creates the low-privilege <code>command-bridge</code> account and root-only environment file. In installer-account mode, the service instead uses the original sudo login account and separate private file-Audit state.
+8. In default mode, verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
 9. Enables and starts <code>command-bridge.service</code>.
 10. Checks <code>/health</code> and authenticated <code>/ready</code>, executes hostname through a real MCP connection, and reads its matching Audit lifecycle. Failure restores the prior release, network configuration and audit-reader assets.
 11. When explicitly requested, prints the copy-ready Codex configuration block.
@@ -66,8 +80,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.0.3-<source-sha>
-├── releases/v2.0.3-<source-sha>/
+├── current -> releases/v2.1.0-<source-sha>
+├── releases/v2.1.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -79,11 +93,14 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 /var/lib/command-bridge/
 └── work/                              command-bridge:command-bridge 0750
 
+/var/lib/command-bridge-installer/     installer account, 0700 (opt-in mode)
+└── CommandBridgeMCP/audit/            private rotating JSONL files
+
 /etc/systemd/system/
 └── command-bridge.service
 ```
 
-The application and Node.js runtime are owned by root. The service account can write only to its state directory and private temporary directory under the default systemd policy.
+The application and Node.js runtime are owned by root. The default dedicated service account can write only to its state directory and private temporary directory under the default systemd policy. Installer-account mode uses the login account's normal filesystem access.
 
 ### Upgrading an existing 1.x Linux installation
 
@@ -156,7 +173,7 @@ The output between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` is a prompt, 
 3. Reference the token through `bearer_token_env_var` instead of placing the secret in TOML.
 4. Preserve unrelated settings, report restart requirements, and verify the MCP connection after restart.
 
-`--codex-url` accepts only an HTTPS URL ending in `/mcp`, without embedded credentials, a query, or a fragment. When provided, a fresh install defaults to loopback for use behind a private HTTPS route. An explicit `COMMAND_BRIDGE_HTTP_HOST` overrides detection. For a concrete non-loopback host, allowed Hosts default to that host unless explicitly configured. Wildcard binds still require an explicit allowed Hosts list. Existing configuration is never overwritten. The built-in listener does not provide TLS.
+`--codex-url` accepts only an HTTPS URL ending in `/mcp`, without embedded credentials, a query, or a fragment. When provided, a fresh install defaults to loopback for use behind a private HTTPS route. An explicit `COMMAND_BRIDGE_HTTP_HOST` overrides detection. For a concrete non-loopback host, allowed Hosts default to that host unless explicitly configured. Wildcard binds still require an explicit allowed Hosts list. Reinstallation preserves the bearer token and network settings unless `--refresh-network` is requested; switching to installer-account mode deliberately changes the Audit backend and working roots. The built-in listener does not provide TLS.
 
 After editing the environment file, restart the service:
 
@@ -191,6 +208,8 @@ sudo journalctl --unit command-bridge.service --no-pager --lines 100
 
 Codex can call the read-only <code>command_bridge_list_audit_events</code> MCP tool with a <code>limit</code> from 1 through 100. The server invokes only the installed fixed reader through non-interactive sudo; it cannot pass journal units, query strings, paths, or other arguments from the MCP client.
 
+In installer-account mode, both writing and reading Audit events use the private file backend and require no Audit reader or sudoers rule. The service account owns the JSONL files, so it can modify or remove them; treat them as operational records, not tamper-proof evidence.
+
 Each accepted event is redacted again before it is returned. Events contain audit ID, timestamp, phase, redacted command, shell, working directory, mode, source, exit code, duration, timeout/truncation, and error code. They never contain command output, bearer tokens, environment values, or raw secrets. The redactor cannot be disabled.
 
 Journald retention is a host policy. This installer does not change global journal retention. The log is operational evidence, not a signed, immutable, or tamper-evident audit ledger.
@@ -207,6 +226,7 @@ It preserves these resources for a future reinstall:
 
 - `/etc/command-bridge`, including the bearer token
 - `/var/lib/command-bridge`, including all work data
+- `/var/lib/command-bridge-installer`, including opt-in file Audit and work data when used
 - The `command-bridge` account, group, and `/var/empty/command-bridge` home
 
 For review and a no-change preview:
@@ -221,7 +241,7 @@ sudo bash command-bridge-uninstall.sh --uninstall --yes
 For a permanent full purge:
 
 > [!CAUTION]
-> This deletes the bearer token, configuration, all work data, and the dedicated service identity. The uninstaller refuses to delete an identity whose home, shell, group membership, or running processes do not match the expected low-privilege service account.
+> This deletes the bearer token, configuration, all CommandBridge work and file Audit data, and the dedicated `command-bridge` service identity. It never deletes the installer login account or its home. The uninstaller refuses to delete the dedicated identity when its home, shell, group membership, or running processes do not match the expected low-privilege service account.
 
 ```bash
 uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --purge --yes && rm -f "${uninstaller}"
@@ -245,6 +265,8 @@ Then restrict port 8800 with the host firewall and restart the service. `COMMAND
 ## Permission boundary
 
 The default service is a low-privilege diagnostic agent, not a root shell. Its account has no login shell, Docker access, or supplementary groups. It has one fixed no-argument sudoers permission solely for the root-owned audit reader; it has no generic sudo command access. Commands such as <code>systemctl restart</code>, package installation, firewall changes, and arbitrary file modification are intentionally unavailable.
+
+Installer-account mode is a different trust choice: the unit runs as the login user, keeps its ordinary groups and access, and uses file Audit instead of the privileged reader. With `--unrestricted`, it can execute the account's shell commands, including `sudo -n` operations already permitted by host policy. No new sudo rights are granted; losing or changing those rights changes MCP behavior as well.
 
 The controlled reader requires a sudo privilege transition, so the systemd unit cannot use <code>NoNewPrivileges=true</code> or <code>RestrictSUIDSGID=true</code>. Do not change that exception into broad sudo access or add the service account to privileged groups.
 

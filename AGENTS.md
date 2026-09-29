@@ -104,7 +104,8 @@ npm start
 
 ## Linux 服務與安裝路徑命名（2.0.0 起）
 
-- Linux 的正式 systemd 單元為 `command-bridge.service`；主要部署、設定與工作資料目錄分別為 `/opt/command-bridge`、`/etc/command-bridge`、`/var/lib/command-bridge`。服務帳號為 `command-bridge`。後續文件、測試與操作指令應以這些名稱為準。
+- Linux 的正式 systemd 單元為 `command-bridge.service`；主要部署、設定與工作資料目錄分別為 `/opt/command-bridge`、`/etc/command-bridge`、`/var/lib/command-bridge`。預設服務帳號為 `command-bridge`；明確使用 `--run-as-installer` 時，服務改以原始 sudo 登入者帳號執行，檔案 Audit／狀態使用 `/var/lib/command-bridge-installer`。後續文件、測試與操作指令應以這些名稱為準。
+- 安裝者帳號模式不應自動新增一般 sudo 授權；只有 `--unrestricted` 明確啟用時才允許自由 Shell 指令，需用 `sudo -n` 依主機既有免密政策執行。預設 allowlist、Bearer Token 驗證與 Audit 先寫入後執行的規則保持不變。模式切換失敗須回復舊設定、服務及 Audit reader；卸載與 purge 不得刪除登入者帳號或其 home。
 - 縮短名稱只涵蓋 Linux 服務與主機上的安裝配置；GitHub 倉庫及固定 bootstrap 網址、npm 套件名稱、Windows 的 `CommandBridgeMCP` 服務與路徑，以及三個 MCP 工具名稱維持原樣，不應為了統一字面名稱而連帶改動。
 - 從 1.x 升級時，安裝器須先驗證舊設定，再切換服務；保留 Bearer Token、政策與工作資料，只調整既有設定中由安裝器管理的 `COMMAND_BRIDGE_POLICY_FILE` 與 `COMMAND_BRIDGE_ALLOWED_ROOTS` 路徑。成功後舊目錄名稱保留為指向新目錄的相容連結，舊 systemd 單元移除；失敗則恢復原目錄、設定、版本與舊服務。不能把相容連結誤認為仍有舊服務在執行。
 - 以後修改 Linux 安裝／卸載或路徑時，須檢查新安裝、1.x 遷移、失敗回復、資料與 Token 保留、真實 MCP／Audit 驗證，以及一般解除安裝和 `--purge`。僅驗證 systemd 啟用與服務重啟時，不宣稱已完成實際主機重開機測試。

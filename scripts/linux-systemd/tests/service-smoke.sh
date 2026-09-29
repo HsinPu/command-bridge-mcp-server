@@ -7,9 +7,11 @@ root=$(pwd)
 config=/etc/command-bridge/command-bridge.env
 service=command-bridge
 fixture=$(mktemp -d)
+switch_fixture=$(mktemp -d)
 verify_log=$(mktemp)
 health_log=$(mktemp)
-trap 'rm -rf -- "$fixture"; rm -f -- "$verify_log" "$health_log"' EXIT
+switch_log=$(mktemp)
+trap 'rm -rf -- "$fixture" "$switch_fixture"; rm -f -- "$verify_log" "$health_log" "$switch_log"' EXIT
 wait_for_listener() {
   # Type=simple reports restart completion before Node starts listening.
   # Wait only for the socket; the mandatory verifier below still checks
@@ -91,6 +93,43 @@ sudo bash /opt/command-bridge/current/uninstall.sh --yes
 sudo test -f "$config"
 sudo test -f /var/lib/command-bridge/work/preserved
 sudo bash "$root/scripts/linux-systemd/install.sh"
+
+# A failed switch must have started the login-account candidate before the
+# dedicated service, journal reader and saved token are considered restored.
+switch_sha=$(printf '%040d' 3)
+switch_marker="/var/lib/command-bridge-installer/rollback-switch-$RANDOM.json"
+tar --exclude=.git --exclude=node_modules --exclude=dist -cf - . | tar -C "$switch_fixture" -xf -
+sudo "$node" scripts/tests/rollback-fixture.mjs prepare "$switch_fixture" health "$switch_sha" "$switch_marker"
+if sudo bash "$switch_fixture/scripts/linux-systemd/install.sh" --run-as-installer > "$switch_log" 2>&1; then echo 'Expected installer-account startup failure.'; exit 1; fi
+grep -q 'INJECTED_STARTUP_FAILURE' "$switch_log"
+sudo "$node" scripts/tests/rollback-fixture.mjs assert "$switch_marker" "$switch_sha" started
+assert_restored
+sudo grep -Fxq 'User=command-bridge' /etc/systemd/system/command-bridge.service
+sudo test -f /etc/sudoers.d/command-bridge-audit-reader
+
 sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
 [[ ! -e /opt/command-bridge ]]
 sudo test ! -e "$config"
+
+# Opt-in installer identity: file Audit, unrestricted commands, and only the
+# login account's existing non-interactive sudo rights. No sudoers grant is added.
+login_uid=$(id -u)
+[[ "$login_uid" != 0 ]]
+[[ "$(sudo -n /usr/bin/id -u)" == 0 ]]
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+sudo systemctl is-active --quiet "$service"
+sudo systemctl is-enabled --quiet "$service"
+sudo grep -Fxq "User=$login_uid" /etc/systemd/system/command-bridge.service
+sudo grep -Fxq 'COMMAND_BRIDGE_AUDIT_BACKEND=file' "$config"
+sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted' "$config"
+sudo test ! -e /etc/sudoers.d/command-bridge-audit-reader
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+user_mode_config=$(sudo sha256sum "$config")
+sudo bash /opt/command-bridge/current/uninstall.sh --yes
+sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
+[[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+[[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
+sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
+sudo test ! -e /var/lib/command-bridge-installer
+[[ "$(id -u)" == "$login_uid" ]]

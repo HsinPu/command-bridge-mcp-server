@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 — 2026-09-29
+
+Minor release from 2.0.3: add an opt-in Linux service mode that runs as the original non-root account invoking the installer through sudo. Existing installations and the default dedicated-account mode keep their behavior.
+
+- `--run-as-installer` uses the installing account's UID and groups, file Audit under `/var/lib/command-bridge-installer`, and its existing sudo policy. No broad sudoers grant is created; password-requiring sudo commands must use `sudo -n` and fail non-interactively.
+- `--unrestricted` may be paired with `--run-as-installer` to explicitly enable free shell commands. Without it, the allowlist remains active. The installer-account unit does not apply the dedicated service's filesystem/capability restrictions, so commands can use the login account's normal access.
+- Preserve the bearer token and other settings when changing modes, roll back service/configuration/Audit assets if activation fails, and keep the login account on uninstall and purge. Extend Linux behavior and disposable-service checks, including a real MCP sudo and matching Audit lifecycle.
+- Recreate the Audit reader directory when restoring a dedicated-account installation after a failed switch to installer-account mode.
+
 ## 2.0.3 — 2026-09-29
 
 Patch release from 2.0.2: fix SELinux label repair on Oracle Linux 8.10, whose `restorecon` does not accept `-x`. MCP interfaces, command policies, and deployment paths are unchanged.

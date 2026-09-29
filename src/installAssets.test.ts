@@ -16,6 +16,14 @@ test("SELinux deployment repairs reused runtimes and fails closed before activat
   });
   assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
 });
+test("installer-account switch preserves configuration and Audit rollback", {
+  skip: process.platform !== "linux"
+}, () => {
+  const result = spawnSync("bash", ["scripts/linux-systemd/tests/installer-account.test.sh"], {
+    encoding: "utf8", timeout: 30_000
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+});
 const bash = process.platform === "win32"
   ? resolve(process.env.ProgramFiles ?? "C:/Program Files", "Git/bin/bash.exe")
   : "bash";
@@ -34,6 +42,7 @@ const installer = readFileSync(
 const unit = readFileSync(
   resolve(projectRoot, "packaging/systemd/command-bridge.service")
 );
+const installerUnit = readFileSync(resolve(projectRoot, "packaging/systemd/command-bridge-installer.service"));
 const auditReader = readFileSync(resolve(projectRoot, "packaging/linux/audit-reader"));
 const documentation = [
   readFileSync(resolve(projectRoot, "README.md"), "utf8"),
@@ -46,6 +55,11 @@ test("installer pins the committed systemd unit digest", () => {
   const actualDigest = createHash("sha256").update(unit).digest("hex");
 
   assert.equal(configuredDigest, actualDigest);
+});
+
+test("installer pins the opt-in login-account systemd unit digest", () => {
+  const configuredDigest = /readonly INSTALLER_UNIT_SHA256="([a-f0-9]{64})"/.exec(installer)?.[1];
+  assert.equal(configuredDigest, createHash("sha256").update(installerUnit).digest("hex"));
 });
 
 test("installer pins and deploys the fixed Linux audit reader", () => {

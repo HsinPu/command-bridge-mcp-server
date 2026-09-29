@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.0.3-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -81,6 +81,8 @@ script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/comman
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
+Linux can optionally run the service as the non-root account that invoked `sudo` during installation. On a fresh install, `--run-as-installer` keeps the allowlist; add `--unrestricted` to allow shell commands under that account, including its existing non-interactive `sudo -n` permissions. Reinstallation retains the saved execution mode. This mode writes Audit events to private rotating files and adds no sudoers grant. See the [Linux installer-account guide](docs/linux-systemd.md#installer-account-mode) before using it.
+
 ## Connect Codex
 
 After a successful installation, the terminal prints a marked block containing the actual endpoint URL, bearer token, and MCP settings:
@@ -124,6 +126,8 @@ Deletion commands such as `rm`, `del`, and `Remove-Item` are absent from the def
 > [!IMPORTANT]
 > Administrators must trust the executable and every argument combination they approve. The service must not be able to modify its policy or approved binaries. Working-directory checks resolve symlinks, but arguments can still refer to other accessible paths. Keep the low-privilege account and network restrictions, and do not expose the service directly to the internet. See the [security policy](SECURITY.md).
 
+The optional Linux installer-account mode deliberately grants MCP commands that login account's existing access. `--unrestricted` also removes the command allowlist; possession of the bearer token can then trigger any non-interactive command that account can run. Sudo commands requiring a password cannot be completed by the background service.
+
 Service installation defaults:
 
 | Setting | Default |
@@ -142,12 +146,12 @@ Each command request entering the execution flow first records `attempted`, foll
 | Platform | Where to look |
 | --- | --- |
 | Windows | Event Viewer → Windows Logs → Application, source `CommandBridgeMCP`. |
-| Linux | systemd journal for `command-bridge`. |
+| Linux | Default service: systemd journal for `command-bridge`; installer-account service: `/var/lib/command-bridge-installer/CommandBridgeMCP/audit/events.jsonl` (rotating files). |
 | MCP client | Call `command_bridge_list_audit_events`. |
 
 Audit events do not store stdout/stderr, and common secret patterns in commands are redacted. Failure to write the initial event prevents execution; failure to write the terminal event withholds captured output. Retention is controlled by the host, and the logs are not tamper-proof.
 
-Local stdio defaults to private JSONL files in the user's data directory, rotating at 10 MiB per file with five files retained. Service installations explicitly select journal or Event Log. The authenticated `/ready` endpoint checks service dependencies; installation also verifies a real MCP command and matching audit lifecycle before discarding upgrade backups.
+Local stdio defaults to private JSONL files in the user's data directory, rotating at 10 MiB per file with five files retained. Services select journal, Event Log, or the Linux installer-account file backend. The authenticated `/ready` endpoint checks service dependencies; installation also verifies a real MCP command and matching audit lifecycle before discarding upgrade backups.
 
 ## One-command uninstall
 

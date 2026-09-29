@@ -83,7 +83,12 @@ jobs:
 
       - name: Verify systemd unit
         if: runner.os == 'Linux'
-        run: sudo systemd-analyze verify packaging/systemd/command-bridge.service
+        run: |
+          sudo systemd-analyze verify packaging/systemd/command-bridge.service
+          installer_unit="$(mktemp --suffix=.service)"
+          sed -e "s/__INSTALLER_UID__/$(id -u)/g" -e "s/__INSTALLER_GID__/$(id -g)/g" packaging/systemd/command-bridge-installer.service > "$installer_unit"
+          sudo systemd-analyze verify "$installer_unit"
+          rm -f "$installer_unit"
 
   publish-channel:
     needs: [test, service-smoke]
