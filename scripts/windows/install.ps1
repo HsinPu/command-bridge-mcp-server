@@ -356,15 +356,28 @@ function Get-ConfigValue {
   return $line.Substring($Name.Length + 1)
 }
 
+function Protect-StartupDiagnosticLine {
+  param([string]$Line, [string]$Token)
+  if ($Line.Contains('command_bridge.audit')) { return '' }
+  if ($Token) { $Line = $Line.Replace($Token, '[REDACTED]') }
+  $Line = [regex]::Replace($Line, '(?i)((?:token|secret|password|authorization|api[_-]?key)\s*[=:]\s*)("[^"]*"|''[^'']*''|\S+)', '$1[REDACTED]')
+  return $Line.Substring(0, [Math]::Min(700, $Line.Length))
+}
+
 function Write-ServiceStartupDiagnostics {
-  # Emit known categories only: never dump config, environment or raw log lines.
+  # Never dump config/environment. Exclude Audit payloads, mask credentials and
+  # bound the startup-log excerpt so wrapper/native failures remain diagnosable.
   try {
+    $token = Get-ConfigValue 'COMMAND_BRIDGE_BEARER_TOKEN'
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($service) { Write-Log "Service state: $($service.Status)" }
     $files = @(Get-ChildItem -LiteralPath $LogsDirectory -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 6)
     Write-Log "Startup log files found: $($files.Count)"
     foreach ($file in $files) {
+      Write-Log "Startup log: $($file.Name) ($($file.Length) bytes)"
       foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 80 -ErrorAction SilentlyContinue)) {
+        $safeLine = Protect-StartupDiagnosticLine -Line $line -Token $token
+        if ($safeLine) { Write-Log $safeLine }
         if ($line.Contains('CommandBridge MCP listening on http://')) { Write-Log 'HTTP listener startup was logged.' }
         if ($line.Contains('CommandBridge MCP running via stdio.')) { Write-Log 'Unexpected stdio startup was logged.' }
         if ($line -match 'Startup dependency checks failed: ([A-Za-z, ]+)') {

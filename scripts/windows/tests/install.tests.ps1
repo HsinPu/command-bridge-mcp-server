@@ -147,14 +147,16 @@ Assert-True $script:restarted 'The previous service must be restarted without re
 $script:diagnostics = @()
 function Write-Log { param($Message) $script:diagnostics += $Message }
 function Get-Service { param($Name, $ErrorAction) return [pscustomobject]@{ Status = 'Stopped' } }
-function Get-ChildItem { param($LiteralPath, $Filter, $ErrorAction) return [pscustomobject]@{ FullName = 'fixture.log' } }
+function Get-ChildItem { param($LiteralPath, $Filter, $ErrorAction) return [pscustomobject]@{ FullName = 'fixture.log'; Name = 'fixture.log'; Length = 100 } }
+function Get-ConfigValue { param($Name) return 'actual-bearer-value' }
 function Get-Content {
   param($LiteralPath, $Tail, $ErrorAction)
-  return @('secret=must-never-print', 'Startup dependency checks failed: audit, policyReadOnly', 'Error: EACCES secret=must-never-print')
+  return @('secret=must-never-print actual-bearer-value', 'Startup dependency checks failed: audit, policyReadOnly', 'Error: EACCES secret=must-never-print', '{"event":"command_bridge.audit","command":"private-command"}')
 }
 Write-ServiceStartupDiagnostics
 Assert-True ($script:diagnostics -contains 'Startup dependency failed: audit') 'Missing audit diagnosis.'
 Assert-True ($script:diagnostics -contains 'Startup dependency failed: policyReadOnly') 'Missing policy diagnosis.'
 Assert-True ($script:diagnostics -contains 'Startup error category: EACCES') 'Missing error category.'
-Assert-True (($script:diagnostics -join '') -notmatch 'secret|must-never-print') 'Diagnostics exposed raw log contents.'
+Assert-True (($script:diagnostics -join '') -notmatch 'actual-bearer-value|must-never-print|private-command') 'Diagnostics exposed credentials or Audit payloads.'
+Assert-True ((Protect-StartupDiagnosticLine -Line ('x' * 1000) -Token '').Length -eq 700) 'Diagnostics must bound line length.'
 Write-Output "Windows installer behavior checks passed."

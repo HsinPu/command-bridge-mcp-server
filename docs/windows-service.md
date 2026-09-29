@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 1.0.5 reports known startup dependency/error categories when service health validation fails, without printing raw logs, environment values or the bearer token. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 1.0.5 reports startup dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. It masks the configured bearer token and credential fields, skips Audit payloads and never dumps configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
