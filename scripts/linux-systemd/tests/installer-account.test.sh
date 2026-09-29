@@ -82,6 +82,8 @@ remove_audit_access_for_installer
 rollback_audit_access
 grep -Fxq 'original helper' "$AUDIT_READER_PATH"
 grep -Fxq 'original rule' "$AUDIT_SUDOERS_FILE"
+AUDIT_ACCESS_INSTALLED=0
+rollback_audit_access
 
 sed -e "s/__INSTALLER_UID__/${INSTALLER_UID}/g" -e "s/__INSTALLER_GID__/${INSTALLER_GID}/g" \
   packaging/systemd/command-bridge-installer.service > "$work/rendered.service"

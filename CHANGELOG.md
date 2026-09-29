@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.2 — 2026-09-29
+
+Patch release from 2.1.1: complete rollback when an installer-account candidate fails before Audit reader assets were installed. The no-op Audit rollback now succeeds, allowing the prior release link, unit and service to be restored. Add a regression check for the no-op case; MCP interfaces, sudo policy and service defaults are unchanged.
+
 ## 2.1.1 — 2026-09-29
 
 Patch release from 2.1.0: make the Windows Audit invalid-payload test tolerate slow PowerShell startup on hosted CI. The test process now has a 15-second launch budget and reports elapsed time on failure; the production Audit helper's five-second deadline, MCP behavior and Linux installer-account mode are unchanged.

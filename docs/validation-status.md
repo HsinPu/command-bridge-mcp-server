@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 2.1.1, retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.1.2, retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.1.2 validation
+
+The [2.1.1 CI run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36548647292) passed both general test jobs. Linux service smoke then started the injected installer-account candidate but failed to restore its prior release: the no-op Audit-reader rollback returned a failure status under `set -e`, so link/unit restoration never ran. A clean Ubuntu WSL reproduction confirmed the old configuration hash was restored while `current` still targeted the failed candidate. Version 2.1.2 corrects the no-op return status and adds a regression check.
+
+Local 2.1.2 validation: Windows `npm test` passed 62/67 with five Linux-only skips. Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 61/67 with six Windows-only skips and all Bash syntax checks. A disposable Ubuntu WSL systemd installation started the injected candidate, observed its failure marker, then verified that the prior release link, configuration hash and service were restored and active. This does not establish Oracle Linux 8.10 Enforcing or actual reboot behavior. Hosted service smoke and install-channel publication still require a successful new run.
 
 ## 2.1.1 validation
 

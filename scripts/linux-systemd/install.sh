@@ -852,7 +852,7 @@ remove_audit_access_for_installer() {
 }
 
 rollback_audit_access() {
-  [[ "${AUDIT_ACCESS_INSTALLED}" == "1" ]] || return
+  [[ "${AUDIT_ACCESS_INSTALLED}" == "1" ]] || return 0
 
   if [[ "${AUDIT_READER_DIR_WAS_PRESENT}" == "1" ]]; then
     install -d -m 0755 -o root -g root "${AUDIT_READER_DIR}" || true

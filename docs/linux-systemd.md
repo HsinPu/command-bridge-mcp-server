@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.1.1. Version 2.1.0 added an opt-in installer-account service mode. This patch changes only a Windows CI test budget. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.1.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completes rollback when that candidate fails before Audit-reader changes. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -80,8 +80,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.1.1-<source-sha>
-├── releases/v2.1.1-<source-sha>/
+├── current -> releases/v2.1.2-<source-sha>
+├── releases/v2.1.2-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
