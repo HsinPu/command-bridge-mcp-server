@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.3 — 2026-09-29 (unreleased)
+
+Patch release from 1.0.2: make Windows PowerShell startup more deterministic and improve CI failure diagnosis, without changing command policies or timeout budgets.
+
+- Preserve standard Windows system/program/profile directory variables in the filtered child environment without inheriting unrelated secrets.
+- Pin safe cmdlet module discovery to Windows PowerShell's own Modules directory, load required modules by absolute manifest path, and avoid New-Object during wrapper initialization.
+- Test the fixed wrapper against external module paths, unknown cmdlets and injected arguments. Add a bounded, failure-only CI probe that reports engine/wrapper stages without dumping environment values or command payloads.
+- The previous CI timeout could not be reproduced on local Windows 10 with Node.js 20.15.1 or 24.18.0. CI resolution remains unconfirmed until the updated workflow runs; the Linux npm configuration blocker is unchanged.
+
 ## 1.0.2 — 2026-09-29 (unreleased)
 
 Patch release from 1.0.1: documentation and working-rule maintenance with no runtime behavior changes.

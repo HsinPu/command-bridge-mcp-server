@@ -33,6 +33,11 @@ jobs:
       - name: Build and test
         run: npm test
 
+      - name: Diagnose Windows PowerShell startup after failure
+        if: failure() && runner.os == 'Windows'
+        timeout-minutes: 2
+        run: node scripts/windows/diagnose-startup.mjs
+
       - name: Check Linux script syntax
         if: runner.os == 'Linux'
         run: |

@@ -67,6 +67,10 @@ The installer removes inherited ACLs and grants the application directory read/e
 
 ## Service operations
 
+Version 1.0.3 preserves standard Windows system/program/profile directory variables in the filtered execution environment. Safe built-in cmdlets load only Windows PowerShell's own module manifests, independent of a parent PowerShell 7 or user module search path. Unrelated environment variables are still excluded unless explicitly configured for passthrough. Production timeout settings are unchanged.
+
+If Windows CI fails, a bounded startup probe records whether the PowerShell engine started and whether the fixed wrapper completed. It compares the filtered environment with a parent-environment reference without printing environment values, tokens or command payloads. Local success does not establish that the hosted-runner timeout is resolved; see [validation status](validation-status.md).
+
 The 1.0.1 disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
 
 Run these commands from an elevated PowerShell session:

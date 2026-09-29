@@ -279,6 +279,12 @@ export class CommandExecutor {
       const { profile, args } = resolveSafeCommand(this.config, shell, command);
       invocation = { executable: profile.executable, args };
       if (profile.cmdlet) {
+        // Keep Windows PowerShell discovery independent of the parent's PowerShell
+        // edition, user-installed modules and caller passthrough settings.
+        for (const key of Object.keys(environment)) {
+          if (key.toLowerCase() === "psmodulepath") delete environment[key];
+        }
+        environment.PSModulePath = join(dirname(profile.executable), "Modules");
         invocation.args = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", fileURLToPath(new URL("../../scripts/windows/run-cmdlet.ps1", import.meta.url))];
         environment.COMMAND_BRIDGE_CMDLET_REQUEST = Buffer.from(JSON.stringify({ name: profile.cmdlet, args })).toString("base64");
       }
@@ -452,10 +458,16 @@ function buildShellInvocation(shell: ShellKind, command: string): ShellInvocatio
   }
 }
 
-function buildChildEnvironment(extraKeys: string[]): NodeJS.ProcessEnv {
+export function buildChildEnvironment(extraKeys: string[]): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
 
-  for (const key of new Set([...defaultEnvironmentKeys, ...extraKeys])) {
+  const windowsKeys = process.platform === "win32" ? [
+    "SystemDrive", "ProgramData", "ProgramFiles", "ProgramFiles(x86)",
+    "ProgramW6432", "CommonProgramFiles", "CommonProgramFiles(x86)",
+    "CommonProgramW6432", "ALLUSERSPROFILE", "APPDATA", "LOCALAPPDATA",
+    "HOMEDRIVE", "HOMEPATH"
+  ] : [];
+  for (const key of new Set([...defaultEnvironmentKeys, ...windowsKeys, ...extraKeys])) {
     const sourceKey =
       process.platform === "win32"
         ? Object.keys(process.env).find(

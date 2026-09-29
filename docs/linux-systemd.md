@@ -64,8 +64,8 @@ The 1.0.1 disposable-runner tests require evidence from the deployed test SHA be
 
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v1.0.2-<source-sha>
-├── releases/v1.0.2-<source-sha>/
+├── current -> releases/v1.0.3-<source-sha>
+├── releases/v1.0.3-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
