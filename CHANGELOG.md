@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.4 — 2026-09-29 (unreleased)
+
+Patch release from 1.0.3: fix Linux installation and native Audit startup without changing MCP interfaces or command policies.
+
+- Isolate npm user/global configuration in distinct empty, build-account-owned files so npm accepts clean installation and pruning.
+- Correct allowed Host validation for IPv4, hostname lists and bracketed IPv6; cover valid and invalid values with executable Bash tests.
+- Allow an empty journal on first installation while propagating journal read failures. The fixed reader filters Audit JSON from the latest 1,000 service entries; unrelated service messages remain excluded.
+- Permit only CAP_SETUID and CAP_SETGID in the service capability ceiling for the fixed sudo Audit reader, with no ambient capabilities for the service process. Keep exact no-argument sudo authorization and root-owned assets.
+- Remove systemd settings that implicitly prohibit the required sudo transition. Retain filesystem/resource restrictions and use DevicePolicy=closed; document the unavailable syscall restrictions explicitly.
+- Return success when optional Codex setup output is disabled, instead of reporting a completed installation as failed. Service smoke tests also check the real process has no effective or ambient capabilities.
+- Bound service-test waits for the listener after Type=simple restarts before requiring authenticated readiness, real MCP and Audit verification; keep production timeouts unchanged.
+- Validated the complete Linux service lifecycle locally on Ubuntu WSL with Node.js 24.18.0, including activation evidence, changed-network rollback and uninstall/reinstall/purge. Linux suites passed 58/62 (four Windows skips); Windows compatibility passed 59/62 (three Linux skips). Hosted CI and channel publication remain pending.
+
 ## 1.0.3 — 2026-09-29 (unreleased)
 
 Patch release from 1.0.2: make Windows PowerShell startup more deterministic and improve CI failure diagnosis, without changing command policies or timeout budgets.

@@ -36,26 +36,19 @@ ReadWritePaths=/var/lib/command-bridge-mcp-server/work
 # The only permitted privilege transition is the root-owned, no-argument audit
 # reader authorized by /etc/sudoers.d/command-bridge-mcp-server-audit-reader.
 # Keep the service account out of sudo and systemd-journal groups; do not grant
-# any other sudo command. NoNewPrivileges/RestrictSUIDSGID would block sudo.
+# any other sudo command. Seccomp-based hardening and PrivateDevices imply
+# NoNewPrivileges even when explicitly false, and therefore block this reader.
 NoNewPrivileges=false
 PrivateTmp=true
-PrivateDevices=true
+DevicePolicy=closed
 ProtectSystem=strict
 ProtectHome=true
-ProtectHostname=true
-ProtectClock=true
 ProtectControlGroups=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
-RestrictRealtime=true
-RestrictNamespaces=true
-LockPersonality=true
 RemoveIPC=true
-CapabilityBoundingSet=
+# Permit sudo's UID/GID transition for the fixed audit reader. These are only
+# a ceiling; the unprivileged Node process receives no ambient capabilities.
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID
 AmbientCapabilities=
-SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 StandardOutput=journal
 StandardError=journal

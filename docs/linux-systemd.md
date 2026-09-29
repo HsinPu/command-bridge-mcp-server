@@ -50,7 +50,7 @@ The installer performs these steps:
 2. Takes an installation lock so two upgrades cannot run at the same time.
 3. Downloads pinned Node.js 24.18.0 and verifies its official SHA-256 checksum.
 4. Uses the source archive fixed to the CI-verified commit SHA.
-5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment, then freezes ownership and removes that account.
+5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment and distinct empty user/global npm configuration files, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
 7. Creates the low-privilege <code>command-bridge</code> service account and root-only environment file.
 8. Verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
@@ -64,8 +64,8 @@ The 1.0.1 disposable-runner tests require evidence from the deployed test SHA be
 
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v1.0.3-<source-sha>
-├── releases/v1.0.3-<source-sha>/
+├── current -> releases/v1.0.4-<source-sha>
+├── releases/v1.0.4-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -85,7 +85,7 @@ The application and Node.js runtime are owned by root. The service account can w
 
 The installer also creates these root-owned audit access assets:
 
-- <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that runs only <code>/usr/bin/journalctl --unit command-bridge-mcp-server.service --output=cat --grep='^{"schemaVersion":1,"event":"command_bridge.audit",' --lines=1000</code>, so it emits only CommandBridge Audit JSON rather than arbitrary service logs
+- <code>/usr/local/libexec/command-bridge-mcp-server/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that reads the latest 1,000 service journal entries and uses a fixed filter to emit only CommandBridge Audit JSON. Empty journals succeed; journal read failures propagate through Bash pipefail. Unrelated service logs are not returned.
 - <code>/etc/sudoers.d/command-bridge-mcp-server-audit-reader</code> (<code>root:root 0440</code>), which permits <code>command-bridge ALL=(root) NOPASSWD: /usr/local/libexec/command-bridge-mcp-server/audit-reader ""</code> and nothing else
 
 The service account is not added to <code>sudo</code> or <code>systemd-journal</code> groups.
@@ -219,6 +219,10 @@ Then restrict port 8800 with the host firewall and restart the service. `COMMAND
 The default service is a low-privilege diagnostic agent, not a root shell. Its account has no login shell, Docker access, or supplementary groups. It has one fixed no-argument sudoers permission solely for the root-owned audit reader; it has no generic sudo command access. Commands such as <code>systemctl restart</code>, package installation, firewall changes, and arbitrary file modification are intentionally unavailable.
 
 The controlled reader requires a sudo privilege transition, so the systemd unit cannot use <code>NoNewPrivileges=true</code> or <code>RestrictSUIDSGID=true</code>. Do not change that exception into broad sudo access or add the service account to privileged groups.
+
+Since 1.0.4, the capability ceiling retains only `CAP_SETUID CAP_SETGID` so sudo can perform the authorized identity transition. `AmbientCapabilities` remains empty: the non-root Node process and ordinary commands do not receive those capabilities. Clearing the entire ceiling prevents native Audit startup.
+
+The unit also omits settings that implicitly enable `NoNewPrivileges` for this non-root service: PrivateDevices, ProtectHostname/Clock/KernelTunables/KernelModules/KernelLogs, RestrictRealtime/Namespaces/AddressFamilies, LockPersonality and SystemCallArchitectures. These syscall restrictions are not active. `DevicePolicy=closed` limits device access; read-only system/home mounts, private temporary storage, control-group protection, resource limits, the capability ceiling and the exact sudo rule remain. Do not re-enable incompatible settings without replacing the sudo-based Audit design and verifying real MCP/Audit access.
 
 `COMMAND_BRIDGE_ALLOWED_ROOTS` restricts the command working directory. It does not stop an allowed command from naming another readable path as an argument. The real boundary is the service account plus the systemd filesystem and capability restrictions.
 

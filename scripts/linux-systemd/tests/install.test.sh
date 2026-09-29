@@ -4,6 +4,24 @@ source scripts/linux-systemd/install.sh
 # Only exercise pure functions; disable the installer's cleanup/error handlers.
 trap - EXIT ERR
 
+PRINT_CODEX_SETUP=0
+setup=$(print_codex_setup)
+[[ -z "$setup" ]]
+
+token=$(printf '%064d' 1)
+for allowed in '192.168.1.20' 'mcp.example.com,127.0.0.1' '[::1]' 'host-name:8800' ''; do
+  validate_new_configuration "$token" '127.0.0.1' 8800 "$allowed" allowlist
+done
+for allowed in 'host name' 'host;command' 'host/other' $'host\nother' 'host\\other'; do
+  if (validate_new_configuration "$token" '127.0.0.1' 8800 "$allowed" allowlist) >/dev/null 2>&1; then
+    echo 'Invalid Host characters were accepted'; exit 1
+  fi
+done
+validate_new_configuration "$token" '192.168.1.20' 8800 '192.168.1.20' allowlist
+if (validate_new_configuration "$token" '192.168.1.20' 8800 '' allowlist) >/dev/null 2>&1; then
+  echo 'Missing non-loopback Host was accepted'; exit 1
+fi
+
 for address in 10.0.0.1 172.16.0.1 172.31.255.1 192.168.1.1 100.64.0.1 100.127.255.1; do
   is_private_ipv4 "$address" || { echo "Rejected private IP: $address"; exit 1; }
 done

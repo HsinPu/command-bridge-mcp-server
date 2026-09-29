@@ -9,15 +9,45 @@ fixture=$(mktemp -d)
 verify_log=$(mktemp)
 health_log=$(mktemp)
 trap 'rm -rf -- "$fixture"; rm -f -- "$verify_log" "$health_log"' EXIT
+wait_for_listener() {
+  # Type=simple reports restart completion before Node starts listening.
+  # Wait only for the socket; the mandatory verifier below still checks
+  # authenticated readiness, real MCP execution and matching Audit events.
+  sudo /opt/command-bridge-mcp-server/runtime/current/bin/node --input-type=module - "$config" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { createConnection } from 'node:net';
+const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
+let host = config.COMMAND_BRIDGE_HTTP_HOST;
+if (host === '0.0.0.0') host = '127.0.0.1';
+if (host === '::') host = '::1';
+const deadline = Date.now() + 20_000;
+while (true) {
+  const connected = await new Promise(resolve => {
+    const socket = createConnection({ host, port: Number(config.COMMAND_BRIDGE_HTTP_PORT) });
+    const finish = value => { socket.destroy(); resolve(value); };
+    socket.setTimeout(Math.min(1000, Math.max(1, deadline - Date.now())), () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.once('connect', () => finish(true));
+  });
+  if (connected) break;
+  if (Date.now() >= deadline) throw new Error('Service listener did not start within 20 seconds.');
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+NODE
+}
 sudo bash scripts/linux-systemd/install.sh
 sudo systemctl is-active --quiet "$service"
 sudo systemctl is-enabled --quiet "$service"
+pid=$(sudo systemctl show "$service" --property=MainPID --value)
+sudo awk '/^CapEff:/ { effective = ($2 == "0000000000000000") } /^CapAmb:/ { ambient = ($2 == "0000000000000000") } /^NoNewPrivs:/ { sudo_allowed = ($2 == "0") } END { exit !(effective && ambient && sudo_allowed) }' "/proc/$pid/status"
+sudo runuser -u command-bridge -- sudo -n /usr/local/libexec/command-bridge-mcp-server/audit-reader >/dev/null
 before=$(sudo sha256sum "$config")
 sudo touch /var/lib/command-bridge-mcp-server/work/preserved
 sudo bash scripts/linux-systemd/install.sh
 [[ "$(sudo sha256sum "$config")" == "$before" ]]
 sudo bash scripts/linux-systemd/install.sh --refresh-network >/dev/null
 sudo systemctl restart "$service"
+wait_for_listener
 sudo /opt/command-bridge-mcp-server/runtime/current/bin/node /opt/command-bridge-mcp-server/current/scripts/verify-install.mjs "$config"
 old=$(readlink /opt/command-bridge-mcp-server/current)
 node=/opt/command-bridge-mcp-server/runtime/current/bin/node
@@ -37,6 +67,7 @@ assert_restored() {
   [[ "$(sudo sha256sum "$config")" == "$before_refresh" ]]
   sudo test -f "$work/preserved"
   sudo systemctl is-active --quiet "$service"
+  wait_for_listener
   sudo "$node" /opt/command-bridge-mcp-server/current/scripts/verify-install.mjs "$config"
 }
 tar --exclude=.git --exclude=node_modules --exclude=dist -cf - . | tar -C "$fixture" -xf -

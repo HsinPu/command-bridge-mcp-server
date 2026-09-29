@@ -23,8 +23,8 @@ readonly LOCK_DIR="/run/command-bridge-mcp-server"
 SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SYSTEMD_UNIT_SHA256="39faaea6008bbabcba0c6133a1936cc34273f91df0e1cb5c1da43c1ab0a46014"
-readonly AUDIT_READER_SHA256="3c5542591db8ffe3a75f14448d3c57be0f4f8a0d85ac68a355ae59906536acf7"
+readonly SYSTEMD_UNIT_SHA256="c1063a5b2d47a988423a776fd850bd6ae6438e781b50f2f10d9fcd9e083e246b"
+readonly AUDIT_READER_SHA256="61a73d27a59846523d324faa4d1cd3964bd3221186895d26f5b5df6c0d335345"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 
@@ -406,6 +406,10 @@ build_source() {
 
   create_build_account "${build_home}"
   install -d -m 0700 -o "${BUILD_USER}" -g "${BUILD_GROUP}" "${build_home}"
+  # npm rejects using the same path for both config layers. Keep distinct,
+  # empty files so neither operation loads the host's user/global npm settings.
+  install -m 0600 -o "${BUILD_USER}" -g "${BUILD_GROUP}" /dev/null "${build_home}/user.npmrc"
+  install -m 0600 -o "${BUILD_USER}" -g "${BUILD_GROUP}" /dev/null "${build_home}/global.npmrc"
   chown -R "${BUILD_USER}:${BUILD_GROUP}" "${source_dir}"
 
   log "Installing locked npm dependencies without lifecycle scripts..."
@@ -414,8 +418,8 @@ build_source() {
     runuser -u "${BUILD_USER}" -- env -i \
       HOME="${build_home}" \
       npm_config_cache="${build_home}/.npm" \
-      npm_config_userconfig=/dev/null \
-      npm_config_globalconfig=/dev/null \
+      npm_config_userconfig="${build_home}/user.npmrc" \
+      npm_config_globalconfig="${build_home}/global.npmrc" \
       PATH="${node_root}/bin:/usr/bin:/bin" \
       "${node_root}/bin/npm" ci --ignore-scripts --no-audit --no-fund
 
@@ -432,8 +436,8 @@ build_source() {
     runuser -u "${BUILD_USER}" -- env -i \
       HOME="${build_home}" \
       npm_config_cache="${build_home}/.npm" \
-      npm_config_userconfig=/dev/null \
-      npm_config_globalconfig=/dev/null \
+      npm_config_userconfig="${build_home}/user.npmrc" \
+      npm_config_globalconfig="${build_home}/global.npmrc" \
       PATH="${node_root}/bin:/usr/bin:/bin" \
       "${node_root}/bin/npm" prune --omit=dev --ignore-scripts --no-audit --no-fund
   )
@@ -656,7 +660,8 @@ validate_new_configuration() {
       fail "COMMAND_BRIDGE_ALLOWED_HOSTS is required for a non-loopback HTTP host."
   fi
 
-  [[ "${allowed_hosts}" =~ ^[A-Za-z0-9.,:_\[\]-]*$ ]] || \
+  local allowed_hosts_pattern='^([A-Za-z0-9.,:_-]|\[|\])*$'
+  [[ "${allowed_hosts}" =~ ${allowed_hosts_pattern} ]] || \
     fail "COMMAND_BRIDGE_ALLOWED_HOSTS contains unsupported characters."
 }
 
@@ -841,7 +846,7 @@ print_summary() {
 print_codex_setup() {
   local token
 
-  [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return
+  [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return 0
   if [[ -z "${CODEX_SETUP_URL}" ]]; then
     CODEX_SETUP_URL=$(automatic_codex_url)
   fi

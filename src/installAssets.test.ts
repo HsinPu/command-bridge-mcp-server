@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -58,11 +59,35 @@ test("installer pins and deploys the fixed Linux audit reader", () => {
   );
   assert.match(installer, /visudo -cf "\$\{AUDIT_SUDOERS_FILE\}"/);
   assert.match(installer, /runuser -u "\$\{SERVICE_USER\}" -- \/usr\/bin\/sudo -n "\$\{AUDIT_READER_PATH\}"/);
-  assert.match(auditReader.toString("utf8"), /exec \/usr\/bin\/journalctl/);
+  assert.match(auditReader.toString("utf8"), /set -euo pipefail/);
   assert.match(auditReader.toString("utf8"), /--unit command-bridge-mcp-server\.service/);
   assert.match(auditReader.toString("utf8"), /--output=cat/);
   assert.match(auditReader.toString("utf8"), /--lines=1000/);
-  assert.match(auditReader.toString("utf8"), /--grep='\^\{"schemaVersion":1,"event":"command_bridge\\\.audit",'/);
+  assert.match(auditReader.toString("utf8"), /\/usr\/bin\/awk/);
+});
+
+test("Linux audit reader accepts empty journals, filters logs, and propagates read errors", {
+  skip: process.platform !== "linux"
+}, () => {
+  const directory = mkdtempSync(resolve(tmpdir(), "audit-reader-test-"));
+  try {
+    const journal = resolve(directory, "journalctl");
+    const helper = resolve(directory, "reader");
+    writeFileSync(helper, auditReader.toString("utf8").replace("/usr/bin/journalctl", journal));
+    const event = '{"schemaVersion":1,"event":"command_bridge.audit","id":"test"}';
+    for (const scenario of [
+      { body: "exit 0", status: 0, output: "" },
+      { body: `printf '%s\\n' 'ordinary log' '${event}' 'other log'`, status: 0, output: event + "\n" },
+      { body: "echo 'journal unavailable' >&2; exit 7", status: 7, output: "" }
+    ]) {
+      writeFileSync(journal, "#!/bin/sh\n" + scenario.body + "\n", { mode: 0o700 });
+      const result = spawnSync("bash", [helper], { encoding: "utf8", timeout: 5000 });
+      assert.equal(result.status, scenario.status, result.stderr);
+      assert.equal(result.stdout, scenario.output);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("installer identifies source by SHA independently from package version", () => {
@@ -99,6 +124,10 @@ test("systemd unit uses the versioned application and runtime symlinks", () => {
   );
   assert.match(unitText, /User=command-bridge/);
   assert.match(unitText, /NoNewPrivileges=false/);
+  assert.match(unitText, /^CapabilityBoundingSet=CAP_SETUID CAP_SETGID$/m);
+  assert.match(unitText, /^AmbientCapabilities=$/m);
+  assert.match(unitText, /^DevicePolicy=closed$/m);
+  assert.doesNotMatch(unitText, /^(PrivateDevices|ProtectHostname|ProtectClock|ProtectKernelTunables|ProtectKernelModules|ProtectKernelLogs|RestrictRealtime|RestrictNamespaces|LockPersonality|SystemCallArchitectures|RestrictAddressFamilies)=/m);
   assert.doesNotMatch(unitText, /RestrictSUIDSGID=true/);
   assert.match(unitText, /ProtectSystem=strict/);
 });
