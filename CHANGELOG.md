@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5 — 2026-09-29 (unreleased)
+
+Patch release from 1.0.4: repair service deployment validation and recovery without changing MCP interfaces or command policies.
+
+- Clear the failed candidate's systemd start-limit counter before restarting the restored release. Report a restored-service restart failure instead of silently discarding it.
+- Report Linux smoke failure line and service state without printing configuration. Add Windows startup diagnostics restricted to known dependency/error categories; raw logs and secrets remain excluded.
+- Suppress PowerShell download progress rendering while retaining checksum verification.
+- Validation is in progress. Both general test jobs passed for 1.0.4, but service jobs failed and channel publication was skipped; local WSL success alone did not meet the release gate.
+
 ## 1.0.4 — 2026-09-29 (unreleased)
 
 Patch release from 1.0.3: fix Linux installation and native Audit startup without changing MCP interfaces or command policies.

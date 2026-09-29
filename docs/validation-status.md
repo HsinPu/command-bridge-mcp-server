@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 1.0.4 (unreleased), a Linux installer and native Audit startup patch. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Local validation does not publish the installation channel or resolve the untested hosted Windows CI result.
+The current package is 1.0.5 (unreleased), addressing hosted service lifecycle failures. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Local validation does not publish the installation channel.
+
+## 1.0.5 release validation in progress
+
+[The 1.0.4 run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36521866541) passed both general test jobs. Linux failed during health-failure rollback after earlier real MCP/Audit checks passed; Windows failed its initial service health check. Both service jobs failed and channel publication was skipped. The current patch clears failed-candidate systemd start limits and adds bounded, category-only Windows startup diagnostics. Updated service CI and channel publication are required before claiming this version installable through the public bootstrap.
 
 ## Previous CI result
 

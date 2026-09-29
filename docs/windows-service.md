@@ -1,5 +1,7 @@
 # Windows service installation
 
+Version 1.0.5 reports known startup dependency/error categories when service health validation fails, without printing raw logs, environment values or the bearer token. Downloads suppress PowerShell progress rendering and still verify checksums.
+
 The Windows installer deploys CommandBridge as a WinSW-managed Windows service named <code>CommandBridgeMCP</code>. The service runs as the low-privilege <code>NT AUTHORITY\LocalService</code> account, not as LocalSystem.
 
 ## Supported hosts

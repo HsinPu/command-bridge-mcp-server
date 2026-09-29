@@ -774,7 +774,10 @@ rollback_activation() {
   fi
   systemctl daemon-reload >/dev/null 2>&1 || true
   if [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" ]]; then
-    systemctl restart "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+    # Failed candidate starts can exhaust StartLimitBurst. Clear that candidate's
+    # failure counter before restarting the restored, previously verified release.
+    systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+    systemctl restart "${SERVICE_NAME}.service" || log "WARNING: Restored service could not be restarted."
   fi
   ACTIVATION_STARTED=0
   ROLLBACK_IN_PROGRESS=0

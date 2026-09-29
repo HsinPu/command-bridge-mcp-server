@@ -143,4 +143,17 @@ function Start-Service { param($Name, $ErrorAction) $script:restarted = $true }
 function Remove-Item { param($LiteralPath, [switch]$Recurse, [switch]$Force) throw 'Rollback attempted to delete the unchanged installation.' }
 Rollback-Installation
 Assert-True $script:restarted 'The previous service must be restarted without replacing its files.'
+$script:diagnostics = @()
+function Write-Log { param($Message) $script:diagnostics += $Message }
+function Get-Service { param($Name, $ErrorAction) return [pscustomobject]@{ Status = 'Stopped' } }
+function Get-ChildItem { param($LiteralPath, $Filter, $ErrorAction) return [pscustomobject]@{ FullName = 'fixture.log' } }
+function Get-Content {
+  param($LiteralPath, $Tail, $ErrorAction)
+  return @('secret=must-never-print', 'Startup dependency checks failed: audit, policyReadOnly', 'Error: EACCES secret=must-never-print')
+}
+Write-ServiceStartupDiagnostics
+Assert-True ($script:diagnostics -contains 'Startup dependency failed: audit') 'Missing audit diagnosis.'
+Assert-True ($script:diagnostics -contains 'Startup dependency failed: policyReadOnly') 'Missing policy diagnosis.'
+Assert-True ($script:diagnostics -contains 'Startup error category: EACCES') 'Missing error category.'
+Assert-True (($script:diagnostics -join '') -notmatch 'secret|must-never-print') 'Diagnostics exposed raw log contents.'
 Write-Output "Windows installer behavior checks passed."

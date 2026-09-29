@@ -76,6 +76,7 @@ function Invoke-External {
 
 function Invoke-WebDownload {
   param([string]$Uri, [string]$Destination)
+  $ProgressPreference = 'SilentlyContinue'
   Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination
 }
 
@@ -355,6 +356,26 @@ function Get-ConfigValue {
   return $line.Substring($Name.Length + 1)
 }
 
+function Write-ServiceStartupDiagnostics {
+  # Emit known categories only: never dump config, environment or raw log lines.
+  try {
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($service) { Write-Log "Service state: $($service.Status)" }
+    foreach ($file in @(Get-ChildItem -LiteralPath $LogsDirectory -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 6)) {
+      foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 80 -ErrorAction SilentlyContinue)) {
+        if ($line -match 'Startup dependency checks failed: ([A-Za-z, ]+)') {
+          foreach ($check in $Matches[1].Split(',').Trim()) {
+            if ($check -in @('accepting', 'workingDirectory', 'shells', 'audit', 'policyReadable', 'policyReadOnly')) { Write-Log "Startup dependency failed: $check" }
+          }
+        }
+        foreach ($category in @('EACCES', 'EPERM', 'ENOENT', 'ERR_MODULE_NOT_FOUND', 'EADDRINUSE', 'INJECTED_STARTUP_FAILURE')) {
+          if ($line.Contains($category)) { Write-Log "Startup error category: $category" }
+        }
+      }
+    }
+  } catch { Write-Log 'Startup diagnostics unavailable.' }
+}
+
 function Wait-ForHealth {
   $httpHost = Get-ConfigValue "COMMAND_BRIDGE_HTTP_HOST"
   $port = Get-ConfigValue "COMMAND_BRIDGE_HTTP_PORT"
@@ -375,6 +396,7 @@ function Wait-ForHealth {
       Start-Sleep -Seconds 1
     }
   }
+  Write-ServiceStartupDiagnostics
   throw "Service health check failed."
 }
 

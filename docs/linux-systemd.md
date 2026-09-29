@@ -1,5 +1,7 @@
 # Linux systemd installation
 
+Version 1.0.5 resets the failed candidate's systemd start-limit counter before restarting a restored release, so repeated failed candidate starts do not prevent recovery. Recovery failures are reported; successful recovery still requires real service verification.
+
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
 ## Supported hosts
@@ -64,8 +66,8 @@ The 1.0.1 disposable-runner tests require evidence from the deployed test SHA be
 
 ```text
 /opt/command-bridge-mcp-server/
-├── current -> releases/v1.0.4-<source-sha>
-├── releases/v1.0.4-<source-sha>/
+├── current -> releases/v1.0.5-<source-sha>
+├── releases/v1.0.5-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/

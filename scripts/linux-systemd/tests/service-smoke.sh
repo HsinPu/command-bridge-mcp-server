@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run only on a disposable CI VM: installs and removes the real service.
 set -Eeuo pipefail
+trap 'code=$?; printf "Service smoke failed at line %s (exit %s).\n" "$LINENO" "$code" >&2; sudo systemctl show command-bridge-mcp-server --property=ActiveState,SubState,Result >&2; exit "$code"' ERR
 [[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_OS:-}" == Linux ]] || { echo 'Disposable GitHub runner required.' >&2; exit 1; }
 root=$(pwd)
 config=/etc/command-bridge-mcp-server/command-bridge.env
