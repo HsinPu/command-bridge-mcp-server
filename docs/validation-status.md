@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 2.1.0, adding an opt-in Linux installer-account service mode. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.1.1, retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.1.1 validation
+
+The [2.1.0 CI run](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/36547940291) passed Ubuntu general tests but failed one Windows Audit invalid-payload test: its PowerShell child exceeded that test's five-second process limit (`ETIMEDOUT`). Service smoke and channel publication were correctly skipped. Version 2.1.1 raises only this test's launch budget to 15 seconds and adds elapsed-time diagnostics; the production Audit helper still has a five-second deadline. Cross-platform tests and service smoke for the new commit remain required before installation through the fixed bootstrap.
+
+Local 2.1.1 validation: Windows `npm test` passed 62/67 with five Linux-only skips; Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 61/67 with six Windows-only skips and all Bash syntax checks. These runs do not replace hosted Windows service or Oracle Linux 8.10 Enforcing validation.
 
 ## 2.1.0 validation
 

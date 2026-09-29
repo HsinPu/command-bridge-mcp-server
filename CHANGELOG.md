@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.1 — 2026-09-29
+
+Patch release from 2.1.0: make the Windows Audit invalid-payload test tolerate slow PowerShell startup on hosted CI. The test process now has a 15-second launch budget and reports elapsed time on failure; the production Audit helper's five-second deadline, MCP behavior and Linux installer-account mode are unchanged.
+
 ## 2.1.0 — 2026-09-29
 
 Minor release from 2.0.3: add an opt-in Linux service mode that runs as the original non-root account invoking the installer through sudo. Existing installations and the default dedicated-account mode keep their behavior.

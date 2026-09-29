@@ -13,10 +13,11 @@ test("Windows Audit startup excludes secrets and rejects invalid payload without
   assert.equal(environment.NODE_OPTIONS, undefined);
   assert.equal(environment.COMMAND_BRIDGE_CMDLET_REQUEST, undefined);
   assert.match(environment.PSModulePath ?? '', /WindowsPowerShell[\\/]v1\.0[\\/]Modules$/);
+  const started = Date.now();
   const result = spawnSync(join(process.env.SystemRoot ?? "C:\\Windows", 'System32/WindowsPowerShell/v1.0/powershell.exe'), [
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', resolve('scripts/windows/audit/write-audit-event.ps1')
-  ], { env: environment, encoding: 'utf8', windowsHide: true, timeout: 5000 });
-  assert.equal(result.error, undefined);
+  ], { env: environment, encoding: 'utf8', windowsHide: true, timeout: 15_000 });
+  assert.equal(result.error, undefined, JSON.stringify({ error: result.error?.message, elapsedMs: Date.now() - started, status: result.status }));
   assert.notEqual(result.status, 0);
   // StrictMode rejects missing fields before any Event Log write.
   assert.match(result.stderr, /schemaVersion|payload is invalid/);
