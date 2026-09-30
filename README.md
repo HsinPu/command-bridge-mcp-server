@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.2.3-blue)
+![Version](https://img.shields.io/badge/version-2.2.4-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -73,15 +73,17 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 
 ### Linux
 
-On a glibc Linux host with systemd (x64/ARM64), run this from your non-root login account. This command runs the service as that account and explicitly enables unrestricted shell commands:
+On a glibc Linux host with systemd (x64/ARM64), run this from your non-root login account. This command runs the service as that account and keeps the default command allowlist on a fresh installation:
 
 ~~~bash
-(script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --unrestricted --print-codex-setup)
+(script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --print-codex-setup)
 ~~~
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
-The Linux command above includes `--run-as-installer --unrestricted`: commands use the installing account's existing access, including only its existing passwordless `sudo -n` permissions. It does not create a dedicated service user. For a fresh installer-account installation with the allowlist, remove `--unrestricted`; for the default dedicated-account mode, remove both options. Removing `--unrestricted` on reinstall does not reset a saved unrestricted mode; see the platform guide before changing modes. This mode writes Audit events to private rotating files and adds no sudoers grant. See the [Linux installer-account guide](docs/linux-systemd.md#installer-account-mode) before using it.
+The Linux command above uses `--run-as-installer` without `--unrestricted`. A fresh installation runs as your login account with `allowlist`: commands and full argument combinations need an explicit policy. The default policies reject `rm`, `sudo -n rm`, and other unlisted commands. Running as your account does not bypass those checks or automatically allow sudo. It does not create a dedicated service user and uses private rotating file Audit without adding sudoers grants. To use the dedicated-account mode on a fresh install, omit `--run-as-installer`.
+
+**Existing installations retain their saved execution mode.** If you previously installed with `--unrestricted`, this command does not switch you back to the allowlist. Set `COMMAND_BRIDGE_EXECUTION_MODE=allowlist` in `/etc/command-bridge/command-bridge.env`, then restart the service; see [Return to allowlist mode](docs/linux-systemd.md#return-to-allowlist-mode). Unrestricted execution remains an explicit advanced choice described in the [platform guide](docs/linux-systemd.md#installer-account-mode); the allowlist is not a complete filesystem sandbox.
 
 Installer-account mode does not create a dedicated `command-bridge` user. After the new service passes MCP/Audit verification, it detects and removes an unused local system account left by older releases, while keeping the policy-reader group and existing data. Unexpected account settings or running processes stop cleanup without deleting the account; see the platform guide for recovery details.
 

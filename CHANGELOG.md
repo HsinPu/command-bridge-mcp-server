@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.4 — 2026-09-30
+
+Patch release from 2.2.3: remove unrestricted execution from both README Linux one-command installation entries. Fresh installations run as the installing account with the default command allowlist. Explain default rejection of deletion/unlisted commands, distinguish account permissions from command-policy authorization, and document how existing unrestricted installations explicitly return to allowlist mode. Saved configuration, installer defaults and runtime behavior remain unchanged.
+
 ## 2.2.3 — 2026-09-30
 
 Patch release from 2.2.2: wrap Linux copy-ready install/uninstall commands in a subshell with EXIT cleanup so download or installation failures remove the caller-owned temporary bootstrap script without changing the caller shell traps. Track and clean only the current invocation's runtime/release staging directories on installer exit, preserving promoted releases, existing runtimes and rollback data. Continue temporary cleanup even when configuration restoration fails. Add failure-injection and cleanup-boundary behavior tests. Hard kills and power loss cannot run EXIT cleanup; no automatic deletion of old deployments is introduced.

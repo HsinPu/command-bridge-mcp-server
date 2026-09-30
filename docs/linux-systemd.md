@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.4. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -21,11 +21,28 @@ Synology DSM is not a systemd host. Use Container Manager or a DSM-specific pack
 
 The fixed bootstrap selects the latest main commit that passed CI through install-channel/channel.txt. No tag, Git, or preinstalled Node.js is required. A missing channel stops installation without falling back to unverified source.
 
-The README uses installer-account mode with unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
+The README uses installer-account mode with the default allowlist on a fresh installation; it does not enable unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
 
 ```bash
 (installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup)
 ```
+
+## Return to allowlist mode
+
+Reinstallation preserves the saved execution mode. Removing `--unrestricted` from the command does not undo an earlier unrestricted installation. To restore command-policy enforcement without changing the service account, token or network settings:
+
+```bash
+sudoedit /etc/command-bridge/command-bridge.env
+```
+
+Set the existing entry to `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`, save the file, then restart and check the service:
+
+```bash
+sudo systemctl restart command-bridge
+sudo systemctl is-active command-bridge
+```
+
+With the default policies, `rm` and `sudo -n rm` are rejected, and sudo operations are not automatically permitted. Custom native policies can still allow destructive behavior; the allowlist is not a filesystem sandbox. Review permitted commands and argument combinations before enabling additional management operations. Invalid policy configuration fails closed; inspect startup diagnostics if the service cannot restart.
 
 ## Temporary files and failed installations
 
@@ -88,8 +105,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.2.3-<source-sha>
-├── releases/v2.2.3-<source-sha>/
+├── current -> releases/v2.2.4-<source-sha>
+├── releases/v2.2.4-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
