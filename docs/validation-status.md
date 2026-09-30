@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 2.2.1, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.2.2, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.2.2 validation
+
+Documentation-only patch: both README Linux install commands explicitly select installer-account mode and unrestricted shell execution, with instructions for the dedicated-account and fresh allowlist alternatives. Installer defaults and runtime behavior are unchanged. Local Windows `npm test` passed 62/67 with five Linux-only skips after rerunning outside the sandbox that blocked Node subprocesses (`EPERM`). The modified Bash fixture passed Ubuntu WSL syntax checking. Both README files retain four one-line install/uninstall commands: only the Linux installation mode options changed; fixed bootstrap URLs, Windows and uninstall commands are unchanged. Relative file links, package/lockfile versions and `git diff --check` passed. A full Linux test run, hosted CI, publication, Oracle Linux Enforcing and real reboot tests have not been performed for this version.
 
 ## 2.2.1 validation
 

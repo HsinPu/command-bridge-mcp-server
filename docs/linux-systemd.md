@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -21,7 +21,7 @@ Synology DSM is not a systemd host. Use Container Manager or a DSM-specific pack
 
 The fixed bootstrap selects the latest main commit that passed CI through install-channel/channel.txt. No tag, Git, or preinstalled Node.js is required. A missing channel stops installation without falling back to unverified source.
 
-One command:
+The README uses installer-account mode with unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
 
 ```bash
 installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
@@ -84,8 +84,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.2.1-<source-sha>
-├── releases/v2.2.1-<source-sha>/
+├── current -> releases/v2.2.2-<source-sha>
+├── releases/v2.2.2-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/

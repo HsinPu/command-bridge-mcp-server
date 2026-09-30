@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2 — 2026-09-30
+
+Patch release from 2.2.1: correct the English and Traditional Chinese README Linux copy-ready install commands to explicitly use the installing login account with unrestricted shell execution. Explain existing passwordless sudo permissions, file Audit, and how to select the dedicated-account or fresh allowlist alternatives. Clarify that removing an option on reinstall does not reset a saved execution mode. Installer defaults, MCP interfaces and runtime behavior are unchanged.
+
 ## 2.2.1 — 2026-09-30
 
 Patch release from 2.2.0: stop creating the unused dedicated Linux user in installer-account mode. Keep the policy-reader group, and detect old local system accounts by UID, home, shell and group settings before removing the `command-bridge` user only after successful service/MCP/Audit verification. Never kill its processes or use `userdel -r`; preserve configuration, tokens and working data. Failed activation retains the old account for rollback; a final cleanup failure reports an error while keeping the newly verified service active. Default dedicated-account mode still creates its required service identity. Add account-validation and real-service regression cases, and make uninstall output reflect which identities actually exist.
