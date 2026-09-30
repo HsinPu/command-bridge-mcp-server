@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 2.1.2, retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.2.0, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.2.0 validation
+
+Local checks cover both installer setup blocks, name validation, token-variable separation and client-side collision instructions. Windows `npm test` passed 62/67 with five Linux-only skips. Ubuntu WSL `npm test` passed 61/67 with six Windows-only skips, using a temporary SHA-256-verified Node.js 24.18.0 runtime. All Bash scripts passed individual syntax checks; all PowerShell scripts and WinSW XML parsed; `git diff --check` passed. The first sandboxed Windows attempt could not spawn Node test subprocesses (`EPERM`), so the reported pass is from the unrestricted rerun. Hosted Windows/Linux general tests and disposable service smoke, channel publication, Oracle Linux 8.10 Enforcing installation, and an actual reboot remain separate checks until independently observed.
 
 ## 2.1.2 validation
 

@@ -8,6 +8,22 @@ PRINT_CODEX_SETUP=0
 setup=$(print_codex_setup)
 [[ -z "$setup" ]]
 
+hostname() { printf 'TWT-PELPLMAP06D.example.com\n'; }
+[[ "$(codex_connection_name)" == 'cb_twt_pelplmap06d_example_com' ]]
+CODEX_SETUP_NAME='cb_oracle_prod'
+[[ "$(codex_connection_name)" == 'cb_oracle_prod' ]]
+if (parse_arguments --codex-name 'Bad-Name') >/dev/null 2>&1; then
+  echo 'Invalid Codex connection name was accepted'; exit 1
+fi
+if (parse_arguments --codex-name=) >/dev/null 2>&1; then
+  echo 'Empty Codex connection name was accepted'; exit 1
+fi
+CODEX_SETUP_NAME=''
+PRINT_CODEX_SETUP=0
+parse_arguments --codex-name=cb_oracle_prod
+[[ "${PRINT_CODEX_SETUP}" == 1 && "${CODEX_SETUP_NAME}" == 'cb_oracle_prod' ]]
+PRINT_CODEX_SETUP=0
+
 token=$(printf '%064d' 1)
 for allowed in '192.168.1.20' 'mcp.example.com,127.0.0.1' '[::1]' 'host-name:8800' ''; do
   validate_new_configuration "$token" '127.0.0.1' 8800 "$allowed" allowlist
@@ -69,6 +85,13 @@ read_config_value() {
 PRINT_CODEX_SETUP=1
 setup=$(print_codex_setup)
 [[ "$setup" == *'url = "http://10.20.30.40:9900/mcp"'* ]]
+[[ "$setup" == *'[mcp_servers.cb_oracle_prod]'* ]]
+[[ "$setup" == *'bearer_token_env_var = "CB_ORACLE_PROD_TOKEN"'* ]]
+[[ "$setup" == *'Never overwrite the existing connection or its token.'* ]]
+CODEX_SETUP_NAME=''
+setup=$(print_codex_setup)
+[[ "$setup" == *'[mcp_servers.cb_twt_pelplmap06d_example_com]'* ]]
+[[ "$setup" == *'bearer_token_env_var = "CB_TWT_PELPLMAP06D_EXAMPLE_COM_TOKEN"'* ]]
 saved_host=::1
 [[ "$(automatic_codex_url)" == 'http://[::1]:9900/mcp' ]]
 saved_host=127.0.0.1

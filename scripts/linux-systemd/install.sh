@@ -56,6 +56,7 @@ BUILD_ACCOUNT_ACTIVE=0
 BUILT_PACKAGE_VERSION=""
 PRINT_CODEX_SETUP=0
 CODEX_SETUP_URL=""
+CODEX_SETUP_NAME=""
 REFRESH_NETWORK=0
 RUN_AS_INSTALLER=0
 ENABLE_UNRESTRICTED=0
@@ -91,6 +92,8 @@ usage() {
     '                            The block contains the bearer token.' \
     '  --codex-url URL           Use this private HTTPS MCP URL in the setup block.' \
     '                            The URL must end in /mcp. Implies --print-codex-setup.' \
+    '  --codex-name NAME         Use this Codex client connection name instead of cb_<hostname>.' \
+    '                            Lowercase letters, digits and underscores; implies setup output.' \
     '  --run-as-installer        Run the Linux service as the original sudo login account.' \
     "                            Uses file Audit and the account's existing sudo policy." \
     '  --unrestricted            With --run-as-installer, allow free shell commands.' \
@@ -132,6 +135,18 @@ parse_arguments() {
         [[ -n "${CODEX_SETUP_URL}" ]] || fail "--codex-url requires a URL."
         PRINT_CODEX_SETUP=1
         ;;
+      --codex-name)
+        (( $# >= 2 )) || fail "--codex-name requires a name."
+        CODEX_SETUP_NAME=$2
+        validate_codex_name "${CODEX_SETUP_NAME}"
+        PRINT_CODEX_SETUP=1
+        shift
+        ;;
+      --codex-name=*)
+        CODEX_SETUP_NAME=${1#*=}
+        validate_codex_name "${CODEX_SETUP_NAME}"
+        PRINT_CODEX_SETUP=1
+        ;;
       -h | --help)
         usage
         exit 0
@@ -143,6 +158,23 @@ parse_arguments() {
     esac
     shift
   done
+}
+
+validate_codex_name() {
+  [[ "$1" =~ ^[a-z][a-z0-9_]{0,63}$ ]] || \
+    fail "--codex-name must be 1-64 characters: start with a lowercase letter, then use lowercase letters, digits or underscores."
+}
+
+codex_connection_name() {
+  local host_name normalized
+  if [[ -n "${CODEX_SETUP_NAME}" ]]; then
+    printf '%s\n' "${CODEX_SETUP_NAME}"
+    return
+  fi
+  host_name=$(hostname 2>/dev/null || uname -n)
+  normalized=$(printf '%s' "${host_name}" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C sed -E 's/[^a-z0-9]+/_/g; s/^_+//; s/_+$//')
+  [[ -n "${normalized}" ]] || normalized=host
+  printf 'cb_%s\n' "${normalized:0:61}"
 }
 
 select_service_identity() {
@@ -1265,7 +1297,7 @@ print_summary() {
 }
 
 print_codex_setup() {
-  local token
+  local token connection_name token_env
 
   [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return 0
   if [[ -z "${CODEX_SETUP_URL}" ]]; then
@@ -1276,6 +1308,8 @@ print_codex_setup() {
     printf '[CommandBridge] WARNING: The bearer token is missing or unsafe to print; the Codex setup block was not printed.\n' >&2
     return
   fi
+  connection_name=$(codex_connection_name)
+  token_env="${connection_name^^}_TOKEN"
 
   printf '\n'
   printf '%s\n' \
@@ -1283,10 +1317,12 @@ print_codex_setup() {
     'Copy it only into a trusted Codex task. Delete copied notes after setup.' \
     '' \
     '========== BEGIN COPY FOR CODEX ==========' \
-    'Configure a user-scoped MCP server named command_bridge on this Codex client.' \
+    "Configure a user-scoped MCP connection named ${connection_name} on this Codex client." \
     '' \
     'Connection details:' \
     "MCP URL: ${CODEX_SETUP_URL}" \
+    "Codex connection name: ${connection_name}" \
+    "Token environment variable: ${token_env}" \
     "Bearer token (secret): ${token}" \
     ''
 
@@ -1301,22 +1337,26 @@ print_codex_setup() {
 
   printf '%s\n' \
     'Complete these steps:' \
-    '1. Detect the local operating system. Store the bearer token in the persistent' \
-    '   user environment variable COMMAND_BRIDGE_BEARER_TOKEN. Do not store it in' \
-    '   the repository or write it directly into config.toml.' \
-    '2. Add or update this user-level Codex configuration in ~/.codex/config.toml:' \
+    '1. Inspect the existing user-level ~/.codex/config.toml and user environment.' \
+    '   If this connection name or token variable already belongs to a different' \
+    '   host, choose an unused connection name and its uppercase NAME_TOKEN variable.' \
+    '   Never overwrite the existing connection or its token. Keep the URL and' \
+    '   token variable below together when choosing a new name.' \
+    '2. Detect the client operating system. Persist this bearer token in the user' \
+    "   environment variable ${token_env}. Do not store it in the repository or TOML." \
+    '3. Add this user-level Codex configuration in ~/.codex/config.toml:' \
     '' \
-    '[mcp_servers.command_bridge]' \
+    "[mcp_servers.${connection_name}]" \
     'enabled = true' \
     "url = \"${CODEX_SETUP_URL}\"" \
-    'bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"' \
+    "bearer_token_env_var = \"${token_env}\"" \
     'startup_timeout_sec = 20.0' \
     'tool_timeout_sec = 60.0' \
     '' \
-    '3. Preserve every unrelated Codex setting. Tell me exactly what changed and' \
+    '4. Preserve every unrelated Codex setting. Tell me exactly what changed and' \
     '   whether Codex must be restarted for the new environment variable.' \
-    '4. After restart, use /mcp to verify that command_bridge is connected.' \
-    '5. Do not repeat the bearer token in your final response.' \
+    "5. After restart, use /mcp to verify that ${connection_name} is connected." \
+    '6. Do not repeat the bearer token in your final response.' \
     '========== END COPY FOR CODEX =========='
 }
 

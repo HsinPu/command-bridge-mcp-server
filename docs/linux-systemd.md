@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.1.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completes rollback when that candidate fails before Audit-reader changes. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -80,8 +80,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.1.2-<source-sha>
-├── releases/v2.1.2-<source-sha>/
+├── current -> releases/v2.2.0-<source-sha>
+├── releases/v2.2.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -166,12 +166,14 @@ sudo awk -F= '$1 == "COMMAND_BRIDGE_BEARER_TOKEN" { print substr($0, index($0, "
 
 ## Copy-ready Codex setup
 
-The output between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` is a prompt, not a shell script. Copy the entire block into a trusted Codex task on the client machine. It tells Codex to:
+The output between `BEGIN COPY FOR CODEX` and `END COPY FOR CODEX` is a prompt, not a shell script. Copy the entire block into a trusted Codex task on the client machine. The Linux host name becomes a lowercase `cb_<hostname>` Codex connection name; separators become underscores. For example, `twtpelplmap06d` yields `[mcp_servers.cb_twtpelplmap06d]` and `CB_TWTPELPLMAP06D_TOKEN`. It tells Codex to:
 
-1. Persist `COMMAND_BRIDGE_BEARER_TOKEN` as a user environment variable appropriate for the client operating system.
-2. Add or update `[mcp_servers.command_bridge]` in the user-level `~/.codex/config.toml`.
-3. Reference the token through `bearer_token_env_var` instead of placing the secret in TOML.
-4. Preserve unrelated settings, report restart requirements, and verify the MCP connection after restart.
+1. Inspect the existing user-level `~/.codex/config.toml` and user environment before editing. If the suggested name or variable belongs to a different host, choose an unused name and corresponding uppercase `<NAME>_TOKEN`; do not overwrite the existing connection or token.
+2. Persist the host's bearer token in that user environment variable on the Codex client; keep the secret out of TOML and source control.
+3. Add the selected `[mcp_servers.<name>]` entry and point `bearer_token_env_var` at its matching variable.
+4. Preserve unrelated settings, report restart requirements, and verify the named MCP connection after restart.
+
+Add `--codex-name cb_oracle_prod` to the one-command installation to choose a stable client name; `--codex-name=cb_oracle_prod` is also accepted and implies setup output. A name must start with a lowercase letter and contain only lowercase letters, digits or underscores, up to 64 characters. It affects only the printed Codex setup; the Linux service remains `command-bridge`. The installer cannot inspect client-side names or environment variables, so collision resolution happens when Codex applies the block. Identical host names can produce the same suggestion. Renaming a host later changes the default suggestion, so choose an explicit name if you require a permanent alias.
 
 `--codex-url` accepts only an HTTPS URL ending in `/mcp`, without embedded credentials, a query, or a fragment. When provided, a fresh install defaults to loopback for use behind a private HTTPS route. An explicit `COMMAND_BRIDGE_HTTP_HOST` overrides detection. For a concrete non-loopback host, allowed Hosts default to that host unless explicitly configured. Wildcard binds still require an explicit allowed Hosts list. Reinstallation preserves the bearer token and network settings unless `--refresh-network` is requested; switching to installer-account mode deliberately changes the Audit backend and working roots. The built-in listener does not provide TLS.
 

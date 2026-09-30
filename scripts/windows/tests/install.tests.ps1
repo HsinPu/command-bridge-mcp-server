@@ -25,6 +25,7 @@ $ConfigFile = Join-Path $env:TEMP ("command-bridge-test-" + [guid]::NewGuid() + 
 function New-Item { param($ItemType, $Path, [switch]$Force) }
 function Test-Path { param($LiteralPath) return $false }
 $CodexUrl = ""
+$CodexName = ""
 $PrintCodexSetup = $true
 $RefreshNetwork = $false
 $ConfigBackup = $null
@@ -61,6 +62,22 @@ try {
   }
   Wait-ForHealth
   Assert-True ((Get-AutomaticCodexUrl) -eq 'http://192.168.1.20:8800/mcp') "Automatic URL did not match listener."
+  Assert-True ((Get-CodexConnectionName -MachineName 'TWT-PELPLMAP06D.example.com') -ceq 'cb_twt_pelplmap06d_example_com') 'Default Codex connection name was not normalized.'
+  Assert-True ((Get-CodexConnectionName -MachineName '---') -ceq 'cb_host') 'Empty normalized hostname needs a safe fallback.'
+  $CodexName = 'cb_oracle_prod'
+  Assert-True ((Get-CodexConnectionName) -ceq 'cb_oracle_prod') 'Custom Codex connection name was ignored.'
+  foreach ($invalidName in @('', 'Bad-Name', '9host', 'host space', ('a' * 65))) {
+    try {
+      Assert-CodexConnectionName $invalidName
+      throw 'Expected CodexName validation failure.'
+    } catch {
+      Assert-True ($_.Exception.Message -like 'CodexName must be*') 'Invalid CodexName did not fail validation.'
+    }
+  }
+  $setup = (Print-CodexSetup) -join "`n"
+  Assert-True ($setup.Contains('[mcp_servers.cb_oracle_prod]')) 'Custom Codex TOML section missing.'
+  Assert-True ($setup.Contains('bearer_token_env_var = "CB_ORACLE_PROD_TOKEN"')) 'Per-host token variable missing.'
+  Assert-True ($setup.Contains('Never overwrite the existing connection or its token.')) 'Collision guidance missing.'
   Assert-True (((Print-CodexSetup) -join "`n") -match 'url = "http://192.168.1.20:8800/mcp"') "Printed URL missing."
   # Reinstallation must preserve saved config even if the detected address changes.
   function Test-Path { param($LiteralPath) return $true }

@@ -2,6 +2,7 @@
 param(
   [switch]$PrintCodexSetup,
   [string]$CodexUrl,
+  [string]$CodexName,
   [switch]$RefreshNetwork
 )
 
@@ -487,18 +488,42 @@ function Invoke-AuditVerification {
   }
 }
 
+function Assert-CodexConnectionName {
+  param([string]$Name)
+  if ($Name -cnotmatch '^[a-z][a-z0-9_]{0,63}$') {
+    throw 'CodexName must be 1-64 characters: start with a lowercase letter, then use lowercase letters, digits or underscores.'
+  }
+}
+
+function Get-CodexConnectionName {
+  param([string]$CustomName = $CodexName, [string]$MachineName = [System.Net.Dns]::GetHostName())
+  if ($CustomName) {
+    Assert-CodexConnectionName $CustomName
+    return $CustomName
+  }
+  $normalized = ($MachineName.ToLowerInvariant() -replace '[^a-z0-9]+', '_' -replace '^_+|_+$', '')
+  if (-not $normalized) { $normalized = 'host' }
+  if ($normalized.Length -gt 61) { $normalized = $normalized.Substring(0, 61) }
+  return "cb_$normalized"
+}
+
 function Print-CodexSetup {
-  if (-not $PrintCodexSetup -and -not $CodexUrl -and -not $RefreshNetwork) {
+  if (-not $PrintCodexSetup -and -not $CodexUrl -and -not $RefreshNetwork -and -not $CodexName) {
     return
   }
   if ([string]::IsNullOrWhiteSpace($CodexUrl)) {
     $CodexUrl = Get-AutomaticCodexUrl
   }
   $token = Get-ConfigValue "COMMAND_BRIDGE_BEARER_TOKEN"
+  $connectionName = Get-CodexConnectionName
+  $tokenEnvironment = $connectionName.ToUpperInvariant() + '_TOKEN'
   Write-Output ""
   Write-Output "SECURITY WARNING: The block below contains a bearer token."
   Write-Output "========== BEGIN COPY FOR CODEX =========="
+  Write-Output "Configure a user-scoped MCP connection named $connectionName on this Codex client."
   Write-Output "MCP URL: $CodexUrl"
+  Write-Output "Codex connection name: $connectionName"
+  Write-Output "Token environment variable: $tokenEnvironment"
   if ($CodexUrl.StartsWith("http://")) {
     Write-Output "This HTTP URL comes from the saved listener configuration; it does not provide TLS."
     Write-Output "Use it only over a trusted LAN or VPN. Firewall rules are not changed automatically."
@@ -506,13 +531,23 @@ function Print-CodexSetup {
     Write-Output "If DHCP changes this IP, update the listener, allowed hosts and client URL."
   }
   Write-Output "Bearer token (secret): $token"
-  Write-Output "[mcp_servers.command_bridge]"
+  Write-Output '1. Inspect the existing user-level ~/.codex/config.toml and user environment.'
+  Write-Output '   If this connection name or token variable already belongs to a different'
+  Write-Output '   host, choose an unused connection name and its uppercase NAME_TOKEN variable.'
+  Write-Output '   Never overwrite the existing connection or its token. Keep the URL and'
+  Write-Output '   token variable below together when choosing a new name.'
+  Write-Output '2. Detect the client operating system. Persist this bearer token in the user'
+  Write-Output "   environment variable $tokenEnvironment. Do not store it in the repository or TOML."
+  Write-Output '3. Add this user-level Codex configuration in ~/.codex/config.toml:'
+  Write-Output "[mcp_servers.$connectionName]"
   Write-Output "enabled = true"
   Write-Output ('url = "' + $CodexUrl + '"')
-  Write-Output 'bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"'
+  Write-Output ('bearer_token_env_var = "' + $tokenEnvironment + '"')
   Write-Output "startup_timeout_sec = 20.0"
   Write-Output "tool_timeout_sec = 60.0"
-  Write-Output "Do not repeat the bearer token in your final response."
+  Write-Output '4. Preserve every unrelated Codex setting and report whether a restart is needed.'
+  Write-Output "5. After restart, use /mcp to verify that $connectionName is connected."
+  Write-Output '6. Do not repeat the bearer token in your final response.'
   Write-Output "========== END COPY FOR CODEX =========="
 }
 
@@ -552,6 +587,7 @@ function Rollback-Installation {
 
 try {
   Assert-Administrator
+  if ($PSBoundParameters.ContainsKey('CodexName')) { Assert-CodexConnectionName $CodexName }
   if ($CodexUrl -and $CodexUrl -notmatch "^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?(/[A-Za-z0-9._~:@%+-]+)*/mcp/?$") {
     throw "CodexUrl must be a private HTTPS URL ending in /mcp."
   }

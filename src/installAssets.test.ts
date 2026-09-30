@@ -181,8 +181,10 @@ test("copy-ready Codex block keeps the bearer token out of config.toml", () => {
   assert.match(setupFunction, /Bearer token \(secret\): \$\{token\}/);
   assert.match(
     setupFunction,
-    /bearer_token_env_var = "COMMAND_BRIDGE_BEARER_TOKEN"/
+    /bearer_token_env_var.*token_env/
   );
+  assert.match(setupFunction, /\[mcp_servers\.\$\{connection_name\}\]/);
+  assert.match(setupFunction, /Never overwrite the existing connection or its token/);
   assert.match(setupFunction, /Do not repeat the bearer token in your final response/);
   assert.doesNotMatch(setupFunction, /^bearer_token\s*=/m);
 });

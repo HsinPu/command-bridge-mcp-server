@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.1.2-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -28,7 +28,7 @@ CommandBridge 是部署在目標主機上的 [Model Context Protocol（MCP）](h
 ## 主要功能
 
 - **一行部署**：不需預先安裝 Git 或 Node.js，從 GitHub 下載原始碼後自動建置。
-- **自動連線設定**：新安裝可偵測區網／Tailscale IPv4，同步設定監聽位址與允許的 Host，輸出可交給 Codex 的設定區塊。
+- **自動連線設定**：新安裝可偵測區網／Tailscale IPv4，同步設定監聽位址與允許的 Host，輸出含主機專屬 Codex 連線名稱和 Token 環境變數的設定區塊。
 - **執行政策**：預設使用指令白名單，另可限制 Shell、工作目錄、逾時、輸出量、環境變數與同時執行數。
 - **操作稽核**：記錄執行前後的 Audit 事件；初始稽核寫入失敗時不啟動指令。
 - **低權限服務**：Linux 使用專用 `command-bridge` 帳號；Windows 使用 `LocalService`。
@@ -90,12 +90,15 @@ Linux 可選擇讓服務以執行 `sudo` 安裝的原始非 root 帳號運作。
 ```text
 ========== BEGIN COPY FOR CODEX ==========
 MCP URL: http://192.168.1.20:8800/mcp
+Codex connection name: cb_twtpelplmap06d
+Token environment variable: CB_TWTPELPLMAP06D_TOKEN
 Bearer token (secret): <安裝時產生或保留的 Token>
-...連線設定...
+[mcp_servers.cb_twtpelplmap06d]
+...使用 CB_TWTPELPLMAP06D_TOKEN 的連線設定...
 ========== END COPY FOR CODEX ==========
 ```
 
-上方 IP 僅為示意。將安裝器印出的完整區塊貼到用戶端電腦上的受信任 Codex 工作，請它依內容設定連線；不要將 Token 貼到公開 Issue 或提交到 Git。
+上方 IP 與主機名稱僅為示意。將安裝器印出的完整區塊貼到用戶端電腦上的受信任 Codex 工作，請它依內容設定連線。每台主機預設建議 `cb_<hostname>` 名稱及對應的 `<大寫名稱>_TOKEN` 用戶端環境變數。若名稱或環境變數已屬於其他主機，設定時應改用未占用的名稱和對應變數，不得覆蓋原有連線。安裝器無法查看 Codex 用戶端電腦，這項檢查由套用設定時執行。需要固定或自訂名稱時，Linux 安裝指令可加 `--codex-name cb_oracle_prod`，Windows 可加 `-CodexName cb_oracle_prod`；名稱須以小寫英文字母開頭，後續僅用小寫英文字母、數字和底線，最多 64 字元。此選項只影響給 Codex 的建議名稱，不改服務和 MCP 工具名稱。不要將 Token 貼到公開 Issue 或提交到 Git。
 
 **不需要先填入網域。** 未指定網址的新安裝會優先選用預設路由介面上的私有 IPv4，再尋找其他私有 IPv4；找不到時退回 `127.0.0.1`，只能在同一台主機連線。已存在的設定檔不會被自動換成新 IP。
 

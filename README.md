@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.1.2-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -28,7 +28,7 @@ Each host runs its own MCP endpoint. The server supports local `stdio` and remot
 ## Features
 
 - **One-command deployment:** downloads and builds GitHub source without a preinstalled Git or Node.js.
-- **Automatic connection setup:** fresh installs can detect a LAN/Tailscale IPv4 address, configure the listener and allowed Host together, and print a setup block for Codex.
+- **Automatic connection setup:** fresh installs can detect a LAN/Tailscale IPv4 address, configure the listener and allowed Host together, and print a host-specific Codex connection name and token environment variable.
 - **Execution policy:** command allowlisting by default, with limits on shells, working directories, timeouts, output, inherited environment variables, and concurrent commands.
 - **Audit trail:** records command lifecycle events; commands do not start if the initial audit write fails.
 - **Low-privilege services:** a dedicated `command-bridge` account on Linux and `LocalService` on Windows.
@@ -90,12 +90,15 @@ After a successful installation, the terminal prints a marked block containing t
 ```text
 ========== BEGIN COPY FOR CODEX ==========
 MCP URL: http://192.168.1.20:8800/mcp
+Codex connection name: cb_twtpelplmap06d
+Token environment variable: CB_TWTPELPLMAP06D_TOKEN
 Bearer token (secret): <generated or preserved token>
-...connection settings...
+[mcp_servers.cb_twtpelplmap06d]
+...connection settings referencing CB_TWTPELPLMAP06D_TOKEN...
 ========== END COPY FOR CODEX ==========
 ```
 
-The IP above is an example. Paste the complete installer-generated block into a trusted Codex task on the client computer and ask it to configure the connection. Do not post the token in public issues or commit it to Git.
+The IP and host name above are examples. Paste the complete installer-generated block into a trusted Codex task on the client computer and ask it to configure the connection. Each host gets a suggested `cb_<hostname>` alias and matching `<UPPERCASE_ALIAS>_TOKEN` client environment variable. If either already belongs to a different host, choose an unused alias and matching token variable without overwriting the existing connection. The installer cannot inspect the client computer; this check happens when applying the printed block. To set a stable or preferred alias, add `--codex-name cb_oracle_prod` on Linux or `-CodexName cb_oracle_prod` on Windows. Names must start with a lowercase letter and contain only lowercase letters, digits, or underscores (up to 64 characters). This changes the Codex client suggestion only; service and MCP tool names stay the same. Do not post the token in public issues or commit it to Git.
 
 **A domain name is not required.** Without an explicit URL, a fresh installation prefers a private IPv4 address on a default-route interface, then looks for other private IPv4 addresses. If none is found, it falls back to `127.0.0.1`, which works only on the same host. Existing configuration files are not automatically changed to a newly detected IP.
 
