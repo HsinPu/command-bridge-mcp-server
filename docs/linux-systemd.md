@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -24,15 +24,19 @@ The fixed bootstrap selects the latest main commit that passed CI through instal
 The README uses installer-account mode with unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup && rm -f "${installer}"
+(installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup)
 ```
+
+## Temporary files and failed installations
+
+The copy-ready commands use a subshell EXIT trap to remove the downloaded bootstrap script even when curl or installation fails; they do not replace traps in your interactive shell. Bootstrap source archives, build files and the isolated npm cache are removed on normal exit. Runtime/release `.new.<pid>` directories are tracked before creation and removed on exit only when their parent is a managed deployment directory and their suffix matches this invocation; symlinks and unrelated paths are rejected. Promoted runtimes/releases, previous versions, tokens and work data are retained. Configuration restoration failures are reported without preventing temporary-file cleanup. Cleanup errors are reported; SIGKILL, power loss and filesystem failures can leave files, and old remnants are not swept automatically.
 
 ## Installer-account mode
 
 If MCP commands must use the same access as the non-root login account that runs the installer through `sudo`, opt in explicitly. For unrestricted shell commands under that account, including only its **existing** passwordless sudo permissions:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --run-as-installer --unrestricted && rm -f "${installer}"
+(installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --run-as-installer --unrestricted)
 ```
 
 On a fresh install, leave off `--unrestricted` to keep the default allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation preserves the saved execution mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
@@ -50,7 +54,7 @@ No URL prompt is required. A fresh installation selects a private IPv4 address, 
 To use an existing private HTTPS route instead:
 
 ```bash
-installer="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp" && rm -f "${installer}"
+(installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --codex-url "https://command-bridge.example.com/mcp")
 ```
 
 > [!CAUTION]
@@ -84,8 +88,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.2.2-<source-sha>
-├── releases/v2.2.2-<source-sha>/
+├── current -> releases/v2.2.3-<source-sha>
+├── releases/v2.2.3-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -225,7 +229,7 @@ Journald retention is a host policy. This installer does not change global journ
 The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge</code>:
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --yes && rm -f "${uninstaller}"
+(uninstaller="$(mktemp)" && trap 'rm -f -- "${uninstaller}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --yes)
 ```
 
 It preserves these resources for a future reinstall:
@@ -250,7 +254,7 @@ For a permanent full purge:
 > This deletes the bearer token, configuration, all CommandBridge work and file Audit data, and the dedicated `command-bridge` service identity. It never deletes the installer login account or its home. The uninstaller refuses to delete the dedicated identity when its home, shell, group membership, or running processes do not match the expected low-privilege service account.
 
 ```bash
-uninstaller="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --purge --yes && rm -f "${uninstaller}"
+(uninstaller="$(mktemp)" && trap 'rm -f -- "${uninstaller}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --purge --yes)
 ```
 
 Both modes use the same lock as the installer, accept only the fixed CommandBridge paths, verify that the service is inactive and disabled before deleting application files, and can be run repeatedly.

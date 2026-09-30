@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 2.2.2, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.2.3, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.2.3 validation
+
+Windows `npm test` passed 62/69 with seven Linux-only skips. Ubuntu WSL, using a temporary checksum-verified Node.js 24.18.0 runtime, passed 63/69 with six Windows-only skips. Behavior tests inject runtime/release copy failures, curl failure and installer failure, assert temporary files are removed and original exit codes preserved, and retain promoted runtime, old releases, unrelated staging paths and symlink targets. Configuration-restore failure does not prevent staging cleanup. All Bash scripts and the Audit reader passed syntax checks. Package/lockfile versions, the four README entry commands, relative file links and `git diff --check` passed. Windows install/uninstall commands and bootstrap URLs are unchanged. This patch does not sweep old deployments or guarantee cleanup after SIGKILL/power loss. Hosted service smoke, channel publication, Oracle Linux Enforcing and actual reboot checks have not run for this version.
 
 ## 2.2.2 validation
 

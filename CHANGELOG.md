@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.3 — 2026-09-30
+
+Patch release from 2.2.2: wrap Linux copy-ready install/uninstall commands in a subshell with EXIT cleanup so download or installation failures remove the caller-owned temporary bootstrap script without changing the caller shell traps. Track and clean only the current invocation's runtime/release staging directories on installer exit, preserving promoted releases, existing runtimes and rollback data. Continue temporary cleanup even when configuration restoration fails. Add failure-injection and cleanup-boundary behavior tests. Hard kills and power loss cannot run EXIT cleanup; no automatic deletion of old deployments is introduced.
+
 ## 2.2.2 — 2026-09-30
 
 Patch release from 2.2.1: correct the English and Traditional Chinese README Linux copy-ready install commands to explicitly use the installing login account with unrestricted shell execution. Explain existing passwordless sudo permissions, file Audit, and how to select the dedicated-account or fresh allowlist alternatives. Clarify that removing an option on reinstall does not reset a saved execution mode. Installer defaults, MCP interfaces and runtime behavior are unchanged.

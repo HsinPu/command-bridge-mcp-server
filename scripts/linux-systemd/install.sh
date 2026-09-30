@@ -39,6 +39,8 @@ readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 
 TEMP_DIR=""
+RUNTIME_STAGING=""
+RELEASE_STAGING=""
 PREVIOUS_RELEASE=""
 PREVIOUS_RUNTIME=""
 ACTIVATION_STARTED=0
@@ -263,12 +265,29 @@ automatic_codex_url() {
   printf 'http://%s:%s/mcp\n' "${host}" "${port}"
 }
 
+cleanup_staging() {
+  local path parent name
+  for path in "${RUNTIME_STAGING}" "${RELEASE_STAGING}"; do
+    [[ -n "${path}" ]] || continue
+    parent=${path%/*}
+    name=${path##*/}
+    # Only this invocation's staging directories; never sweep other releases.
+    if [[ ( "${parent}" == "${RUNTIME_DIR}" || "${parent}" == "${RELEASES_DIR}" ) &&
+          "${name}" == .*".new.$$" && ! -L "${path}" ]]; then
+      rm -rf -- "${path}" || log "WARNING: Could not remove deployment staging directory."
+    else
+      log "WARNING: Refusing cleanup of an unexpected staging path."
+    fi
+  done
+}
+
 cleanup() {
+  cleanup_staging
   if [[ "${INSTALL_SUCCEEDED}" == 0 && "${LEGACY_ROLLBACK_DONE}" == 0 ]]; then
     if [[ "${LEGACY_MIGRATION}" == 1 && -n "${LEGACY_CONFIG_BACKUP}" && -f "${LEGACY_CONFIG_BACKUP}" ]]; then
-      install -m 0600 "${LEGACY_CONFIG_BACKUP}" "${CONFIG_FILE}"
+      install -m 0600 "${LEGACY_CONFIG_BACKUP}" "${CONFIG_FILE}" || log "WARNING: Could not restore configuration."
     elif [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
-      install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
+      install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}" || log "WARNING: Could not restore configuration."
     fi
     if [[ -n "${CONFIG_BACKUP}" || -n "${LEGACY_CONFIG_BACKUP}" ]]; then
       restore_selinux_path "${CONFIG_FILE}" || log "WARNING: Restored configuration SELinux label could not be verified."
@@ -970,14 +989,16 @@ install_runtime_and_release() {
   local source_dir="${TEMP_DIR}/source"
   local runtime_name="node-v${NODE_VERSION}-linux-${node_arch}"
   local runtime_final="${RUNTIME_DIR}/${runtime_name}"
-  local runtime_staging="${RUNTIME_DIR}/.${runtime_name}.new.$$"
+  RUNTIME_STAGING="${RUNTIME_DIR}/.${runtime_name}.new.$$"
+  local runtime_staging=${RUNTIME_STAGING}
   local package_version release_name release_final release_staging path
 
   package_version=${BUILT_PACKAGE_VERSION}
   [[ -n "${package_version}" ]] || fail "Built package version was not recorded."
   release_name="v${package_version}-${SOURCE_REF}"
   release_final="${RELEASES_DIR}/${release_name}"
-  release_staging="${RELEASES_DIR}/.${release_name}.new.$$"
+  RELEASE_STAGING="${RELEASES_DIR}/.${release_name}.new.$$"
+  release_staging=${RELEASE_STAGING}
 
   install -d -m 0755 -o root -g root "${INSTALL_ROOT}" "${RELEASES_DIR}" "${RUNTIME_DIR}"
   for path in "${INSTALL_ROOT}" "${RELEASES_DIR}" "${RUNTIME_DIR}"; do

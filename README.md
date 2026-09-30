@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.2.2-blue)
+![Version](https://img.shields.io/badge/version-2.2.3-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -76,7 +76,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 On a glibc Linux host with systemd (x64/ARM64), run this from your non-root login account. This command runs the service as that account and explicitly enables unrestricted shell commands:
 
 ~~~bash
-script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --unrestricted --print-codex-setup && rm -f "$script"
+(script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --unrestricted --print-codex-setup)
 ~~~
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
@@ -84,6 +84,8 @@ Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux a
 The Linux command above includes `--run-as-installer --unrestricted`: commands use the installing account's existing access, including only its existing passwordless `sudo -n` permissions. It does not create a dedicated service user. For a fresh installer-account installation with the allowlist, remove `--unrestricted`; for the default dedicated-account mode, remove both options. Removing `--unrestricted` on reinstall does not reset a saved unrestricted mode; see the platform guide before changing modes. This mode writes Audit events to private rotating files and adds no sudoers grant. See the [Linux installer-account guide](docs/linux-systemd.md#installer-account-mode) before using it.
 
 Installer-account mode does not create a dedicated `command-bridge` user. After the new service passes MCP/Audit verification, it detects and removes an unused local system account left by older releases, while keeping the policy-reader group and existing data. Unexpected account settings or running processes stop cleanup without deleting the account; see the platform guide for recovery details.
+
+Linux copy-ready commands remove the temporary downloaded script on both success and failure. Installer exit cleanup removes only its own unpromoted deployment staging directories; installed runtimes, releases and data remain. Hard kills or power loss can leave temporary files.
 
 ## Connect Codex
 
@@ -173,7 +175,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 ### Linux
 
 ~~~bash
-script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --uninstall --yes && rm -f "$script"
+(script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --uninstall --yes)
 ~~~
 
 Detailed settings and full data removal: [Windows guide](docs/windows-service.md) · [Linux guide](docs/linux-systemd.md).
