@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0 — 2026-09-30
+
+Major release from 2.2.4: Linux installation now always selects command execution mode from the current installer options. Without `--unrestricted` it writes `allowlist`, even when reinstalling a previously unrestricted deployment; explicit `--run-as-installer --unrestricted` writes `unrestricted`. Saved mode and inherited execution-mode environment values no longer select installation mode. Other configuration, tokens, network settings, roots and policies remain preserved, with rollback on validation failure.
+
+**Migration:** users requiring unrestricted commands must pass `--unrestricted` on every install or upgrade. The README command now restores allowlist enforcement automatically. Default policies reject unlisted/deletion commands but are not a filesystem sandbox. MCP interfaces and Windows installation behavior are unchanged. Add behavior and service-switch tests, and synchronize both README files and platform guidance.
+
 ## 2.2.4 — 2026-09-30
 
 Patch release from 2.2.3: remove unrestricted execution from both README Linux one-command installation entries. Fresh installations run as the installing account with the default command allowlist. Explain default rejection of deletion/unlisted commands, distinguish account permissions from command-policy authorization, and document how existing unrestricted installations explicitly return to allowlist mode. Saved configuration, installer defaults and runtime behavior remain unchanged.

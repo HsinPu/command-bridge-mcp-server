@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.2.4-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -73,7 +73,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 
 ### Linux
 
-On a glibc Linux host with systemd (x64/ARM64), run this from your non-root login account. This command runs the service as that account and keeps the default command allowlist on a fresh installation:
+On a glibc Linux host with systemd (x64/ARM64), run this from your non-root login account. This command runs the service as that account and sets the command allowlist on both new installs and reinstalls:
 
 ~~~bash
 (script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --print-codex-setup)
@@ -81,9 +81,9 @@ On a glibc Linux host with systemd (x64/ARM64), run this from your non-root logi
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
-The Linux command above uses `--run-as-installer` without `--unrestricted`. A fresh installation runs as your login account with `allowlist`: commands and full argument combinations need an explicit policy. The default policies reject `rm`, `sudo -n rm`, and other unlisted commands. Running as your account does not bypass those checks or automatically allow sudo. It does not create a dedicated service user and uses private rotating file Audit without adding sudoers grants. To use the dedicated-account mode on a fresh install, omit `--run-as-installer`.
+The Linux command above uses `--run-as-installer` without `--unrestricted`. New installations and reinstalls run as your login account with `allowlist`: commands and full argument combinations need an explicit policy. The default policies reject `rm`, `sudo -n rm`, and other unlisted commands. Running as your account does not bypass those checks or automatically allow sudo. It does not create a dedicated service user and uses private rotating file Audit without adding sudoers grants. To use the dedicated-account mode on a fresh install, omit `--run-as-installer`.
 
-**Existing installations retain their saved execution mode.** If you previously installed with `--unrestricted`, this command does not switch you back to the allowlist. Set `COMMAND_BRIDGE_EXECUTION_MODE=allowlist` in `/etc/command-bridge/command-bridge.env`, then restart the service; see [Return to allowlist mode](docs/linux-systemd.md#return-to-allowlist-mode). Unrestricted execution remains an explicit advanced choice described in the [platform guide](docs/linux-systemd.md#installer-account-mode); the allowlist is not a complete filesystem sandbox.
+**Since 3.0.0, each Linux installation selects the execution mode from its options.** Without `--unrestricted`, it writes `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`, including when upgrading an unrestricted installation. To retain unrestricted execution, explicitly pass `--unrestricted` together with `--run-as-installer` on every install. Tokens, network settings, custom roots and policy files are preserved; failed validation restores the prior settings. See [Return to allowlist mode](docs/linux-systemd.md#return-to-allowlist-mode). Unrestricted execution remains an explicit advanced choice described in the [platform guide](docs/linux-systemd.md#installer-account-mode); the allowlist is not a complete filesystem sandbox.
 
 Installer-account mode does not create a dedicated `command-bridge` user. After the new service passes MCP/Audit verification, it detects and removes an unused local system account left by older releases, while keeping the policy-reader group and existing data. Unexpected account settings or running processes stop cleanup without deleting the account; see the platform guide for recovery details.
 

@@ -112,6 +112,11 @@ npm start
 - 以後修改 Linux 安裝／卸載或路徑時，須檢查新安裝、1.x 遷移、失敗回復、資料與 Token 保留、真實 MCP／Audit 驗證，以及一般解除安裝和 `--purge`。僅驗證 systemd 啟用與服務重啟時，不宣稱已完成實際主機重開機測試。
 - 2.0.2 起，Linux 部署不得保留 `/tmp` 的 SELinux context；須依主機政策修復並驗證新建及重用的 Runtime／程式、設定、服務與 Audit 資產標籤。2.0.3 起需相容 Oracle Linux 8.10 不支援 `restorecon -x` 的情況，以 `find -P -xdev` 控制遍歷範圍。Enforcing／Permissive 缺工具或驗證失敗時停止啟用，回復後也須驗證才重啟。不得關閉 SELinux、自動放寬政策或遞迴重標使用者工作資料；WSL Disabled 與模擬測試不代表 Oracle Linux Enforcing 驗證通過。
 
+## Linux 安裝模式選擇（3.0.0 起）
+
+- Linux 每次安裝／重裝依本次參數寫入執行模式：未加 `--unrestricted` 為 `allowlist`；明確搭配 `--run-as-installer --unrestricted` 才為 `unrestricted`。既有或繼承環境的執行模式不得覆蓋本次選擇。其他設定與 Token 保留，切換驗證失敗須回復原設定和服務。
+- 中英文 README 主指令保持白名單；文件須提醒需自由 Shell 的舊用戶每次重裝都要明確加參數。測試涵蓋新裝、雙向切換、重裝、缺失模式欄位、設定保留與失敗回復。
+
 ## 初步檢查紀錄（2026-09-22）
 
 初次觀察已在 1.0.0 實作中處理；以下不代表完整安全稽核認證。

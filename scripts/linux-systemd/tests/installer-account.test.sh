@@ -114,6 +114,7 @@ ensure_installer_state
 [[ ! -e "$work/outside/audit" ]]
 rm "$INSTALLER_STATE_DIR/CommandBridgeMCP"
 COMMAND_BRIDGE_BEARER_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+COMMAND_BRIDGE_EXECUTION_MODE=unrestricted
 mkdir -p "$(dirname "$CONFIG_FILE")"
 install_configuration
 grep -Fxq 'COMMAND_BRIDGE_AUDIT_BACKEND=file' "$CONFIG_FILE"
@@ -133,7 +134,31 @@ EXISTING_INSTALLER_MODE=1 ENABLE_UNRESTRICTED=0
 sed -i "s|^COMMAND_BRIDGE_ALLOWED_ROOTS=.*|COMMAND_BRIDGE_ALLOWED_ROOTS=${INSTALLER_HOME}|" "$CONFIG_FILE"
 cp "$CONFIG_FILE" "$work/custom.env"
 install_configuration
+cmp "$work/custom.env" "$CONFIG_BACKUP"
+sed 's/^COMMAND_BRIDGE_EXECUTION_MODE=.*/COMMAND_BRIDGE_EXECUTION_MODE=allowlist/' "$work/custom.env" > "$work/expected.env"
+cmp "$work/expected.env" "$CONFIG_FILE"
+# A failed mode switch restores the complete previous configuration on exit.
+cp "$work/custom.env" "$CONFIG_FILE"
+if (
+  INSTALL_SUCCEEDED=0
+  trap cleanup EXIT
+  install_configuration
+  grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$CONFIG_FILE"
+  exit 37
+); then echo 'Failure injection did not fail'; exit 1; else [[ "$?" == 37 ]]; fi
 cmp "$work/custom.env" "$CONFIG_FILE"
+# Explicit unrestricted wins; omission resets it, including noncanonical entries.
+ENABLE_UNRESTRICTED=1
+install_configuration
+cmp "$work/custom.env" "$CONFIG_FILE"
+ENABLE_UNRESTRICTED=0
+sed -i 's/^COMMAND_BRIDGE_EXECUTION_MODE=.*/ export COMMAND_BRIDGE_EXECUTION_MODE = unrestricted/' "$CONFIG_FILE"
+install_configuration
+grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$CONFIG_FILE"
+sed -i '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$CONFIG_FILE"
+install_configuration
+[[ "$(grep -c '^COMMAND_BRIDGE_EXECUTION_MODE=' "$CONFIG_FILE")" == 1 ]]
+grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$CONFIG_FILE"
 
 mkdir -p "$AUDIT_READER_DIR" "$(dirname "$AUDIT_SUDOERS_FILE")"
 printf 'original helper\n' > "$AUDIT_READER_PATH"

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.2.4-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -73,7 +73,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 
 ### Linux
 
-適用使用 systemd 的 glibc Linux（x64／ARM64）。請從你的非 root 登入帳號執行；下列指令會以該帳號運作服務，全新安裝預設保留指令白名單：
+適用使用 systemd 的 glibc Linux（x64／ARM64）。請從你的非 root 登入帳號執行；下列指令會以該帳號運作服務，新安裝與重新安裝都會設定為指令白名單：
 
 ~~~bash
 (script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --print-codex-setup)
@@ -81,9 +81,9 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
-上方 Linux 指令只包含 `--run-as-installer`，不包含 `--unrestricted`。全新安裝會以登入者帳號運作並使用 `allowlist`，指令及完整參數組合都必須有明確政策。預設政策拒絕 `rm`、`sudo -n rm` 及其他未列入的指令；使用登入者帳號不會略過這些檢查，也不代表自動允許 sudo。此模式不建立專用服務使用者，使用私有輪替檔案記錄 Audit，不新增 sudoers 授權。全新安裝若要使用專用帳號模式，移除 `--run-as-installer`。
+上方 Linux 指令只包含 `--run-as-installer`，不包含 `--unrestricted`。新安裝與重新安裝都會以登入者帳號運作並使用 `allowlist`，指令及完整參數組合都必須有明確政策。預設政策拒絕 `rm`、`sudo -n rm` 及其他未列入的指令；使用登入者帳號不會略過這些檢查，也不代表自動允許 sudo。此模式不建立專用服務使用者，使用私有輪替檔案記錄 Audit，不新增 sudoers 授權。全新安裝若要使用專用帳號模式，移除 `--run-as-installer`。
 
-**既有安裝會保留已儲存的執行模式。** 若之前使用過 `--unrestricted`，重新執行此指令不會自動改回白名單。請將 `/etc/command-bridge/command-bridge.env` 的 `COMMAND_BRIDGE_EXECUTION_MODE` 改為 `allowlist`，再重啟服務，詳見 [恢復白名單模式](docs/linux-systemd.md#return-to-allowlist-mode)。自由 Shell 仍是需明確啟用的進階選項，操作說明放在 [平台指南](docs/linux-systemd.md#installer-account-mode)；白名單不是完整檔案系統沙箱。
+**3.0.0 起，每次 Linux 安裝都依本次參數設定執行模式。** 未加 `--unrestricted` 就寫入 `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`，舊版自由 Shell 安裝也會切回白名單。要保留自由 Shell，必須每次安裝都明確搭配 `--run-as-installer --unrestricted`。Token、網路設定、自訂工作根目錄與政策檔仍保留；驗證失敗會回復原設定。詳見 [恢復白名單模式](docs/linux-systemd.md#return-to-allowlist-mode)。自由 Shell 仍是需明確啟用的進階選項，操作說明放在 [平台指南](docs/linux-systemd.md#installer-account-mode)；白名單不是完整檔案系統沙箱。
 
 安裝者帳號模式不再建立專用的 `command-bridge` 使用者。新服務通過 MCP／Audit 驗證後，會偵測並移除舊版留下、已不使用的本機系統帳號，保留政策讀取群組及既有資料。帳號設定異常或仍有程序執行時會停止清理並保留帳號；處理方式見平台指南。
 

@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 2.2.4, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 3.0.0, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 3.0.0 validation
+
+Linux install/reinstall now explicitly selects mode from installer options. Behavior checks cover inherited unrestricted settings ignored on fresh install, explicit opt-in, resetting an old unrestricted deployment, missing/noncanonical mode entries, token/custom roots preserved, and restoration of the complete old configuration after an injected failure. Local Windows `npm test` passed 62/69 with seven Linux-only skips. Ubuntu WSL, using temporary checksum-verified Node.js 24.18.0, passed 63/69 with six Windows-only skips. All Bash scripts and the Audit reader passed syntax checks; package/lockfile versions, README entry commands, relative file links and `git diff --check` passed. Disposable Linux service smoke now includes unrestricted-to-allowlist and explicit unrestricted restoration with unchanged non-mode settings and real MCP/Audit verification; that hosted service test has not run for this source. Hosted CI/channel, Oracle Linux Enforcing and actual reboot remain unverified for this version.
 
 ## 2.2.4 validation
 

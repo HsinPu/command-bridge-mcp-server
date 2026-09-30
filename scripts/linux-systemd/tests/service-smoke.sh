@@ -139,6 +139,15 @@ sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge 
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
 if getent passwd command-bridge >/dev/null; then echo 'Legacy installer-mode user was not removed.'; exit 1; fi
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
+preserved_settings=$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer
+sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$config"
+[[ "$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)" == "$preserved_settings" ]]
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+# Explicit opt-in on the following reinstall restores unrestricted execution.
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+[[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
 sudo bash /opt/command-bridge/current/uninstall.sh --yes
 sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]

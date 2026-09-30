@@ -1101,6 +1101,8 @@ validate_new_configuration() {
 
 install_configuration() {
   local token host port allowed_hosts execution_mode audit_backend allowed_roots
+  execution_mode=allowlist
+  if [[ "${ENABLE_UNRESTRICTED}" == 1 ]]; then execution_mode=unrestricted; fi
 
   install -d -m 0750 -o root -g "${SERVICE_GROUP}" "${CONFIG_DIR}"
   if [[ ! -e "${CONFIG_DIR}/policy.json" ]]; then
@@ -1108,32 +1110,31 @@ install_configuration() {
   fi
 
   if [[ -e "${CONFIG_FILE}" ]]; then
-    log "Preserving existing configuration and bearer token at ${CONFIG_FILE}."
+    log "Preserving configuration and bearer token; setting execution mode to ${execution_mode}."
     chown root:root "${CONFIG_FILE}"
     chmod 0600 "${CONFIG_FILE}"
-    if [[ "${REFRESH_NETWORK}" == 1 || "${ENABLE_UNRESTRICTED}" == 1 || ( "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ) ]]; then
-      CONFIG_BACKUP="${TEMP_DIR}/previous-config.env"
-      cp -p "${CONFIG_FILE}" "${CONFIG_BACKUP}"
-      if [[ "${REFRESH_NETWORK}" == 1 ]]; then host=$(detect_private_ipv4); fi
-      if [[ "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ]]; then
-        allowed_roots="${INSTALLER_HOME}:/"
-      fi
-      awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v unrestricted="${ENABLE_UNRESTRICTED}" '
-        /^COMMAND_BRIDGE_HTTP_HOST=/ && host != "" { print "COMMAND_BRIDGE_HTTP_HOST=" host; next }
-        /^COMMAND_BRIDGE_ALLOWED_HOSTS=/ && host != "" { print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host; next }
-        /^COMMAND_BRIDGE_AUDIT_BACKEND=/ && roots != "" { print "COMMAND_BRIDGE_AUDIT_BACKEND=file"; audit_seen=1; next }
-        /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ && roots != "" { print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots; roots_seen=1; next }
-        /^COMMAND_BRIDGE_EXECUTION_MODE=/ && unrestricted == "1" { print "COMMAND_BRIDGE_EXECUTION_MODE=unrestricted"; mode_seen=1; next }
-        { print }
-        END {
-          if (roots != "" && !audit_seen) print "COMMAND_BRIDGE_AUDIT_BACKEND=file"
-          if (roots != "" && !roots_seen) print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots
-          if (unrestricted == "1" && !mode_seen) print "COMMAND_BRIDGE_EXECUTION_MODE=unrestricted"
-        }
-      ' "${CONFIG_FILE}" > "${CONFIG_FILE}.new"
-      chmod 0600 "${CONFIG_FILE}.new"
-      mv "${CONFIG_FILE}.new" "${CONFIG_FILE}"
+    # Every install selects the mode from its explicit option, even on reinstall.
+    CONFIG_BACKUP="${TEMP_DIR}/previous-config.env"
+    cp -p "${CONFIG_FILE}" "${CONFIG_BACKUP}"
+    if [[ "${REFRESH_NETWORK}" == 1 ]]; then host=$(detect_private_ipv4); fi
+    if [[ "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ]]; then
+      allowed_roots="${INSTALLER_HOME}:/"
     fi
+    awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v mode="${execution_mode}" '
+      /^COMMAND_BRIDGE_HTTP_HOST=/ && host != "" { print "COMMAND_BRIDGE_HTTP_HOST=" host; next }
+      /^COMMAND_BRIDGE_ALLOWED_HOSTS=/ && host != "" { print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host; next }
+      /^COMMAND_BRIDGE_AUDIT_BACKEND=/ && roots != "" { print "COMMAND_BRIDGE_AUDIT_BACKEND=file"; audit_seen=1; next }
+      /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ && roots != "" { print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots; roots_seen=1; next }
+      /^[[:space:]]*(export[[:space:]]+)?COMMAND_BRIDGE_EXECUTION_MODE[[:space:]]*=/ { print "COMMAND_BRIDGE_EXECUTION_MODE=" mode; mode_seen=1; next }
+      { print }
+      END {
+        if (roots != "" && !audit_seen) print "COMMAND_BRIDGE_AUDIT_BACKEND=file"
+        if (roots != "" && !roots_seen) print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots
+        if (!mode_seen) print "COMMAND_BRIDGE_EXECUTION_MODE=" mode
+      }
+    ' "${CONFIG_FILE}" > "${CONFIG_FILE}.new"
+    chmod 0600 "${CONFIG_FILE}.new"
+    mv "${CONFIG_FILE}.new" "${CONFIG_FILE}"
     return
   fi
 
@@ -1144,8 +1145,6 @@ install_configuration() {
   if [[ -z "${allowed_hosts}" && "${host}" != "127.0.0.1" && "${host}" != "localhost" && "${host}" != "::1" && "${host}" != "0.0.0.0" && "${host}" != "::" ]]; then
     allowed_hosts=${host}
   fi
-  execution_mode=${COMMAND_BRIDGE_EXECUTION_MODE:-allowlist}
-  if [[ "${ENABLE_UNRESTRICTED}" == 1 ]]; then execution_mode=unrestricted; fi
   audit_backend=journal
   allowed_roots=${WORK_DIR_PATH}
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then

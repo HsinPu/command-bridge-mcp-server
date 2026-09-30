@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.4. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 3.0.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -21,7 +21,7 @@ Synology DSM is not a systemd host. Use Container Manager or a DSM-specific pack
 
 The fixed bootstrap selects the latest main commit that passed CI through install-channel/channel.txt. No tag, Git, or preinstalled Node.js is required. A missing channel stops installation without falling back to unverified source.
 
-The README uses installer-account mode with the default allowlist on a fresh installation; it does not enable unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
+The README uses installer-account mode with the allowlist on every installation; it does not enable unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
 
 ```bash
 (installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup)
@@ -29,7 +29,9 @@ The README uses installer-account mode with the default allowlist on a fresh ins
 
 ## Return to allowlist mode
 
-Reinstallation preserves the saved execution mode. Removing `--unrestricted` from the command does not undo an earlier unrestricted installation. To restore command-policy enforcement without changing the service account, token or network settings:
+Since 3.0.0, rerun the README command to restore allowlist enforcement: every Linux installation writes `allowlist` unless `--unrestricted` is explicitly passed with `--run-as-installer`. Saved execution mode and inherited `COMMAND_BRIDGE_EXECUTION_MODE` environment values no longer override that selection. This is a breaking upgrade change: add `--unrestricted` on every install if unrestricted execution is required. Tokens, network settings, custom roots and policy files are preserved; validation failures restore the old configuration and service.
+
+For an existing installation before upgrading, you can also change the mode manually:
 
 ```bash
 sudoedit /etc/command-bridge/command-bridge.env
@@ -56,7 +58,7 @@ If MCP commands must use the same access as the non-root login account that runs
 (installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --run-as-installer --unrestricted)
 ```
 
-On a fresh install, leave off `--unrestricted` to keep the default allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation preserves the saved execution mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
+On every install, leave off `--unrestricted` to select allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation selects the mode from the current options rather than the saved mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
 
 The installer-account unit uses that account's UID and normal group memberships, plus the dedicated `command-bridge` group to read the root-owned policy. It allows home access and normal filesystem permissions. It does not apply the dedicated account's read-only filesystem, private temporary directory or capability ceiling, so existing sudo privileges remain usable. Anyone holding the bearer token can invoke the selected command policy using this account. Keep the endpoint on a trusted LAN/VPN or private HTTPS route and guard the token accordingly.
 
@@ -105,8 +107,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.2.4-<source-sha>
-├── releases/v2.2.4-<source-sha>/
+├── current -> releases/v3.0.0-<source-sha>
+├── releases/v3.0.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
