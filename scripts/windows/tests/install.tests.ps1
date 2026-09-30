@@ -22,12 +22,15 @@ $ConfigRoot = $env:TEMP
 $WorkDirectory = "TestDrive:\work"
 $LogsDirectory = "TestDrive:\logs"
 $ConfigFile = Join-Path $env:TEMP ("command-bridge-test-" + [guid]::NewGuid() + ".env")
-function New-Item { param($ItemType, $Path, [switch]$Force) }
+function New-Item { param($ItemType, $Path, [switch]$Force, $ErrorAction) }
 function Test-Path { param($LiteralPath) return $false }
 $CodexUrl = ""
 $CodexName = ""
 $PrintCodexSetup = $true
 $RefreshNetwork = $false
+$EnableFileTransfer = $false
+$EnableUpload = $false
+$EnableDownload = $false
 $ConfigBackup = $null
 $script:addresses = @(
   [pscustomobject]@{ IPAddress = '8.8.8.8'; InterfaceIndex = 1; SkipAsSource = $false },
@@ -95,6 +98,18 @@ try {
   $env:COMMAND_BRIDGE_HTTP_PORT = '9900'
   New-SecureConfiguration
   Assert-True ((Get-AutomaticCodexUrl) -eq 'http://10.20.30.40:9900/mcp') "Explicit host/port ignored."
+  $beforeTransfer = [IO.File]::ReadAllText($ConfigFile)
+  [IO.File]::AppendAllText($ConfigFile, "`r`nCOMMAND_BRIDGE_TRANSFER_ROOT=C:\private`r`nCOMMAND_BRIDGE_TRANSFER_MAX_BYTES=1024`r`nCOMMAND_BRIDGE_DOWNLOAD_ENABLED=false`r`n")
+  $EnableUpload = $true
+  Set-TransferConfiguration
+  $transferText = [IO.File]::ReadAllText($ConfigFile)
+  Assert-True ($transferText.Contains('COMMAND_BRIDGE_UPLOAD_ENABLED=true')) 'Upload opt-in missing.'
+  Assert-True ($transferText.Contains('COMMAND_BRIDGE_DOWNLOAD_ENABLED=false')) 'Upload unexpectedly enabled download.'
+  Assert-True ($transferText.Contains('COMMAND_BRIDGE_TRANSFER_ROOT=C:\private')) 'Custom root changed.'
+  Assert-True ($transferText.Contains('COMMAND_BRIDGE_TRANSFER_MAX_BYTES=1024')) 'Reduced size limit changed.'
+  $EnableUpload = $false
+  Set-TransferConfiguration
+  Assert-True ([IO.File]::ReadAllText($ConfigFile) -eq $transferText) 'Omitted transfer switches reset saved settings.'
 } finally {
   foreach ($key in $savedEnvironment.Keys) {
     [Environment]::SetEnvironmentVariable($key, $savedEnvironment[$key])

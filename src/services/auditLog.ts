@@ -25,6 +25,7 @@ export type AuditPhase = "attempted" | "blocked" | "completed" | "failed";
 export type AuditSource = "http-bearer" | "stdio";
 
 export interface CommandAuditEvent {
+  fileTransfer?: FileTransferAudit;
   schemaVersion: typeof AUDIT_SCHEMA_VERSION;
   event: typeof AUDIT_EVENT_NAME;
   auditId: string;
@@ -44,6 +45,7 @@ export interface CommandAuditEvent {
 }
 
 export interface CreateAuditEventInput {
+  fileTransfer?: FileTransferAudit;
   auditId?: string;
   timestamp?: string;
   phase: AuditPhase;
@@ -92,6 +94,7 @@ export function createAuditLog(config: AppConfig): AuditLog {
 
 export function createAuditEvent(input: CreateAuditEventInput): CommandAuditEvent {
   return {
+    ...(input.fileTransfer ? { fileTransfer: input.fileTransfer } : {}),
     schemaVersion: AUDIT_SCHEMA_VERSION,
     event: AUDIT_EVENT_NAME,
     auditId: input.auditId ?? randomUUID(),
@@ -332,6 +335,15 @@ function parseJsonRecord(value: string): Record<string, unknown> | undefined {
   }
 }
 
+export interface FileTransferAudit {
+  schemaVersion: 1;
+  operation: "upload" | "download";
+  path: string | null;
+  size: number | null;
+  sha256: string | null;
+  committed: boolean;
+}
+
 function normalizeAuditEvent(value: unknown): CommandAuditEvent | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -380,7 +392,17 @@ function normalizeAuditEvent(value: unknown): CommandAuditEvent | undefined {
     return undefined;
   }
 
+  let transfer: FileTransferAudit | undefined;
+  if (value.fileTransfer !== undefined) {
+    const item = value.fileTransfer;
+    if (!isRecord(item) || item.schemaVersion !== 1 || (item.operation !== "upload" && item.operation !== "download") ||
+        !(item.path === null || (typeof item.path === "string" && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/.test(item.path))) ||
+        !(item.size === null || (Number.isSafeInteger(item.size) && Number(item.size) >= 0)) ||
+        !(item.sha256 === null || (typeof item.sha256 === "string" && /^[a-f0-9]{64}$/.test(item.sha256))) || typeof item.committed !== "boolean") return undefined;
+    transfer = { schemaVersion: 1, operation: item.operation as "upload" | "download", path: item.path as string | null, size: item.size as number | null, sha256: item.sha256 as string | null, committed: item.committed };
+  }
   return {
+    ...(transfer ? { fileTransfer: transfer } : {}),
     schemaVersion: AUDIT_SCHEMA_VERSION,
     event: AUDIT_EVENT_NAME,
     auditId,

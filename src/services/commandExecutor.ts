@@ -6,6 +6,7 @@ import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import { FileTransferService } from "./fileTransferService.js";
 import {
   assertCommandAllowed,
   resolveWorkingDirectory,
@@ -63,6 +64,7 @@ const defaultEnvironmentKeys = [
 ];
 
 export class CommandExecutor {
+  readonly files: FileTransferService;
   private activeCommands = 0;
   private stopping = false;
   private readonly running = new Set<() => void>();
@@ -71,7 +73,7 @@ export class CommandExecutor {
   constructor(
     private readonly config: AppConfig,
     private readonly auditLog: AuditLog = createAuditLog(config)
-  ) {}
+  ) { this.files = new FileTransferService(config, auditLog); }
 
   execute(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
     const operation = this.executeInternal(request, signal);
@@ -81,12 +83,13 @@ export class CommandExecutor {
   }
 
   async shutdown(): Promise<void> {
+    const fileShutdown = this.files.shutdown();
     this.stopping = true;
     for (const stop of this.running) stop();
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        Promise.allSettled([...this.pending]),
+        Promise.allSettled([...this.pending, fileShutdown]),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
     } finally { if (timer) clearTimeout(timer); }

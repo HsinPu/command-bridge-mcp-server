@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 3.0.0, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 3.1.0, adding opt-in safe file upload/download while retaining existing command tools and installer-account service modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 3.1.0 validation
+
+New transfer tests exercise binary/SHA-256 round trips, exclusive publication, unsafe names, symlinks/hardlinks, malformed Base64, size limits, private root permissions, cancellation, Audit failures and concurrency-slot recovery. A real Linux HTTP MCP upload/download exceeds the former 100 KiB body limit; authentication precedes parsing and oversized bodies are rejected. Windows tests reject unverified ACLs and prove a native directory lease permits file publication while blocking directory rename, then releases it.
+
+Local Windows npm test passed 66/77 with 11 platform skips; Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 69/77 with eight platform skips. PowerShell/WinSW and all Bash scripts are checked individually. Real installed service transfer/Audit probes have been added to both disposable hosted smoke workflows but have not run for this source. Local Windows lock/ACL rejection tests do not prove successful LocalService deployment. Hosted CI, install-channel publication, Oracle Linux Enforcing and actual reboot remain unverified. This version intentionally supports flat filenames without overwrite.
 
 ## 3.0.0 validation
 

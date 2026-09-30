@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.0 — 2026-09-30
+
+MINOR from 3.0.0: add optional `command_bridge_upload_file` and `command_bridge_download_file` with independent default-disabled permissions, SHA-256/canonical Base64 validation and a maximum 5 MiB file size. Preserve existing tools and command policies; fix the optional absent Bearer Token schema for local stdio while retaining required HTTP authentication. Restrict transfers to private managed directories and flat filenames; reject links, special files, unsafe ACLs and existing destinations. First release deliberately does not support conditional overwrite because portable filesystem APIs cannot guarantee atomic compare-and-replace.
+
+Anchor Linux operations to an open directory descriptor; protect Windows directory identity with verified ACLs and a native handle. Add bounded transfers, cancellation/cleanup, optional Audit metadata without content, authenticated bounded HTTP bodies, installer opt-in switches and real MCP/Audit service smoke probes. Synchronize configuration, README files and platform guidance. Hosted CI/service and installation-channel publication remain subject to actual verification.
+
 ## 3.0.0 — 2026-09-30
 
 Major release from 2.2.4: Linux installation now always selects command execution mode from the current installer options. Without `--unrestricted` it writes `allowlist`, even when reinstalling a previously unrestricted deployment; explicit `--run-as-installer --unrestricted` writes `unrestricted`. Saved mode and inherited execution-mode environment values no longer select installation mode. Other configuration, tokens, network settings, roots and policies remain preserved, with rollback on validation failure.

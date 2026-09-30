@@ -13,7 +13,7 @@ for mode in runtime release; do
   MODE="$mode" bash -c '
     source "$CLEANUP_FIXTURE/installer.sh"
     TEMP_DIR="$CLEANUP_FIXTURE/source"
-    BUILT_PACKAGE_VERSION=3.0.0
+    BUILT_PACKAGE_VERSION=3.1.0
     SOURCE_REF=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     restore_selinux_path() { :; }
     restore_current_selinux_layout() { :; }

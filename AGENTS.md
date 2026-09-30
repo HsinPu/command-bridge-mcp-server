@@ -7,7 +7,7 @@ CommandBridge MCP 是跨平台的 MCP Server，讓 MCP 用戶端透過本機 std
 - 技術：TypeScript、Node.js、ES modules、MCP SDK、Express、Zod。
 - 2026-09-22 初次檢視時版本為 0.3.0（pre-1.0）；目前版本以 package.json 為準。
 - Node.js 需求為 >=20；目前 CI 使用 24.18.0，涵蓋 Ubuntu 與 Windows。
-- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events。
+- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events，以及 3.1.0 新增的 command_bridge_upload_file、command_bridge_download_file。
 - 預設使用 stdio 與 allowlist 執行模式；HTTP 模式需要至少 32 字元的 Bearer Token。
 
 ## 程式結構
@@ -93,6 +93,9 @@ npm start
 - 純介紹或排版修改時，仍須升 PATCH 並更新 CHANGELOG；確認四個一行指令沒有意外變動、相對文件連結有效、中英文內容一致，並執行 git diff --check。不需為排版新增程式測試。
 
 ## 修改時應維持的行為
+
+- 3.1.0 檔案傳輸授權獨立於 allowlist／unrestricted，預設皆關閉。只支援受保護傳輸目錄內的安全單層檔名、一般檔案與最多 5 MiB，不覆寫、不執行内容、不透過 Shell／sudo／網址抓取。Linux 固定目錄 descriptor；Windows 驗證 ACL 並持有原生目錄鎖，無法保護時拒絕。詳見 docs/file-transfer.md。
+- 檔案 Audit 沿用 schemaVersion 1 的選用 fileTransfer metadata，不記錄內容。初始失敗不操作；終結失敗不回傳下載內容，上傳已發布時明確回報可能存在，不宣稱回復。逾時後實際 I/O 未結束前不得釋放名額。
 
 - 維持 Linux／Windows 相容性；涉及 Shell、路徑、程序終止或服務部署時需分別考慮兩個平台。
 - 預設採 allowlist；不要在未獲使用者要求時放寬為 unrestricted。

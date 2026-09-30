@@ -160,6 +160,29 @@ install_configuration
 [[ "$(grep -c '^COMMAND_BRIDGE_EXECUTION_MODE=' "$CONFIG_FILE")" == 1 ]]
 grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$CONFIG_FILE"
 
+# Execute provisioning only inside this fixture, with the selected identity mocked.
+runuser() {
+  [[ "$1" == -u && "$2" == alice && "$3" == -- ]]
+  shift 3
+  "$@"
+}
+ENABLE_UPLOAD=1 ENABLE_DOWNLOAD=0
+install_configuration
+grep -Fxq 'COMMAND_BRIDGE_UPLOAD_ENABLED=true' "$CONFIG_FILE"
+grep -Fxq 'COMMAND_BRIDGE_DOWNLOAD_ENABLED=false' "$CONFIG_FILE"
+[[ "$(stat -c %a "$INSTALLER_STATE_DIR/transfers")" == 700 ]]
+sed -i 's/^COMMAND_BRIDGE_TRANSFER_MAX_BYTES=.*/COMMAND_BRIDGE_TRANSFER_MAX_BYTES=1024/' "$CONFIG_FILE"
+ENABLE_UPLOAD=0
+cp "$CONFIG_FILE" "$work/transfer.env"
+install_configuration
+cmp "$work/transfer.env" "$CONFIG_FILE"
+mv "$INSTALLER_STATE_DIR/transfers" "$INSTALLER_STATE_DIR/safe-transfers"
+ln -s "$work/outside" "$INSTALLER_STATE_DIR/transfers"
+if ( ENABLE_UPLOAD=1 install_configuration ) > "$work/transfer-failure" 2>&1; then echo 'Symlink provisioning accepted.'; exit 1; fi
+[[ "$(stat -c %a "$work/outside")" == 700 ]]
+rm "$INSTALLER_STATE_DIR/transfers"
+mv "$INSTALLER_STATE_DIR/safe-transfers" "$INSTALLER_STATE_DIR/transfers"
+
 mkdir -p "$AUDIT_READER_DIR" "$(dirname "$AUDIT_SUDOERS_FILE")"
 printf 'original helper\n' > "$AUDIT_READER_PATH"
 printf 'original rule\n' > "$AUDIT_SUDOERS_FILE"

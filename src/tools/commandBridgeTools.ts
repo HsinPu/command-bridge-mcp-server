@@ -8,6 +8,7 @@ import { getSystemInfo } from "../services/systemInfoService.js";
 
 const shellSchema = z.enum(["bash", "sh", "powershell", "cmd"]);
 const auditEventSchema = z.object({
+  fileTransfer: z.object({ schemaVersion: z.literal(1), operation: z.enum(["upload", "download"]), path: z.string().nullable(), size: z.number().nullable(), sha256: z.string().nullable(), committed: z.boolean() }).optional(),
   schemaVersion: z.literal(1),
   event: z.literal("command_bridge.audit"),
   auditId: z.string(),
@@ -31,6 +32,18 @@ export function registerCommandBridgeTools(
   config: AppConfig,
   executor: CommandExecutor
 ): void {
+  server.registerTool("command_bridge_upload_file", {
+    title: "Upload file to transfer directory",
+    description: "Upload a Base64 file into the dedicated transfer directory. Independently disabled by default. Single filenames only, at most 5 MiB, no overwrite, no execution or extraction.",
+    inputSchema: { path: z.string().max(120), contentBase64: z.string().max(6990508), sha256: z.string().regex(/^[a-f0-9]{64}$/), overwrite: z.boolean().optional(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/).optional() },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
+  }, async (request, extra) => { try { return toToolResult(await executor.files.upload(request, extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_download_file", {
+    title: "Download file from transfer directory",
+    description: "Read a regular file from the dedicated transfer directory as Base64 with SHA-256. Independently disabled by default. Single filenames only and at most 5 MiB; no arbitrary host paths.",
+    inputSchema: { path: z.string().max(120) },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, async ({ path }, extra) => { try { return toToolResult(await executor.files.download(path, extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
   server.registerTool(
     "command_bridge_get_system_info",
     {
@@ -48,6 +61,7 @@ export function registerCommandBridgeTools(
         totalMemoryMb: z.number().int(),
         freeMemoryMb: z.number().int(),
         executionMode: z.enum(["allowlist", "unrestricted"]),
+        fileTransfer: z.object({ uploadEnabled: z.boolean(), downloadEnabled: z.boolean(), maxBytes: z.number().int(), overwrite: z.literal(false) }).optional(),
         allowedShells: z.array(shellSchema),
         allowedCommands: z.array(z.string()),
         allowedRoots: z.array(z.string()),

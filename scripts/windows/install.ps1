@@ -3,7 +3,10 @@ param(
   [switch]$PrintCodexSetup,
   [string]$CodexUrl,
   [string]$CodexName,
-  [switch]$RefreshNetwork
+  [switch]$RefreshNetwork,
+  [switch]$EnableFileTransfer,
+  [switch]$EnableUpload,
+  [switch]$EnableDownload
 )
 
 Set-StrictMode -Version Latest
@@ -37,6 +40,7 @@ $PreviousMoved = $false
 $ActivationSucceeded = $false
 $InstallCommitted = $false
 $EventSourceCreated = $false
+$TransferDirectoryCreated = $false
 
 function Write-Log {
   param([string]$Message)
@@ -236,6 +240,7 @@ function New-SecureConfiguration {
       $updated = [regex]::Replace($updated, '(?m)^COMMAND_BRIDGE_ALLOWED_HOSTS=.*$', "COMMAND_BRIDGE_ALLOWED_HOSTS=$httpHost")
       [IO.File]::WriteAllText($ConfigFile, $updated, (New-Object System.Text.UTF8Encoding($false)))
     }
+    Set-TransferConfiguration
     return
   }
 
@@ -289,6 +294,29 @@ function New-SecureConfiguration {
   )
   $encoding = New-Object System.Text.UTF8Encoding($false)
   [IO.File]::WriteAllText($ConfigFile, (($lines -join $newLine) + $newLine), $encoding)
+  Set-TransferConfiguration
+}
+
+function Set-TransferConfiguration {
+  if (-not $EnableFileTransfer -and -not $EnableUpload -and -not $EnableDownload) { return }
+  $root = Join-Path $ConfigRoot 'transfers'
+  if ((Test-Path -LiteralPath $root) -and ((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unsafe transfer directory.' }
+  if (-not (Test-Path -LiteralPath $root)) {
+    New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+    $script:TransferDirectoryCreated = $true
+  }
+  $text = [IO.File]::ReadAllText($ConfigFile)
+  if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = $text }
+  $values = @{}
+  if ($text -notmatch '(?m)^COMMAND_BRIDGE_TRANSFER_ROOT=') { $values.COMMAND_BRIDGE_TRANSFER_ROOT=$root }
+  if ($text -notmatch '(?m)^COMMAND_BRIDGE_TRANSFER_MAX_BYTES=') { $values.COMMAND_BRIDGE_TRANSFER_MAX_BYTES='5242880' }
+  if ($EnableFileTransfer -or $EnableUpload) { $values.COMMAND_BRIDGE_UPLOAD_ENABLED='true' }
+  if ($EnableFileTransfer -or $EnableDownload) { $values.COMMAND_BRIDGE_DOWNLOAD_ENABLED='true' }
+  foreach ($key in $values.Keys) {
+    if ($text -match "(?m)^$key=") { $text = [regex]::Replace($text, "(?m)^$key=.*$", "$key=$($values[$key])") }
+    else { $text += "`r`n$key=$($values[$key])`r`n" }
+  }
+  [IO.File]::WriteAllText($ConfigFile, $text, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 function Copy-ApplicationPayload {
@@ -320,6 +348,12 @@ function Set-RestrictedAcl {
   Invoke-External $icacls @($ConfigRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")
   Invoke-External $icacls @($WorkDirectory, "/grant:r", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M")
   Invoke-External $icacls @($LogsDirectory, "/grant:r", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M")
+  $transferRoot = Join-Path $ConfigRoot 'transfers'
+  if ($script:TransferDirectoryCreated) {
+    if ((Get-Item -LiteralPath $transferRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unsafe transfer directory.' }
+    Invoke-External $icacls @($transferRoot, '/inheritance:r', '/setowner', '*S-1-5-32-544')
+    Invoke-External $icacls @($transferRoot, '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(RX,WD)', '*S-1-5-19:(OI)(CI)(IO)M')
+  }
 }
 
 function Register-EventLogSource {

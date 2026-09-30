@@ -72,7 +72,9 @@ try {
   [IO.File]::WriteAllText($config, $validConfig)
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Yes')
   if (-not (Test-Path -LiteralPath $config) -or -not (Test-Path -LiteralPath $preserved)) { throw 'Uninstall deleted preserved data.' }
-  Run-Installer (Join-Path $root 'scripts\windows\install.ps1')
+  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-EnableFileTransfer')
+  & $node (Join-Path $root 'scripts\verify-file-transfer.mjs') $config
+  if ($LASTEXITCODE -ne 0) { throw 'Service file transfer/Audit verification failed.' }
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Purge', '-Yes')
   if (Test-Path -LiteralPath $config) { throw 'Purge left configuration.' }
 } finally {

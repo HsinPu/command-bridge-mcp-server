@@ -62,6 +62,8 @@ CODEX_SETUP_NAME=""
 REFRESH_NETWORK=0
 RUN_AS_INSTALLER=0
 ENABLE_UNRESTRICTED=0
+ENABLE_UPLOAD=0
+ENABLE_DOWNLOAD=0
 EXISTING_INSTALLER_MODE=0
 INSTALLER_UID=""
 INSTALLER_GID=""
@@ -99,6 +101,9 @@ usage() {
     '  --run-as-installer        Run the Linux service as the original sudo login account.' \
     "                            Uses file Audit and the account's existing sudo policy." \
     '  --unrestricted            With --run-as-installer, allow free shell commands.' \
+    '  --enable-file-transfer    Enable uploads and downloads in a private transfer directory.' \
+    '  --enable-upload           Enable only upload (preserve saved download setting).' \
+    '  --enable-download         Enable only download (preserve saved upload setting).' \
     '  -h, --help                Show this help and exit.'
 }
 
@@ -126,6 +131,9 @@ parse_arguments() {
       --unrestricted)
         ENABLE_UNRESTRICTED=1
         ;;
+      --enable-file-transfer) ENABLE_UPLOAD=1; ENABLE_DOWNLOAD=1 ;;
+      --enable-upload) ENABLE_UPLOAD=1 ;;
+      --enable-download) ENABLE_DOWNLOAD=1 ;;
       --codex-url)
         (( $# >= 2 )) || fail "--codex-url requires a URL."
         CODEX_SETUP_URL=$2
@@ -1103,6 +1111,18 @@ install_configuration() {
   local token host port allowed_hosts execution_mode audit_backend allowed_roots
   execution_mode=allowlist
   if [[ "${ENABLE_UNRESTRICTED}" == 1 ]]; then execution_mode=unrestricted; fi
+  local transfer_root="${STATE_DIR}/transfers"
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then transfer_root="${INSTALLER_STATE_DIR}/transfers"; fi
+  if [[ "${ENABLE_UPLOAD}" == 1 || "${ENABLE_DOWNLOAD}" == 1 ]]; then
+    [[ ! -L "${transfer_root}" ]] || fail "Transfer directory must not be a symlink."
+    local transfer_user=${SERVICE_USER}
+    if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then transfer_user=${SUDO_USER}; fi
+    # Never perform privileged chown/chmod through a service-writable path.
+    runuser -u "${transfer_user}" -- env -i PATH=/usr/bin:/bin bash -c '
+      if [[ ! -e "$1" && ! -L "$1" ]]; then mkdir -m 0700 -- "$1"; fi
+      [[ -d "$1" && ! -L "$1" && "$(stat -c %u -- "$1")" == "$(id -u)" && "$(stat -c %a -- "$1")" == 700 ]]
+    ' bash "${transfer_root}" || fail "Transfer directory must be private and owned by the service account."
+  fi
 
   install -d -m 0750 -o root -g "${SERVICE_GROUP}" "${CONFIG_DIR}"
   if [[ ! -e "${CONFIG_DIR}/policy.json" ]]; then
@@ -1120,7 +1140,10 @@ install_configuration() {
     if [[ "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ]]; then
       allowed_roots="${INSTALLER_HOME}:/"
     fi
-    awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v mode="${execution_mode}" '
+    awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v mode="${execution_mode}" -v upload="${ENABLE_UPLOAD}" -v download="${ENABLE_DOWNLOAD}" -v transfer="${transfer_root}" '
+      /^COMMAND_BRIDGE_UPLOAD_ENABLED=/ && upload == "1" { print "COMMAND_BRIDGE_UPLOAD_ENABLED=true"; upload_seen=1; next }
+      /^COMMAND_BRIDGE_DOWNLOAD_ENABLED=/ && download == "1" { print "COMMAND_BRIDGE_DOWNLOAD_ENABLED=true"; download_seen=1; next }
+      /^COMMAND_BRIDGE_TRANSFER_ROOT=/ { transfer_seen=1 }
       /^COMMAND_BRIDGE_HTTP_HOST=/ && host != "" { print "COMMAND_BRIDGE_HTTP_HOST=" host; next }
       /^COMMAND_BRIDGE_ALLOWED_HOSTS=/ && host != "" { print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host; next }
       /^COMMAND_BRIDGE_AUDIT_BACKEND=/ && roots != "" { print "COMMAND_BRIDGE_AUDIT_BACKEND=file"; audit_seen=1; next }
@@ -1128,6 +1151,9 @@ install_configuration() {
       /^[[:space:]]*(export[[:space:]]+)?COMMAND_BRIDGE_EXECUTION_MODE[[:space:]]*=/ { print "COMMAND_BRIDGE_EXECUTION_MODE=" mode; mode_seen=1; next }
       { print }
       END {
+        if (upload == "1" && !upload_seen) print "COMMAND_BRIDGE_UPLOAD_ENABLED=true"
+        if (download == "1" && !download_seen) print "COMMAND_BRIDGE_DOWNLOAD_ENABLED=true"
+        if ((upload == "1" || download == "1") && !transfer_seen) print "COMMAND_BRIDGE_TRANSFER_ROOT=" transfer
         if (roots != "" && !audit_seen) print "COMMAND_BRIDGE_AUDIT_BACKEND=file"
         if (roots != "" && !roots_seen) print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots
         if (!mode_seen) print "COMMAND_BRIDGE_EXECUTION_MODE=" mode
@@ -1156,6 +1182,10 @@ install_configuration() {
   umask 077
   {
     printf 'COMMAND_BRIDGE_TRANSPORT=http\n'
+    printf 'COMMAND_BRIDGE_UPLOAD_ENABLED=%s\n' "$([[ "${ENABLE_UPLOAD}" == 1 ]] && echo true || echo false)"
+    printf 'COMMAND_BRIDGE_DOWNLOAD_ENABLED=%s\n' "$([[ "${ENABLE_DOWNLOAD}" == 1 ]] && echo true || echo false)"
+    printf 'COMMAND_BRIDGE_TRANSFER_ROOT=%s\n' "${transfer_root}"
+    printf 'COMMAND_BRIDGE_TRANSFER_MAX_BYTES=5242880\n'
     printf 'COMMAND_BRIDGE_AUDIT_BACKEND=%s\n' "${audit_backend}"
     printf 'COMMAND_BRIDGE_POLICY_FILE=%s/policy.json\n' "${CONFIG_DIR}"
     printf 'COMMAND_BRIDGE_BEARER_TOKEN=%s\n' "${token}"
