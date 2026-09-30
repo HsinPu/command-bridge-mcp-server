@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.1 — 2026-09-30
+
+Patch release from 2.2.0: stop creating the unused dedicated Linux user in installer-account mode. Keep the policy-reader group, and detect old local system accounts by UID, home, shell and group settings before removing the `command-bridge` user only after successful service/MCP/Audit verification. Never kill its processes or use `userdel -r`; preserve configuration, tokens and working data. Failed activation retains the old account for rollback; a final cleanup failure reports an error while keeping the newly verified service active. Default dedicated-account mode still creates its required service identity. Add account-validation and real-service regression cases, and make uninstall output reflect which identities actually exist.
+
 ## 2.2.0 — 2026-09-30
 
 Minor release from 2.1.2: one-command Linux and Windows installers now print a Codex client connection name derived from the host name and a matching, connection-specific bearer-token environment variable. Multiple hosts can therefore be configured on one Codex client without reusing the former fixed `command_bridge` alias or `COMMAND_BRIDGE_BEARER_TOKEN` client variable. `--codex-name NAME` / `-CodexName NAME` optionally selects a stable client alias; these options affect only the printed setup block. The block tells Codex to inspect existing client settings and choose an unused alias and token variable when a different host already uses the suggestion, preserving existing connections. Service names, MCP tool names, server authentication and saved tokens are unchanged.

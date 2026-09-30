@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.1-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -82,6 +82,8 @@ script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/comman
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
 Linux 可選擇讓服務以執行 `sudo` 安裝的原始非 root 帳號運作。全新安裝加上 `--run-as-installer` 仍保留白名單；再加 `--unrestricted` 才允許以該帳號自由執行 Shell 指令，包括既有免密的 `sudo -n` 權限。重新安裝會保留已儲存的執行模式。此模式使用私有輪替檔案記錄 Audit，不新增 sudoers 授權。使用前請閱讀 [Linux 安裝者帳號指南](docs/linux-systemd.md#installer-account-mode)。
+
+安裝者帳號模式不再建立專用的 `command-bridge` 使用者。新服務通過 MCP／Audit 驗證後，會偵測並移除舊版留下、已不使用的本機系統帳號，保留政策讀取群組及既有資料。帳號設定異常或仍有程序執行時會停止清理並保留帳號；處理方式見平台指南。
 
 ## 連線 Codex
 

@@ -685,6 +685,14 @@ build_source() {
 
 ensure_service_account() {
   local nologin_shell
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
+    validate_unused_service_account
+    if ! getent group "${SERVICE_GROUP}" >/dev/null; then
+      groupadd --system "${SERVICE_GROUP}"
+    fi
+    # The login account only needs the policy-reader group, not another user.
+    return 0
+  fi
   nologin_shell=$(command -v nologin || true)
   [[ -n "${nologin_shell}" ]] || nologin_shell=/bin/false
 
@@ -710,6 +718,53 @@ ensure_service_account() {
   install -d -m 0555 -o root -g root "${SERVICE_HOME}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${STATE_DIR}"
   install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${WORK_DIR_PATH}"
+}
+
+validate_unused_service_account() {
+  local entry name uid gid home shell uid_min
+  entry=$(getent passwd "${SERVICE_USER}" || true)
+  [[ -n "${entry}" ]] || return 0
+  IFS=: read -r name _ uid gid _ home shell <<< "${entry}"
+  [[ "${name}" == "${SERVICE_USER}" && "${uid}" =~ ^[0-9]+$ && "${gid}" =~ ^[0-9]+$ ]] && \
+    (( 10#${uid} > 0 && 10#${uid} != 10#${INSTALLER_UID} && 10#${gid} > 0 )) || \
+    fail "Refusing to remove an unexpected service identity."
+  uid_min=$(awk '$1 == "UID_MIN" { print $2; exit }' /etc/login.defs)
+  uid_min=${uid_min:-1000}
+  [[ "${uid_min}" =~ ^[0-9]+$ ]] && (( 10#${uid} < 10#${uid_min} )) || \
+    fail "The command-bridge account is not a system account; inspect it manually."
+  awk -F: -v name="${name}" -v uid="${uid}" '$1 == name && $3 == uid { found=1 } END { exit !found }' /etc/passwd || \
+    fail "The command-bridge account is not a local managed account."
+  [[ "${home}" == "${SERVICE_HOME}" && "$(id -gn "${SERVICE_USER}")" == "${SERVICE_GROUP}" && "$(id -nG "${SERVICE_USER}")" == "${SERVICE_GROUP}" ]] || \
+    fail "The command-bridge account has unexpected home/group settings; it was not removed."
+  case "${shell}" in */nologin | /bin/false) ;; *) fail "The command-bridge account has a login shell; it was not removed." ;; esac
+}
+
+remove_unused_service_account() {
+  local entry uid gid process_status
+  [[ "${RUN_AS_INSTALLER}" == 1 ]] || return 0
+  validate_unused_service_account
+  entry=$(getent passwd "${SERVICE_USER}" || true)
+  [[ -n "${entry}" ]] || { log "Unused service account is already absent."; return 0; }
+  [[ "${INSTALL_SUCCEEDED}" == 1 && "${ACTIVATION_STARTED}" == 0 ]] || \
+    fail "Refusing account cleanup before successful installation commitment."
+  [[ "$(systemctl show "${SERVICE_NAME}.service" --property=User --value)" == "${INSTALLER_UID}" ]] && \
+    systemctl is-active --quiet "${SERVICE_NAME}.service" || \
+    fail "Refusing account cleanup before the installer-account service is active."
+  IFS=: read -r _ _ uid gid _ <<< "${entry}"
+  if pgrep -u "${uid}" >/dev/null 2>&1; then
+    fail "The old command-bridge account still has processes; no processes were killed and the account was kept."
+  else
+    process_status=$?
+    [[ "${process_status}" == 1 ]] || fail "Could not check old service-account processes; the account was kept."
+  fi
+  userdel "${SERVICE_USER}" || fail "Verified service is active, but the old service account could not be removed."
+  # Some shadow-utils configurations also remove a same-name primary group.
+  if ! getent group "${SERVICE_GROUP}" >/dev/null; then
+    groupadd --system --gid "${gid}" "${SERVICE_GROUP}" || \
+      fail "Old user removed, but the policy-reader group could not be restored."
+  fi
+  # Do not use userdel -r or recursively chown/delete preserved working data.
+  log "Removed unused command-bridge user; policy-reader group and existing data were preserved."
 }
 
 ensure_installer_state() {
@@ -1412,6 +1467,8 @@ main() {
   finish_legacy_migration
   ACTIVATION_STARTED=0
   INSTALL_SUCCEEDED=1
+  # Account deletion is the final step after verification/rollback commitment.
+  remove_unused_service_account
   print_summary
   print_codex_setup
 }

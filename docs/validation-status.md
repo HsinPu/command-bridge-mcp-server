@@ -1,6 +1,12 @@
 # Architecture implementation validation
 
-The current package is 2.2.0, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 2.2.1, adding host-specific Codex setup names while retaining the opt-in Linux installer-account service mode from 2.1.0. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 2.2.1 validation
+
+Account cleanup now has behavior tests for fresh installer mode, old managed identities, active processes, process-query errors, unexpected home/shell/UID/groups, deletion failure, pre-verification rejection and policy-group recreation. The disposable Linux service smoke covers a failed mode switch retaining the old identity, a successful switch removing it, a fresh installer-account installation without it, and reinstallation removing a simulated older leftover while retaining configuration and work data. Hosted CI must be verified for this source version before publication; Oracle Linux 8.10 Enforcing and actual reboot verification remain separate.
+
+Local Windows `npm test` passed 62/67 with five Linux-only skips. Ubuntu WSL with checksum-verified Node.js 24.18.0 passed 61/67 with six Windows-only skips. All Bash scripts passed individual syntax checks, and PowerShell scripts and WinSW XML parsed. Hosted service smoke and installation-channel publication require a successful run for the final commit; these local checks do not prove real host account removal.
 
 ## 2.2.0 validation
 

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.1-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -82,6 +82,8 @@ script="$(mktemp)" && curl -fsSL https://raw.githubusercontent.com/HsinPu/comman
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
 Linux can optionally run the service as the non-root account that invoked `sudo` during installation. On a fresh install, `--run-as-installer` keeps the allowlist; add `--unrestricted` to allow shell commands under that account, including its existing non-interactive `sudo -n` permissions. Reinstallation retains the saved execution mode. This mode writes Audit events to private rotating files and adds no sudoers grant. See the [Linux installer-account guide](docs/linux-systemd.md#installer-account-mode) before using it.
+
+Installer-account mode does not create a dedicated `command-bridge` user. After the new service passes MCP/Audit verification, it detects and removes an unused local system account left by older releases, while keeping the policy-reader group and existing data. Unexpected account settings or running processes stop cleanup without deleting the account; see the platform guide for recovery details.
 
 ## Connect Codex
 

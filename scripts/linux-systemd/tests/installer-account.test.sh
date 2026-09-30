@@ -12,6 +12,8 @@ sed -e "s|/opt/command-bridge|${work}/opt/command-bridge|g" \
     -e "s|/etc/systemd/system/|${work}/units/|g" \
     -e "s|/usr/local/libexec/|${work}/helpers/|g" \
     -e "s|/etc/sudoers.d/|${work}/sudoers/|g" \
+    -e "s|/etc/passwd|${work}/passwd|g" \
+    -e "s|/etc/login.defs|${work}/login.defs|g" \
     scripts/linux-systemd/install.sh > "$work/installer.sh"
 source "$work/installer.sh"
 trap - EXIT ERR
@@ -21,6 +23,12 @@ getent() {
     printf 'alice:x:12345:12346::%s/home/alice:/bin/bash\n' "$work"
     return 0
   fi
+  if [[ "$1 $2" == 'passwd command-bridge' ]]; then
+    [[ "${old_present:-0}" == 1 ]] || return 2
+    cat "$work/passwd"
+    return 0
+  fi
+  if [[ "$1 $2" == 'group command-bridge' ]]; then printf 'command-bridge:x:982:\n'; return 0; fi
   command getent "$@"
 }
 install() {
@@ -36,6 +44,59 @@ RUN_AS_INSTALLER=1
 select_service_identity
 [[ "$INSTALLER_UID" == 12345 && "$INSTALLER_GID" == 12346 ]]
 [[ "$INSTALLER_HOME" == "$work/home/alice" ]]
+printf 'UID_MIN 1000\n' > "$work/login.defs"
+useradd() { echo 'Installer mode must not create a service user.' >&2; return 1; }
+groupadd() { echo 'Existing policy-reader group must be preserved.' >&2; return 1; }
+ensure_service_account
+[[ ! -e "$STATE_DIR" && ! -e "$SERVICE_HOME" ]]
+old_present=1
+printf 'command-bridge:x:988:982::%s:/usr/sbin/nologin\n' "$SERVICE_HOME" > "$work/passwd"
+id() {
+  if [[ "$2" == command-bridge ]]; then printf '%s\n' "${mock_groups:-command-bridge}"; else command id "$@"; fi
+}
+systemctl() {
+  case "$1" in show) printf '%s\n' "${INSTALLER_UID}" ;; is-active) return 0 ;; *) return 1 ;; esac
+}
+pgrep() { return "${mock_process_status:-1}"; }
+userdel() {
+  [[ "$*" == command-bridge ]] || return 1
+  [[ "${mock_delete_failure:-0}" == 0 ]] || return 1
+  old_present=0
+}
+ensure_service_account
+printf 'preserved work\n' > "$work/preserved"
+if (remove_unused_service_account) > "$work/failure" 2>&1; then echo 'Unverified installation deleted the account.'; exit 1; fi
+INSTALL_SUCCEEDED=1
+for mock_process_status in 0 2; do
+  if (remove_unused_service_account) > "$work/failure" 2>&1; then echo 'Unsafe process cleanup accepted.'; exit 1; fi
+  [[ "$old_present" == 1 ]]
+done
+mock_process_status=1 mock_groups='command-bridge wheel'
+if (remove_unused_service_account) > "$work/failure" 2>&1; then echo 'Privileged account deletion accepted.'; exit 1; fi
+mock_groups=command-bridge mock_delete_failure=1
+if (remove_unused_service_account) > "$work/failure" 2>&1; then echo 'userdel failure was hidden.'; exit 1; fi
+mock_delete_failure=0
+for record in 'command-bridge:x:0:982::HOME:/usr/sbin/nologin' 'command-bridge:x:1001:982::HOME:/usr/sbin/nologin' 'command-bridge:x:988:982::/home/someone:/usr/sbin/nologin' 'command-bridge:x:988:982::HOME:/bin/bash'; do
+  printf '%s\n' "${record//HOME/$SERVICE_HOME}" > "$work/passwd"
+  if (validate_unused_service_account) > "$work/failure" 2>&1; then echo 'Unrelated account accepted for deletion.'; exit 1; fi
+done
+printf 'command-bridge:x:988:982::%s:/usr/sbin/nologin\n' "$SERVICE_HOME" > "$work/passwd"
+remove_unused_service_account
+[[ "$old_present" == 0 && "$(cat "$work/preserved")" == 'preserved work' ]]
+remove_unused_service_account
+old_present=1 group_present=1
+getent() {
+  case "$1 $2" in
+    'passwd command-bridge') [[ "$old_present" == 1 ]] || return 2; cat "$work/passwd" ;;
+    'group command-bridge') [[ "$group_present" == 1 ]] || return 2; printf 'command-bridge:x:982:\n' ;;
+    'passwd alice') printf 'alice:x:12345:12346::%s/home/alice:/bin/bash\n' "$work" ;;
+    *) command getent "$@" ;;
+  esac
+}
+userdel() { [[ "$*" == command-bridge ]] || return 1; old_present=0 group_present=0; }
+groupadd() { [[ "$*" == '--system --gid 982 command-bridge' ]] || return 1; group_present=1; }
+remove_unused_service_account
+[[ "$old_present" == 0 && "$group_present" == 1 ]]
 if ( SUDO_USER='' select_service_identity ) > "$work/failure" 2>&1; then
   echo 'Direct root execution incorrectly selected an installer account.' >&2; exit 1
 fi

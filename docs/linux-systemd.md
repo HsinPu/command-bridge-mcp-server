@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 2.2.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -41,6 +41,10 @@ The installer-account unit uses that account's UID and normal group memberships,
 
 This mode switches Audit to owner-only JSONL files under `/var/lib/command-bridge-installer/CommandBridgeMCP/audit` (10 MiB per file, five files). It removes the old dedicated-account Audit reader and exact sudoers rule only after the new service passes real MCP/Audit verification. A failed switch restores the prior unit, configuration and helper. Existing bearer token, network settings, policy and `/var/lib/command-bridge/work` data are preserved; when switching from the dedicated account, the working-directory roots become the login account's home followed by `/`. Subsequent reinstalls preserve custom roots. File Audit is writable by the service account and is not an immutable security ledger.
 
+Starting with 2.2.1, installer-account mode does not create the dedicated `command-bridge` user or its empty home/work directories. It still creates or retains the `command-bridge` group used by the unit to read administrator-owned policy files. After successful activation, real MCP/Audit verification and migration commitment, the installer detects an old user and removes it only if it is a local, non-root system account with the expected `/var/empty/command-bridge` home, nologin shell, primary group and no extra groups or active processes. The policy-reader group keeps its original GID even if `userdel` removes a same-name group automatically. The installing login account is never removed.
+
+Unexpected identity settings or active processes block cleanup; no processes are killed. Activation failure keeps the old user available for rollback. If final account cleanup fails after commitment, installation returns an error while the newly verified service stays active; resolve the reported identity/process issue and repeat the same installer-account command to retry. Configuration, tokens, the empty old service home and historical work files are not deleted or recursively re-owned; those files retain their existing ownership metadata, which can show a numeric UID after account removal. Administrators can migrate individual historical files if needed. Default dedicated-account installations still create the service user they execute as.
+
 No URL prompt is required. A fresh installation selects a private IPv4 address, preferring the default-route interface, and configures both the listener and allowed Host. It prints `http://<IP>:<port>/mcp` and the generated or preserved bearer token in a marked Codex setup block. Detection accepts RFC1918 and 100.64.0.0/10 addresses (including Tailscale); without one it falls back to `127.0.0.1`, usable only on this host. Existing configuration is preserved, and the printed URL uses its saved host and port. A wildcard IPv4 bind uses the detected private IP; a wildcard IPv6 bind prints IPv6 loopback for local setup.
 
 To use an existing private HTTPS route instead:
@@ -68,11 +72,11 @@ The installer performs these steps:
 4. Uses the source archive fixed to the CI-verified commit SHA.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment and distinct empty user/global npm configuration files, then freezes ownership and removes that account.
 6. Installs immutable runtime and application release directories under `/opt`.
-7. Creates the low-privilege <code>command-bridge</code> account and root-only environment file. In installer-account mode, the service instead uses the original sudo login account and separate private file-Audit state.
+7. Creates the low-privilege <code>command-bridge</code> account in default mode and a root-only environment file. In installer-account mode, it creates only the policy-reader group and uses the original sudo login account with separate private file-Audit state.
 8. In default mode, verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
 9. Enables and starts <code>command-bridge.service</code>.
 10. Checks <code>/health</code> and authenticated <code>/ready</code>, executes hostname through a real MCP connection, and reads its matching Audit lifecycle. Failure restores the prior release, network configuration and audit-reader assets.
-11. When explicitly requested, prints the copy-ready Codex configuration block.
+11. In installer-account mode, safely removes any recognized, unused old service user after verification; when explicitly requested, prints the copy-ready Codex configuration block.
 
 ## Installed layout
 
@@ -80,8 +84,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v2.2.0-<source-sha>
-├── releases/v2.2.0-<source-sha>/
+├── current -> releases/v2.2.1-<source-sha>
+├── releases/v2.2.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -229,7 +233,7 @@ It preserves these resources for a future reinstall:
 - `/etc/command-bridge`, including the bearer token
 - `/var/lib/command-bridge`, including all work data
 - `/var/lib/command-bridge-installer`, including opt-in file Audit and work data when used
-- The `command-bridge` account, group, and `/var/empty/command-bridge` home
+- Any existing `command-bridge` account, the policy-reader group, and `/var/empty/command-bridge` home; installer-account mode no longer has the dedicated user after successful cleanup
 
 For review and a no-change preview:
 

@@ -106,6 +106,14 @@ sudo "$node" scripts/tests/rollback-fixture.mjs assert "$switch_marker" "$switch
 assert_restored
 sudo grep -Fxq 'User=command-bridge' /etc/systemd/system/command-bridge.service
 sudo test -f /etc/sudoers.d/command-bridge-audit-reader
+getent passwd command-bridge >/dev/null
+
+# A successful switch removes the now-unused user only after real MCP/Audit.
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer
+if getent passwd command-bridge >/dev/null; then echo 'Unused dedicated user survived the switch.'; exit 1; fi
+getent group command-bridge >/dev/null
+sudo test -f "$work/preserved"
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
 
 sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
 [[ ! -e /opt/command-bridge ]]
@@ -117,6 +125,7 @@ login_uid=$(id -u)
 [[ "$login_uid" != 0 ]]
 [[ "$(sudo -n /usr/bin/id -u)" == 0 ]]
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+if getent passwd command-bridge >/dev/null; then echo 'Fresh installer mode created a dedicated user.'; exit 1; fi
 sudo systemctl is-active --quiet "$service"
 sudo systemctl is-enabled --quiet "$service"
 sudo grep -Fxq "User=$login_uid" /etc/systemd/system/command-bridge.service
@@ -125,6 +134,11 @@ sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted' "$config"
 sudo test ! -e /etc/sudoers.d/command-bridge-audit-reader
 sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
 user_mode_config=$(sudo sha256sum "$config")
+# Simulate the leftover account created by older installer-account releases.
+sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+if getent passwd command-bridge >/dev/null; then echo 'Legacy installer-mode user was not removed.'; exit 1; fi
+[[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 sudo bash /opt/command-bridge/current/uninstall.sh --yes
 sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]

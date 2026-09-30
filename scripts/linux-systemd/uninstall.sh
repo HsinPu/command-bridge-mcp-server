@@ -143,7 +143,7 @@ print_plan() {
     printf '  Configuration: %s\n' "${CONFIG_DIR}"
     printf '  Work data: %s\n' "${STATE_DIR}"
     printf '  Installer-account state and file Audit: %s\n' "${INSTALLER_STATE_DIR}"
-    printf '  Service identity: %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
+    printf '  Service identity (if present): %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
     printf '  Service home: %s\n' "${SERVICE_HOME}"
     warn "--purge permanently deletes the bearer token and all CommandBridge work data."
   else
@@ -152,9 +152,18 @@ print_plan() {
     printf '  Configuration: %s\n' "${CONFIG_DIR}"
     printf '  Work data: %s\n' "${STATE_DIR}"
     printf '  Installer-account state and file Audit: %s\n' "${INSTALLER_STATE_DIR}"
-    printf '  Service identity: %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
+    print_preserved_identity
   fi
   printf '\n'
+}
+
+print_preserved_identity() {
+  if getent passwd "${SERVICE_USER}" >/dev/null 2>&1; then
+    printf '  Service account: %s\n' "${SERVICE_USER}"
+  fi
+  if getent group "${SERVICE_GROUP}" >/dev/null 2>&1; then
+    printf '  Policy-reader group: %s\n' "${SERVICE_GROUP}"
+  fi
 }
 
 confirm_removal() {
@@ -417,7 +426,7 @@ print_summary() {
     printf '  %s\n' "${CONFIG_DIR}"
     printf '  %s\n' "${STATE_DIR}"
     printf '  %s\n' "${INSTALLER_STATE_DIR}"
-    printf '  %s:%s\n' "${SERVICE_USER}" "${SERVICE_GROUP}"
+    print_preserved_identity
     printf '\n'
     printf 'To delete those items too, re-run this script with --purge --yes.\n'
   fi
@@ -431,7 +440,7 @@ main() {
   fi
 
   require_root_systemd_linux
-  for command_name in chmod flock install readlink rm rmdir systemctl uname; do
+  for command_name in chmod flock getent install readlink rm rmdir systemctl uname; do
     require_command "${command_name}"
   done
   if [[ "${PURGE}" == "1" ]]; then
