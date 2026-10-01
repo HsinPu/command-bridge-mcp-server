@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.1.3 — 2026-10-01
+
+PATCH from 4.1.2: record the required automatic Git commit after each completed, versioned and validated batch in AGENTS.md. Synchronize current version references; runtime behavior and the guarded one-command installation choice remain unchanged.
+
+## 4.1.2 — 2026-10-01
+
+PATCH from 4.1.1: change the documented primary one-command installers to explicitly select guarded on Linux (--guarded) and Windows (-ExecutionMode guarded), including reinstalls. Synchronize README translations, platform guides and project rules; preserve tokens and other settings. This documentation/setup-preference update leaves local runtime and bare-installer defaults unchanged. Fixed bootstrap URLs and uninstall commands remain unchanged.
+
 ## 4.1.1 — 2026-10-01
 
 PATCH from 4.1.0: fix guarded preflight bypasses for curl/wget compact output options and PowerShell named write targets. Resolve Path/LiteralPath/Destination/FilePath and colon-bound values independently of argument order; reject unsupported or ambiguous parameters rather than guessing. Preserve ordinary work-directory targets and system-source copies. Add harmless policy/executor regressions proving blocked Audit lifecycle and untouched files, and synchronize three-mode documentation. Existing modes, defaults, tool interfaces and sudo permissions are unchanged.

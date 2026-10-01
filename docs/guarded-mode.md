@@ -27,7 +27,7 @@ External scripts such as `sudo bash /tmp/script.sh` are opaque and may still del
 
 ## Choose mode / 選擇模式
 
-The existing README one-command installers remain allowlist by default. To choose guarded, append `--guarded` to the Linux bootstrap installation invocation (optionally `--run-as-installer` to keep the login account), or `-ExecutionMode guarded` to the Windows bootstrap invocation. `--guarded` and `--unrestricted` together are rejected. Windows explicitly supports `-ExecutionMode allowlist|guarded|unrestricted`; omitted mode preserves existing settings, with the existing fresh-install environment/default behavior retained.
+From 4.1.2 the README one-command installers explicitly select guarded. For custom installer invocations, choose guarded with `--guarded` to the Linux bootstrap installation invocation (optionally `--run-as-installer` to keep the login account), or `-ExecutionMode guarded` to the Windows bootstrap invocation. `--guarded` and `--unrestricted` together are rejected. Windows explicitly supports `-ExecutionMode allowlist|guarded|unrestricted`; omitted mode preserves existing settings, with the existing fresh-install environment/default behavior retained.
 
 Linux installation always selects the mode from this invocation: omitted mode selects allowlist; `--guarded` selects guarded; `--run-as-installer --unrestricted` selects unrestricted. Installation choices do not grant new sudo permissions. Windows LocalService does not acquire administrator privileges by changing mode.
 
@@ -43,7 +43,7 @@ Linux 修改 `/etc/command-bridge/command-bridge.env` 後執行 `sudo systemctl 
 
 ## One-command installation / guarded 一鍵安裝
 
-These optional commands require the 4.1.0 install channel to have been published after CI. They select guarded explicitly; the main README commands remain unchanged.
+These optional commands require the 4.1.0 install channel to have been published after CI. They select guarded explicitly; the main README commands now make the same explicit mode selection.
 
 Linux (sudo from the login account):
 
@@ -66,3 +66,5 @@ MCP own-file rejection remains `SELF_MODIFICATION_BLOCKED`; see [self-protection
 ## 4.1.1 parsing corrections / 參數修正
 
 Download output checks include separated, compact short options (`curl -o/path`, `wget -O/path`, `wget -P/path`) and long options with `=`. Supported PowerShell write Cmdlets resolve named Path/LiteralPath/Destination/FilePath values regardless of order, including `-Path:value`. Copy-Item checks its destination; Move-Item checks both source and destination. Unknown/duplicate/ambiguous parameters return GUARDED_SYNTAX_UNSUPPORTED, including parameter abbreviations not explicitly supported. Named Value/Encoding and other supported non-path parameters are not mistaken for targets. These corrections do not extend the guard into a sandbox.
+
+Since 4.1.2, reinstalling with the README command switches the saved mode to guarded on both platforms while preserving tokens and other settings. To select allowlist instead, remove --guarded from the Linux command or replace -ExecutionMode guarded with -ExecutionMode allowlist on Windows. Direct installer invocations without mode options and local stdio retain their previous defaults.

@@ -1,6 +1,14 @@
 # Architecture implementation validation
 
-The current package is 4.1.1, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.3, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.3 validation
+
+Documentation-only patch recording the required Git commit after each completed, versioned and validated batch. Local Windows npm test passed 79/90 with 11 platform skips and no failures. The two version-synchronized Bash fixtures passed WSL syntax checks. Root package/lockfile and built server versions, relative document links, the four README bootstrap entries and git diff --check passed. This commit also includes the previously validated 4.1.2 guarded installation documentation. Full Linux tests, hosted CI/channel publication and real installed services have not been rerun for 4.1.3.
+
+## 4.1.2 validation
+
+Documentation/setup-preference patch: the primary README Windows/Linux commands now explicitly select guarded on fresh install and reinstall, preserving tokens and other settings. Runtime/bare-installer defaults are unchanged. Local Windows npm test passed 79/90 with 11 platform skips; the two version-synchronized Bash fixtures passed WSL syntax checks. Both README files retain exactly four one-line entries, with guarded added only to installation commands; bootstrap URLs and uninstall commands are unchanged. Root package/lockfile versions, built server version, relative document links and git diff --check passed. Full Linux tests, hosted CI/channel publication and real installed services have not been reverified for 4.1.2.
 
 ## 4.1.1 validation
 

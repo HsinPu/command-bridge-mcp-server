@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.1.1-blue)
+![Version](https://img.shields.io/badge/version-4.1.3-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -65,25 +65,27 @@ SELinux Enforcing／Permissive 主機需有 `restorecon` 與 `matchpathcon`，�
 
 ### Windows
 
+下列指令在新安裝及重裝時明確選擇 guarded，既有 Token 與其他設定保留。
+
 以系統管理員身分開啟 Windows PowerShell（x64），貼上：
 
 ~~~powershell
-$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
+$script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); try { Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.ps1" -OutFile $script; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -ExecutionMode guarded -PrintCodexSetup; if ($LASTEXITCODE -ne 0) { throw "CommandBridge failed (exit $LASTEXITCODE)." } } finally { Remove-Item -LiteralPath $script -Force -ErrorAction SilentlyContinue }
 ~~~
 
 ### Linux
 
-適用使用 systemd 的 glibc Linux（x64／ARM64）。請從你的非 root 登入帳號執行；下列指令會以該帳號運作服務，新安裝與重新安裝都會設定為指令白名單：
+適用使用 systemd 的 glibc Linux（x64／ARM64）。請從你的非 root 登入帳號執行；下列指令會以該帳號運作服務，新安裝與重新安裝都會設定為 guarded 模式：
 
 ~~~bash
-(script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --print-codex-setup)
+(script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --guarded --print-codex-setup)
 ~~~
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
-上方 Linux 指令只包含 `--run-as-installer`，不包含 `--unrestricted`。新安裝與重新安裝都會以登入者帳號運作並使用 `allowlist`，指令及完整參數組合都必須有明確政策。預設政策拒絕 `rm`、`sudo -n rm` 及其他未列入的指令；使用登入者帳號不會略過這些檢查，也不代表自動允許 sudo。此模式不建立專用服務使用者，使用私有輪替檔案記錄 Audit，不新增 sudoers 授權。全新安裝若要使用專用帳號模式，移除 `--run-as-installer`。
+上方 Linux 指令包含 `--run-as-installer --guarded`。新安裝與重新安裝都以登入者帳號運作並設定為 guarded：一般指令可用，可辨識的刪除與系統修改會被拒絕。既有 sudo 權限保持不變，不新增 sudoers 授權。此模式不建立專用服務使用者，使用私有輪替檔案記錄 Audit。全新安裝若要使用專用帳號模式，移除 `--run-as-installer`。
 
-**3.0.0 起，每次 Linux 安裝都依本次參數設定執行模式。** 未加 `--guarded` 或 `--unrestricted` 就寫入 `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`，舊版自由 Shell 安裝也會切回白名單。要保留自由 Shell，必須每次安裝都明確搭配 `--run-as-installer --unrestricted`。Token、網路設定、自訂工作根目錄與政策檔仍保留；驗證失敗會回復原設定。詳見 [恢復白名單模式](docs/linux-systemd.md#return-to-allowlist-mode)。自由 Shell 仍是需明確啟用的進階選項，操作說明放在 [平台指南](docs/linux-systemd.md#installer-account-mode)；白名單不是完整檔案系統沙箱。
+**3.0.0 起，每次 Linux 安裝都依本次參數設定執行模式。** 未加 `--guarded` 或 `--unrestricted` 就寫入 `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`，舊版自由 Shell 安裝也會切回白名單。要保留自由 Shell，必須每次安裝都明確搭配 `--run-as-installer --unrestricted`。README 指令重新安裝會明確切換為 guarded；Token、網路設定、自訂工作根目錄與政策檔仍保留；驗證失敗會回復原設定。詳見 [恢復白名單模式](docs/linux-systemd.md#return-to-allowlist-mode)。自由 Shell 仍是需明確啟用的進階選項，操作說明放在 [平台指南](docs/linux-systemd.md#installer-account-mode)；白名單不是完整檔案系統沙箱。
 
 安裝者帳號模式不再建立專用的 `command-bridge` 使用者。新服務通過 MCP／Audit 驗證後，會偵測並移除舊版留下、已不使用的本機系統帳號，保留政策讀取群組及既有資料。帳號設定異常或仍有程序執行時會停止清理並保留帳號；處理方式見平台指南。
 
@@ -145,7 +147,8 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 
 | 項目 | 預設值 |
 | --- | --- |
-| 執行模式 | `allowlist` |
+| 未設定時的程式執行模式 | `allowlist` |
+| README 一鍵安裝模式 | `guarded` |
 | Shell | Linux：`bash`；Windows：`powershell` |
 | HTTP Port | `8800` |
 | 指令逾時 | 預設 15 秒，上限 60 秒 |
@@ -156,7 +159,7 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 
 4.0.0 起，預設常駐的**指令誤操作攔截**會在建立程序前，拒絕可辨識的直接修改 MCP 自身設定、政策、程式及服務檔案，回傳 `SELF_MODIFICATION_BLOCKED` 並留下 attempted／blocked Audit。allowlist、guarded 與 unrestricted 均適用，原本 sudo 權限保持不變，不新增提權代理。這是防止常見誤操作，**不能可靠阻擋腳本、變數、任意程式或外部 root 服務的間接修改**。自身維護請使用另外的管理員終端機。詳見 [攔截範圍與遷移](docs/self-protection.md)。
 
-4.1.0 新增可選的 **guarded 模式**，一般指令可用，可辨識的刪除及系統修改會被拒絕，附上規則與 Audit ID。Linux 加上 `--guarded`，Windows 加上 `-ExecutionMode guarded`；主要一鍵安裝指令仍預設 allowlist。一般工作檔案寫入與既有 sudo 權限保留。這是誤操作防護，不是沙箱；外部腳本／程式可能繞過檢查，工作檔案仍可能被覆寫。詳見 [guarded 規則與設定](docs/guarded-mode.md)。
+4.1.0 新增可選的 **guarded 模式**，一般指令可用，可辨識的刪除及系統修改會被拒絕，附上規則與 Audit ID。Linux 加上 `--guarded`，Windows 加上 `-ExecutionMode guarded`；4.1.2 起，主要一鍵安裝指令明確選擇 guarded。一般工作檔案寫入與既有 sudo 權限保留。這是誤操作防護，不是沙箱；外部腳本／程式可能繞過檢查，工作檔案仍可能被覆寫。詳見 [guarded 規則與設定](docs/guarded-mode.md)。
 
 每次進入執行流程的指令請求先記錄 `attempted`，結束後記錄 `blocked`、`completed` 或 `failed`。事件包含時間、Audit ID、遮罩後的指令、Shell、工作目錄、來源、exit code 與耗時。
 

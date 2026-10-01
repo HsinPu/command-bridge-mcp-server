@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.1.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.1.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -21,7 +21,7 @@ Synology DSM is not a systemd host. Use Container Manager or a DSM-specific pack
 
 The fixed bootstrap selects the latest main commit that passed CI through install-channel/channel.txt. No tag, Git, or preinstalled Node.js is required. A missing channel stops installation without falling back to unverified source.
 
-The README uses installer-account mode with the allowlist on every installation; it does not enable unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
+The README uses installer-account mode with guarded on every installation; it does not enable unrestricted commands. Run its command from your non-root login account; see the next section for its permissions and Audit behavior. To use the installer's default dedicated-account mode with the allowlist instead:
 
 ```bash
 (installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup)
@@ -29,7 +29,7 @@ The README uses installer-account mode with the allowlist on every installation;
 
 ## Return to allowlist mode
 
-Since 3.0.0, rerun the README command to restore allowlist enforcement: every Linux installation writes `allowlist` unless `--guarded` or `--run-as-installer --unrestricted` is explicitly passed. Saved execution mode and inherited `COMMAND_BRIDGE_EXECUTION_MODE` environment values no longer override that selection. This is a breaking upgrade change: add `--unrestricted` on every install if unrestricted execution is required. Tokens, network settings, custom roots and policy files are preserved; validation failures restore the old configuration and service.
+To restore allowlist, remove `--guarded` from the README Linux command before running it: every Linux installation writes `allowlist` unless `--guarded` or `--run-as-installer --unrestricted` is explicitly passed. Saved execution mode and inherited `COMMAND_BRIDGE_EXECUTION_MODE` environment values no longer override that selection. This is a breaking upgrade change: add `--unrestricted` on every install if unrestricted execution is required. Tokens, network settings, custom roots and policy files are preserved; validation failures restore the old configuration and service.
 
 For an existing installation before upgrading, you can also change the mode manually:
 
@@ -107,8 +107,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.1.1-<source-sha>
-├── releases/v4.1.1-<source-sha>/
+├── current -> releases/v4.1.3-<source-sha>
+├── releases/v4.1.3-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -329,4 +329,4 @@ Recognizable direct self-maintenance commands are rejected before execution in a
 
 ## Optional guarded mode (4.1.0)
 
-Use `--guarded` (optionally with `--run-as-installer`) to permit general commands while rejecting recognizable deletion and system changes. Existing sudo/OS permissions remain unchanged; arbitrary scripts/programs can bypass this accident guard. Existing primary installation commands remain allowlist. See [rules, mode selection and limitations](guarded-mode.md).
+Use `--guarded` (optionally with `--run-as-installer`) to permit general commands while rejecting recognizable deletion and system changes. Existing sudo/OS permissions remain unchanged; arbitrary scripts/programs can bypass this accident guard. The README installation commands select guarded from 4.1.2. See [rules, mode selection and limitations](guarded-mode.md).

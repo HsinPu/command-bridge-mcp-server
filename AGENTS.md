@@ -45,6 +45,11 @@ npm start
 - 本機設定範本為 .env.example；.env、node_modules/、dist/ 已列入 .gitignore。
 - CI 另檢查 Linux Shell 語法、PowerShell 語法、WinSW XML 與 systemd unit。
 
+## Git 提交規則（必須遵守）
+
+- 每次完成一批任何調整，都必須在完成升版、CHANGELOG 與必要驗證後建立 Git commit，不必等待使用者再次要求。此規則包含程式、測試、安裝／部署設定及所有文件修改。
+- 提交本批已確認的變更，不將其他來源或尚未完成的變更混入；完成後回報 commit SHA 及驗證結果。若提交受阻，明確說明原因，不宣稱已提交。
+
 ## 版本更新規則（必須遵守）
 
 每次完成一批任何調整，都必須在同一批變更中更新版本號，不得沿用修改前的版本。此規則包含 src/、測試程式、安裝／解除安裝腳本、部署設定、建置／CI 設定、依賴更新，以及 AGENTS.md、README、驗證紀錄等文件、註解與排版修改。純文件修改也必須升版，沒有免升版例外。
@@ -126,7 +131,7 @@ npm start
 ## Linux 安裝模式選擇（3.0.0 起）
 
 - Linux 每次安裝／重裝依本次參數寫入執行模式：未加 `--guarded` 或 `--unrestricted` 為 `allowlist`；4.1.0 起加 `--guarded` 為 `guarded`；明確搭配 `--run-as-installer --unrestricted` 才為 `unrestricted`。既有或繼承環境的執行模式不得覆蓋本次選擇。其他設定與 Token 保留，切換驗證失敗須回復原設定和服務。
-- 中英文 README 主指令保持白名單；文件須提醒需自由 Shell 的舊用戶每次重裝都要明確加參數。測試涵蓋新裝、雙向切換、重裝、缺失模式欄位、設定保留與失敗回復。
+- 4.1.2 起中英文 README 主指令明確選擇 guarded（Linux --guarded、Windows -ExecutionMode guarded）；未指定模式的程式／安裝器預設維持原規則；文件須提醒需自由 Shell 的舊用戶每次重裝都要明確加參數。測試涵蓋新裝、雙向切換、重裝、缺失模式欄位、設定保留與失敗回復。
 
 ## 初步檢查紀錄（2026-09-22）
 
