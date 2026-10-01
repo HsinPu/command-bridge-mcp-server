@@ -123,7 +123,7 @@ export class FileTransferService {
               (process.getuid && pinned.uid !== process.getuid())) throw new AppError("FILE_ROOT_UNSAFE", "Transfer root must be private and owned by the service account.");
           base = `/proc/self/fd/${directory.fd}`;
         } else if (process.platform === "win32") {
-          try { await validateWindowsRoot(root); } catch { throw new AppError("FILE_ROOT_UNSAFE", "Windows transfer directory ACLs could not be verified."); }
+          try { await validateWindowsRoot(root); } catch (error) { if (error instanceof AppError) throw error; throw new AppError("FILE_ROOT_UNSAFE", "Windows transfer directory ACL helper failed."); }
           lease = await lockWindowsRoot(root);
           const afterLock = await lstat(root);
           if (afterLock.isSymbolicLink() || afterLock.ino !== info.ino || afterLock.dev !== info.dev || await realpath(root) !== resolve(root)) throw new AppError("FILE_ROOT_UNSAFE", "Transfer directory changed while acquiring protection.");
@@ -149,7 +149,9 @@ export class FileTransferService {
       const blocked = !metadata.committed && ["FILE_TRANSFER_DISABLED", "FILE_PATH_BLOCKED", "FILE_ROOT_UNSAFE", "FILE_TYPE_BLOCKED", "FILE_EXISTS", "FILE_TOO_LARGE", "FILE_ENCODING_INVALID", "FILE_HASH_MISMATCH", "FILE_OVERWRITE_DISABLED", "FILE_TRANSFER_BUSY", "FILE_DIRECTORY_LIMIT", "FILE_TEMP_REMAINS"].includes(code);
       if (!terminal) { terminal = true; try { await this.audit.write(event(blocked ? "blocked" : "failed", code)); } catch { throw new AppError("FILE_AUDIT_FAILED", "Terminal Audit failed; an upload may already exist."); } }
       if (error instanceof AppError) throw error;
-      throw new AppError("FILE_IO_FAILED", "File operation failed; inspect host storage and permissions.");
+      const ioCode = error instanceof Error && "code" in error && typeof error.code === "string" &&
+        ["EACCES", "EPERM", "EIO", "ENOENT", "EBUSY", "ENOSPC"].includes(error.code) ? error.code : "unknown";
+      throw new AppError("FILE_IO_FAILED", `File operation failed (${ioCode}); inspect host storage and permissions.`);
     } finally { if (acquired) this.active = false; }
   }
 }
@@ -157,10 +159,13 @@ export class FileTransferService {
 async function validateWindowsRoot(root: string) {
   // Parent and directory ACLs must make rename/reparse replacement impossible
   // for non-administrators. Do not accept a general user-owned transfer root.
-  const script = `$ErrorActionPreference='Stop'; $trusted=@('S-1-5-18','S-1-5-32-544'); $current=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $paths=@($env:CB_ROOT); $parent=$env:CB_PARENT; while($parent){$paths+=,$parent; $parent=[IO.Directory]::GetParent($parent); if($parent){$parent=$parent.FullName}}; foreach($p in $paths) { $a=Get-Acl -LiteralPath $p; $owner=$a.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; if($owner -notin $trusted){throw 'owner'}; foreach($r in $a.Access) { if($r.AccessControlType -ne 'Allow'){continue}; $sid=$r.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value; if($sid -in $trusted){continue}; if($p -eq $env:CB_ROOT -and $sid -ne $current){throw 'readable'}; if(([int]$r.PropagationFlags -band 2) -ne 0){continue}; $mask=if($p -eq $env:CB_ROOT){0xD0114}else{0xD0040}; if(([int]$r.FileSystemRights -band $mask) -ne 0){throw 'writable'} } }; 'ok'`;
+  const script = `$ErrorActionPreference='Stop'; try { $trusted=@('S-1-5-18','S-1-5-32-544'); $current=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $paths=@($env:CB_ROOT); $parent=$env:CB_PARENT; while($parent){$paths+=,$parent; $parent=[IO.Directory]::GetParent($parent); if($parent){$parent=$parent.FullName}}; foreach($p in $paths) { $a=[IO.Directory]::GetAccessControl($p); $owner=$a.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; if($owner -notin $trusted){throw 'owner'}; foreach($r in $a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier])) { if($r.AccessControlType -ne 'Allow'){continue}; $sid=$r.IdentityReference.Value; if($sid -in $trusted){continue}; if($p -eq $env:CB_ROOT -and $sid -ne $current){throw 'readable'}; if(([int]$r.PropagationFlags -band 2) -ne 0){continue}; $mask=if($p -eq $env:CB_ROOT){0xD0114}else{0xD0040}; if(([int]$r.FileSystemRights -band $mask) -ne 0){throw 'writable'} } }; 'ok' } catch { if($_.Exception.Message -in @('owner','readable','writable')) { [Console]::Out.WriteLine($_.Exception.Message) } else { [Console]::Out.WriteLine('query') } }`;
   const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
   const output = await runFixedProcess(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: join(systemRoot, "System32"), PSModulePath: join(systemRoot, "System32/WindowsPowerShell/v1.0/Modules"), CB_ROOT: root, CB_PARENT: dirname(root) });
-  if (output.trim() !== "ok") throw new AppError("FILE_ROOT_UNSAFE", "Transfer ACLs must protect directory identity from non-administrators.");
+  if (output.trim() !== "ok") {
+    const reason = ["owner", "readable", "writable", "query"].includes(output.trim()) ? output.trim() : "query";
+    throw new AppError("FILE_ROOT_UNSAFE", `Windows transfer ACL check failed (${reason}).`);
+  }
 }
 
 export async function lockWindowsRoot(root: string): Promise<{ child: ChildProcess; release: () => Promise<void> }> {

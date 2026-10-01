@@ -89,7 +89,7 @@ test("Windows transfers refuse ordinary user-owned or unverified roots", { skip:
   const root = await mkdtemp(join(tmpdir(), "cb-files-acl-")), audit = new MemoryAudit();
   try {
     const files = new FileTransferService(config(root), audit);
-    await assert.rejects(files.upload(payload(Buffer.from("data"))), /ACLs|directory|root/);
+    await assert.rejects(files.upload(payload(Buffer.from("data"))), /ACL check failed \((owner|readable|writable)\)/);
     assert.deepEqual(await readdir(root), []);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

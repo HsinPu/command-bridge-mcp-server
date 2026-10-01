@@ -20,6 +20,13 @@ try {
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1')
   if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Service is not running.' }
   if ((Get-CimInstance Win32_Service -Filter "Name='CommandBridgeMCP'").StartMode -ne 'Auto') { throw 'Service is not automatic.' }
+  # Probe LocalService file access before the lengthy rollback/reinstall cases.
+  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-EnableFileTransfer')
+  $node = Join-Path $install 'runtime\node.exe'
+  [xml]$earlyDefinition = [IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml'))
+  $earlyRelease = Split-Path -Parent (Split-Path -Parent (([string]$earlyDefinition.service.arguments).Trim('"').Replace('%BASE%', $install)))
+  & $node (Join-Path $earlyRelease 'scripts\verify-file-transfer.mjs') $config
+  if ($LASTEXITCODE -ne 0) { throw 'Early LocalService file transfer/Audit verification failed.' }
   $before = [IO.File]::ReadAllText($config)
   $preserved = Join-Path $env:ProgramData 'CommandBridgeMCP\work\preserved'
   [IO.File]::WriteAllText($preserved, 'keep')

@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.12 — 2026-10-01
+
+PATCH from 4.1.11: query Windows transfer ACLs through .NET rather than Get-Acl auto-loading and retain all existing owner/access rules. Provide only fixed ACL failure categories and safe MCP error codes in file-transfer verification. Run the real LocalService file-transfer probe immediately after initial service setup, before longer lifecycle/rollback cases, while retaining the final post-reinstall probe. Hosted 4.1.10 reached real upload but its generic failure lacked an actionable category; publication remains blocked until the complete service gate passes.
+
 ## 4.1.11 — 2026-10-01
 
 PATCH from 4.1.10: resolve the Windows directory-lease assembly from the application dist directory in both source and built execution. Prepare build assets through predev so npm run dev retains file-transfer support after moving interop compilation out of requests. Production deadlines, ACLs and MCP interfaces remain unchanged; preserve the full CI/service publication gate.

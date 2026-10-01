@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.11, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.12, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.12 validation
+
+Hosted 4.1.10 Windows installed successfully and passed command/Audit verification, then failed real upload with a generic verifier message. The verifier now prints only bounded error codes/fixed categories, and the Windows service probe runs real LocalService upload/download/Audit immediately after initial setup as well as after final reinstall. Runtime ACL queries use .NET and SID rules without module or account-name discovery, retaining existing restrictions and the five-second helper deadline. The Windows unsafe-root test now requires an actual owner/access rejection, not a generic helper failure. Local Windows npm test passed 80/92 with 12 skips; final affected file-transfer tests passed five with four Linux skips. WSL with checksum-verified Node.js 24.18.0 passed 82/92 with ten skips. Scripts, versions and git diff --check passed. Hosted early/full service checks and channel publication remain pending; previous Linux hosted service/migration gates passed. Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.11 validation
 

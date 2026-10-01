@@ -27,6 +27,13 @@ async function serviceFetch(input, init) {
   });
 }
 const client = new Client({ name: 'command-bridge-file-verifier', version: '1.0.0' });
+// Print only known categories, never arbitrary messages, paths or response data.
+function failureCategory(result) {
+  const error = result.structuredContent?.error;
+  const code = typeof error?.code === 'string' && /^[A-Z_]{1,64}$/.test(error.code) ? error.code : 'UNKNOWN';
+  const reason = typeof error?.message === 'string' ? error.message.match(/^(?:Windows transfer ACL check failed|Could not lock the transfer directory|File operation failed) \((owner|readable|writable|query|startup|load|open|EACCES|EPERM|EIO|ENOENT|EBUSY|ENOSPC|unknown)\)/)?.[1] : undefined;
+  return code + (reason ? `:${reason}` : '');
+}
 const timer = setTimeout(() => { console.error('File verification timed out.'); process.exit(1); }, 30000);
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers }, fetch: serviceFetch }));
@@ -35,9 +42,13 @@ try {
   const data = Buffer.from([0, 255, 128, 42]);
   const sha256 = createHash('sha256').update(data).digest('hex');
   const upload = await client.callTool({ name: 'command_bridge_upload_file', arguments: { path, contentBase64: data.toString('base64'), sha256 } });
-  if (upload.isError || !upload.structuredContent?.ok) throw new Error('Upload verification failed.');
+  if (upload.isError || !upload.structuredContent?.ok) {
+    throw new Error(`Upload verification failed (${failureCategory(upload)}).`);
+  }
   const download = await client.callTool({ name: 'command_bridge_download_file', arguments: { path } });
-  if (download.isError || download.structuredContent?.sha256 !== sha256 || download.structuredContent?.contentBase64 !== data.toString('base64')) throw new Error('Download verification failed.');
+  if (download.isError || download.structuredContent?.sha256 !== sha256 || download.structuredContent?.contentBase64 !== data.toString('base64')) {
+    throw new Error(`Download verification failed (${failureCategory(download)}).`);
+  }
   const audit = await client.callTool({ name: 'command_bridge_list_audit_events', arguments: { limit: 100 } });
   for (const id of [upload.structuredContent.auditId, download.structuredContent.auditId]) {
     const events = (audit.structuredContent?.events ?? []).filter(e => e.auditId === id);
