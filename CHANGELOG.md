@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.6 — 2026-10-01
+
+PATCH from 4.1.5: compile the fixed Windows directory-lease interop assembly during npm run build, then load it from the installed application at runtime. Hosted stage diagnostics confirmed .NET compilation exceeded the unchanged five-second request readiness deadline even with private TEMP/TMP. Remove request-time compilation instead of widening that deadline; retain native handle protection, failed-open cleanup tests and fail-closed behavior. Build failure stops deployment and the cross-platform release gate remains intact.
+
 ## 4.1.5 — 2026-10-01
 
 PATCH from 4.1.4: supply the native Windows directory-lock helper with its own private TEMP/TMP directory for .NET compilation. Preserve the five-second readiness deadline and fail-closed transfer behavior. Report only safe startup/compile/open stage names on failure, never compiler output or paths; cover failed native opens and compiler-directory cleanup. Sequential Windows tests alone did not resolve hosted CI; installation publication remains gated by real cross-platform validation.

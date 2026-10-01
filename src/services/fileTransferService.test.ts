@@ -109,7 +109,7 @@ test("Windows directory lease permits exclusive file publication and prevents di
   } finally { await lease?.release(); await rm(root, { recursive: true, force: true }); await rm(root + "-moved", { recursive: true, force: true }); }
 });
 
-test("Windows directory lease reports a failed native open and cleans its compiler temporary directory", { skip: process.platform !== "win32" }, async () => {
+test("Windows directory lease reports a failed native open and cleans its control temporary directory", { skip: process.platform !== "win32" }, async () => {
   const root = await mkdtemp(join(tmpdir(), "cb-files-missing-"));
   const before = new Set((await readdir(tmpdir())).filter(name => name.startsWith("cb-root-lease-")));
   try {

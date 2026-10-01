@@ -1,10 +1,12 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 4.1.5; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 4.1.6; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
 Audit helpers receive only standard Windows directory variables and load fixed built-in PowerShell modules, without inheriting arbitrary environment secrets or external module paths. Their five-second deadline remains unchanged. Startup diagnostics include rotated log files because WinSW restarts can leave the current error log empty.
+
+The Windows build compiles the fixed directory-lease native interface into `dist/windows-directory-lease.dll` before tests and deployment. File transfers load that installed assembly instead of compiling during a request; a missing or invalid assembly fails closed. The five-second lock readiness deadline remains unchanged. A failed native build stops installation before service activation.
 
 The Windows installer deploys CommandBridge as a WinSW-managed Windows service named <code>CommandBridgeMCP</code>. The service runs as the low-privilege <code>NT AUTHORITY\LocalService</code> account, not as LocalSystem.
 

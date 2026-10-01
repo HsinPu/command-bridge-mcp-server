@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { open, lstat, realpath, link, unlink, opendir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { resolve, dirname, join, isAbsolute } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
 import { AppError } from "../errors/AppError.js";
@@ -165,17 +166,17 @@ async function validateWindowsRoot(root: string) {
 export async function lockWindowsRoot(root: string): Promise<{ child: ChildProcess; release: () => Promise<void> }> {
   // Hold a non-reparse directory handle without delete sharing for the
   // complete operation. Child creation remains allowed, root mutation does not.
-  const script = `$ErrorActionPreference='Stop'; [Console]::Error.WriteLine('CB_LEASE_COMPILING'); Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using Microsoft.Win32.SafeHandles; public class CBRootLease { [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern SafeFileHandle CreateFile(string p, uint a, uint s, IntPtr q, uint d, uint f, IntPtr t); }'; [Console]::Error.WriteLine('CB_LEASE_OPENING'); $h=[CBRootLease]::CreateFile($env:CB_ROOT,[uint32]2147483648,3,[IntPtr]::Zero,3,0x02200000,[IntPtr]::Zero); if($h.IsInvalid){throw 'lock'}; try { [Console]::Out.WriteLine('ready'); [Console]::Out.Flush(); $end=[DateTime]::UtcNow.AddSeconds(30); while(-not [System.IO.File]::Exists($env:CB_RELEASE)) { if([DateTime]::UtcNow -gt $end){throw 'deadline'}; Start-Sleep -Milliseconds 50 } } finally {$h.Dispose()}`;
+  const script = `$ErrorActionPreference='Stop'; [Console]::Error.WriteLine('CB_LEASE_LOADING'); [void][Reflection.Assembly]::LoadFrom($env:CB_LEASE_ASSEMBLY); [Console]::Error.WriteLine('CB_LEASE_OPENING'); $h=[CBRootLease]::CreateFile($env:CB_ROOT,[uint32]2147483648,3,[IntPtr]::Zero,3,0x02200000,[IntPtr]::Zero); if($h.IsInvalid){throw 'lock'}; try { [Console]::Out.WriteLine('ready'); [Console]::Out.Flush(); $end=[DateTime]::UtcNow.AddSeconds(30); while(-not [System.IO.File]::Exists($env:CB_RELEASE)) { if([DateTime]::UtcNow -gt $end){throw 'deadline'}; Start-Sleep -Milliseconds 50 } } finally {$h.Dispose()}`;
   const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
   const control = await mkdtemp(join(tmpdir(), "cb-root-lease-"));
   const releaseFile = join(control, "release");
-  const child = spawn(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { windowsHide: true, env: { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: join(systemRoot, "System32"), PSModulePath: join(systemRoot, "System32/WindowsPowerShell/v1.0/Modules"), TEMP: control, TMP: control, CB_ROOT: root, CB_RELEASE: releaseFile }, stdio: ["pipe", "pipe", "pipe"] });
-  // Add-Type invokes the .NET compiler; give it an explicit private writable
-  // temporary directory instead of relying on a stripped environment fallback.
+  const child = spawn(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { windowsHide: true, env: { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: join(systemRoot, "System32"), PSModulePath: join(systemRoot, "System32/WindowsPowerShell/v1.0/Modules"), CB_LEASE_ASSEMBLY: fileURLToPath(new URL("../windows-directory-lease.dll", import.meta.url)), CB_ROOT: root, CB_RELEASE: releaseFile }, stdio: ["pipe", "pipe", "pipe"] });
+  // Load only the fixed assembly built with this application; never compile
+  // native interop while holding a file-transfer request.
   let stage = "startup";
   child.stderr.on("data", (chunk: Buffer) => {
-    const marker = chunk.toString().match(/CB_LEASE_(COMPILING|OPENING)/g)?.at(-1);
-    if (marker) stage = marker === "CB_LEASE_COMPILING" ? "compile" : "open";
+    const marker = chunk.toString().match(/CB_LEASE_(LOADING|OPENING)/g)?.at(-1);
+    if (marker) stage = marker === "CB_LEASE_LOADING" ? "load" : "open";
   });
   const closed = new Promise<number | null>(resolve => child.once("close", resolve));
   child.stdin.on("error", () => undefined);
