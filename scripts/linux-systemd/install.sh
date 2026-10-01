@@ -62,6 +62,7 @@ CODEX_SETUP_NAME=""
 REFRESH_NETWORK=0
 RUN_AS_INSTALLER=0
 ENABLE_UNRESTRICTED=0
+ENABLE_GUARDED=0
 ENABLE_UPLOAD=0
 ENABLE_DOWNLOAD=0
 EXISTING_INSTALLER_MODE=0
@@ -101,6 +102,7 @@ usage() {
     '  --run-as-installer        Run the Linux service as the original sudo login account.' \
     "                            Uses file Audit and the account's existing sudo policy." \
     '  --unrestricted            With --run-as-installer, allow free shell commands.' \
+    '  --guarded                 Reject recognizable deletion and system modifications.' \
     '  --enable-file-transfer    Enable uploads and downloads in a private transfer directory.' \
     '  --enable-upload           Enable only upload (preserve saved download setting).' \
     '  --enable-download         Enable only download (preserve saved upload setting).' \
@@ -131,6 +133,7 @@ parse_arguments() {
       --unrestricted)
         ENABLE_UNRESTRICTED=1
         ;;
+      --guarded) ENABLE_GUARDED=1 ;;
       --enable-file-transfer) ENABLE_UPLOAD=1; ENABLE_DOWNLOAD=1 ;;
       --enable-upload) ENABLE_UPLOAD=1 ;;
       --enable-download) ENABLE_DOWNLOAD=1 ;;
@@ -168,6 +171,7 @@ parse_arguments() {
     esac
     shift
   done
+  [[ "${ENABLE_GUARDED}" != 1 || "${ENABLE_UNRESTRICTED}" != 1 ]] || fail "--guarded and --unrestricted cannot be combined."
 }
 
 validate_codex_name() {
@@ -1094,8 +1098,8 @@ validate_new_configuration() {
   [[ "${host}" =~ ^[A-Za-z0-9._:%-]+$ ]] || fail "Invalid COMMAND_BRIDGE_HTTP_HOST."
   [[ "${port}" =~ ^[0-9]+$ ]] || fail "COMMAND_BRIDGE_HTTP_PORT must be numeric."
   (( port >= 1 && port <= 65535 )) || fail "COMMAND_BRIDGE_HTTP_PORT must be between 1 and 65535."
-  [[ "${execution_mode}" == "allowlist" || "${execution_mode}" == "unrestricted" ]] || \
-    fail "COMMAND_BRIDGE_EXECUTION_MODE must be allowlist or unrestricted."
+  [[ "${execution_mode}" == "allowlist" || "${execution_mode}" == "guarded" || "${execution_mode}" == "unrestricted" ]] || \
+    fail "COMMAND_BRIDGE_EXECUTION_MODE must be allowlist, guarded or unrestricted."
 
   if [[ "${host}" != "127.0.0.1" && "${host}" != "localhost" && "${host}" != "::1" ]]; then
     [[ -n "${allowed_hosts}" ]] || \
@@ -1111,6 +1115,7 @@ install_configuration() {
   local token host port allowed_hosts execution_mode audit_backend allowed_roots
   execution_mode=allowlist
   if [[ "${ENABLE_UNRESTRICTED}" == 1 ]]; then execution_mode=unrestricted; fi
+  if [[ "${ENABLE_GUARDED}" == 1 ]]; then execution_mode=guarded; fi
   local transfer_root="${STATE_DIR}/transfers"
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then transfer_root="${INSTALLER_STATE_DIR}/transfers"; fi
   if [[ "${ENABLE_UPLOAD}" == 1 || "${ENABLE_DOWNLOAD}" == 1 ]]; then

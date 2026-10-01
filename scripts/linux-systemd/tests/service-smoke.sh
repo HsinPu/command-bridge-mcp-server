@@ -133,7 +133,22 @@ sudo grep -Fxq 'COMMAND_BRIDGE_AUDIT_BACKEND=file' "$config"
 sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted' "$config"
 sudo test ! -e /etc/sudoers.d/command-bridge-audit-reader
 sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+# A harmless new sentinel under the protected configuration root must never be created.
+probe="/etc/command-bridge/.self-protection-probe-$$"
+sudo test ! -e "$probe"
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" "sudo -n touch -- $probe" error:SELF_MODIFICATION_BLOCKED
+sudo test ! -e "$probe"
 user_mode_config=$(sudo sha256sum "$config")
+# Exercise a real guarded service, preserving all non-mode settings and sudo.
+guarded_preserved=$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --guarded
+sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=guarded' "$config"
+[[ "$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)" == "$guarded_preserved" ]]
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'rm -- /tmp/command-bridge-guarded-absent' error:DELETE_OPERATION_BLOCKED
+sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo systemctl restart example.service' error:SYSTEM_MODIFICATION_BLOCKED
+sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+[[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 # Simulate the leftover account created by older installer-account releases.
 sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted

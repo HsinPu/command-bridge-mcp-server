@@ -19,7 +19,7 @@ const MAX_AUDIT_READER_OUTPUT_BYTES = 4 * 1024 * 1024;
 const shellKinds = new Set<ShellKind>(["bash", "sh", "powershell", "cmd"]);
 const auditPhases = new Set<AuditPhase>(["attempted", "blocked", "completed", "failed"]);
 const auditSources = new Set<AuditSource>(["http-bearer", "stdio"]);
-const executionModes = new Set<ExecutionMode>(["allowlist", "unrestricted"]);
+const executionModes = new Set<ExecutionMode>(["allowlist", "guarded", "unrestricted"]);
 
 export type AuditPhase = "attempted" | "blocked" | "completed" | "failed";
 export type AuditSource = "http-bearer" | "stdio";

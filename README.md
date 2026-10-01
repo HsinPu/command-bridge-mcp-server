@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-3.1.0-blue)
+![Version](https://img.shields.io/badge/version-4.1.1-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -83,7 +83,7 @@ Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux a
 
 The Linux command above uses `--run-as-installer` without `--unrestricted`. New installations and reinstalls run as your login account with `allowlist`: commands and full argument combinations need an explicit policy. The default policies reject `rm`, `sudo -n rm`, and other unlisted commands. Running as your account does not bypass those checks or automatically allow sudo. It does not create a dedicated service user and uses private rotating file Audit without adding sudoers grants. To use the dedicated-account mode on a fresh install, omit `--run-as-installer`.
 
-**Since 3.0.0, each Linux installation selects the execution mode from its options.** Without `--unrestricted`, it writes `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`, including when upgrading an unrestricted installation. To retain unrestricted execution, explicitly pass `--unrestricted` together with `--run-as-installer` on every install. Tokens, network settings, custom roots and policy files are preserved; failed validation restores the prior settings. See [Return to allowlist mode](docs/linux-systemd.md#return-to-allowlist-mode). Unrestricted execution remains an explicit advanced choice described in the [platform guide](docs/linux-systemd.md#installer-account-mode); the allowlist is not a complete filesystem sandbox.
+**Since 3.0.0, each Linux installation selects the execution mode from its options.** Without `--guarded` or `--unrestricted`, it writes `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`, including when upgrading an unrestricted installation. To retain unrestricted execution, explicitly pass `--unrestricted` together with `--run-as-installer` on every install. Tokens, network settings, custom roots and policy files are preserved; failed validation restores the prior settings. See [Return to allowlist mode](docs/linux-systemd.md#return-to-allowlist-mode). Unrestricted execution remains an explicit advanced choice described in the [platform guide](docs/linux-systemd.md#installer-account-mode); the allowlist is not a complete filesystem sandbox.
 
 Installer-account mode does not create a dedicated `command-bridge` user. After the new service passes MCP/Audit verification, it detects and removes an unused local system account left by older releases, while keeping the policy-reader group and existing data. Unexpected account settings or running processes stop cleanup without deleting the account; see the platform guide for recovery details.
 
@@ -134,7 +134,7 @@ Example requests for a connected client:
 
 The default `allowlist` mode parses literal arguments, matches an exact approved argv combination, and launches a fixed executable without a shell. Built-in PowerShell cmdlets use a fixed wrapper. Linux defaults include `uname`, `hostname`, `df`, and `ps`; Windows defaults include `Get-Process`, `Get-Service`, and `systeminfo`. Built-ins allow no arguments by default; `Get-CimInstance` uses `Win32_OperatingSystem`. Custom commands require an administrator-managed policy file.
 
-Deletion commands such as `rm`, `del`, and `Remove-Item` are absent from the default policies and are rejected. Enabling a custom native executable policy can permit destructive operations, and `unrestricted` explicitly restores free-form shell execution. Neither mode is a complete filesystem sandbox.
+Deletion commands such as `rm`, `del`, and `Remove-Item` are absent from the default policies and are rejected. Enabling a custom native executable policy can permit destructive operations, and `unrestricted` explicitly restores free-form shell execution. None of the three modes is a complete filesystem sandbox.
 
 > [!IMPORTANT]
 > Administrators must trust the executable and every argument combination they approve. The service must not be able to modify its policy or approved binaries. Working-directory checks resolve symlinks, but arguments can still refer to other accessible paths. Keep the low-privilege account and network restrictions, and do not expose the service directly to the internet. See the [security policy](SECURITY.md).
@@ -153,6 +153,10 @@ Service installation defaults:
 | Concurrent commands | 2 |
 
 ## Audit logging
+
+Since 4.0.0, an always-on **command preflight guard** rejects recognizable direct writes to CommandBridge's own configuration, policy, application and service assets before starting a process. It applies to all execution modes and returns `SELF_MODIFICATION_BLOCKED` with an attempted/blocked Audit lifecycle. Existing sudo permissions remain unchanged; no privilege broker is introduced. It prevents common accidents, **not indirect modification through scripts, variables, arbitrary programs or external root services**. Manage CommandBridge itself from a separate administrator terminal. See [self-protection and migration](docs/self-protection.md).
+
+Version 4.1.0 adds optional **guarded mode** for general commands: recognizable deletion and system modifications are rejected with a rule and Audit ID. Choose `--guarded` on Linux or `-ExecutionMode guarded` on Windows; the primary installer commands still default to allowlist. Ordinary work-file writes and existing sudo permissions remain available. This is accident prevention, not a sandbox; external scripts/programs can bypass inspection and work files may still be overwritten. See [guarded rules and setup](docs/guarded-mode.md).
 
 Each command request entering the execution flow first records `attempted`, followed by `blocked`, `completed`, or `failed`. Events include the timestamp, audit ID, redacted command, shell, working directory, source, exit code, and duration.
 

@@ -1,4 +1,6 @@
 export class AppError extends Error {
+  rule?: string;
+  auditId?: string;
   constructor(
     public readonly code: string,
     message: string,
@@ -16,7 +18,9 @@ export function toErrorPayload(error: unknown) {
       error: {
         code: error.code,
         message: error.message,
-        action: error.action
+        action: error.action,
+        ...(error.rule ? { rule: error.rule } : {}),
+        ...(error.auditId ? { auditId: error.auditId } : {})
       }
     };
   }

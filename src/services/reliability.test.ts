@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readdir, readFile, writeFile } from "node:fs/promises";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
@@ -43,12 +43,26 @@ test("installer verifies real MCP and audit through the configured virtual host"
   const cfg = config(); cfg.allowedHosts = ["bridge.internal"];
   const executor = new CommandExecutor(cfg, new MemoryAudit());
   const server = await startHttpTransport(cfg, executor);
-  const directory = await mkdtemp(join(tmpdir(), "command-bridge-verifier-"));
+  const directory = await mkdtemp(join(process.cwd(), ".command-bridge-verifier-"));
   try {
     const path = join(directory, "service.env");
     await writeFile(path, `COMMAND_BRIDGE_HTTP_HOST=127.0.0.1\nCOMMAND_BRIDGE_HTTP_PORT=${(server.address() as { port: number }).port}\nCOMMAND_BRIDGE_ALLOWED_HOSTS=bridge.internal\nCOMMAND_BRIDGE_BEARER_TOKEN=${cfg.bearerToken}\n`);
     const result = await promisify(execFile)(process.execPath, [join(process.cwd(), "scripts/verify-install.mjs"), path], { timeout: 20_000 });
     assert.match(result.stdout, /verification passed/);
+    // Exercise the real MCP error response and matching blocked Audit, not just a policy unit test.
+    const protectedFile = join(directory, "protected.env");
+    await writeFile(protectedFile, "unchanged");
+    const command = `echo changed > "${protectedFile}"`;
+    const blocked = await promisify(execFile)(process.execPath, [join(process.cwd(), "scripts/verify-install.mjs"), path, command, "error:SELF_MODIFICATION_BLOCKED"], { timeout: 20_000 });
+    assert.match(blocked.stdout, /verification passed/);
+    assert.equal(await readFile(protectedFile, "utf8"), "unchanged");
+    cfg.executionMode = "guarded";
+    const sentinel = join(tmpdir(), "cb-guarded-absent-" + Date.now());
+    const deleteCommand = `${process.platform === "win32" ? "del" : "rm"} "${sentinel}"`;
+    const rejected = await promisify(execFile)(process.execPath, [join(process.cwd(), "scripts/verify-install.mjs"), path, deleteCommand, "error:DELETE_OPERATION_BLOCKED"], { timeout: 20_000 });
+    assert.match(rejected.stdout, /verification passed/);
+    const normal = await promisify(execFile)(process.execPath, [join(process.cwd(), "scripts/verify-install.mjs"), path], { timeout: 20_000 });
+    assert.match(normal.stdout, /verification passed/);
   } finally {
     await executor.shutdown();
     await new Promise<void>(resolve => server.close(() => resolve()));

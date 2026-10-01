@@ -31,6 +31,16 @@ try {
   [xml]$definition = $xmlBefore
   $release = Split-Path -Parent (Split-Path -Parent (([string]$definition.service.arguments).Trim('"').Replace('%BASE%', $install)))
   $node = Join-Path $install 'runtime\node.exe'
+  $modeBefore = [IO.File]::ReadAllText($config)
+  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-ExecutionMode', 'guarded')
+  $guardedConfig = [IO.File]::ReadAllText($config)
+  if ([regex]::Replace($guardedConfig, '(?m)^COMMAND_BRIDGE_EXECUTION_MODE=[^\r\n]*', 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist') -cne $modeBefore) { throw 'Mode switch changed other settings.' }
+  & $node (Join-Path $root 'scripts\verify-install.mjs') $config 'Remove-Item C:\command-bridge-guarded-absent' 'error:DELETE_OPERATION_BLOCKED'
+  if ($LASTEXITCODE -ne 0) { throw 'Guarded deletion/Audit verification failed.' }
+  & $node (Join-Path $root 'scripts\verify-install.mjs') $config 'Restart-Service example' 'error:SYSTEM_MODIFICATION_BLOCKED'
+  if ($LASTEXITCODE -ne 0) { throw 'Guarded system/Audit verification failed.' }
+  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-ExecutionMode', 'allowlist')
+  if ([IO.File]::ReadAllText($config) -cne $modeBefore) { throw 'Mode round trip changed settings.' }
   $infoBefore = [IO.File]::ReadAllText((Join-Path $release 'install-info.json'))
   $beforeRefresh = [IO.File]::ReadAllText($config)
   $hostBefore = [regex]::Match($beforeRefresh, '(?m)^COMMAND_BRIDGE_HTTP_HOST=([^\r\n]+)').Groups[1].Value

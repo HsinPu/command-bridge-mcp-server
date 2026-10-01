@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import { FileTransferService } from "./fileTransferService.js";
+import { assertNoSelfModification } from "./selfProtection.js";
+import { assertGuardedCommand } from "./guardedPolicy.js";
 import {
   assertCommandAllowed,
   resolveWorkingDirectory,
@@ -169,12 +171,15 @@ export class CommandExecutor {
       shell = requestedShell;
       assertCommandAllowed(this.config, shell, request.command);
       cwd = resolveWorkingDirectory(this.config.allowedRoots, request.cwd);
+      assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile });
+      if (this.config.executionMode === "guarded") assertGuardedCommand(request.command, cwd);
       timeoutMs = clampTimeout(
         request.timeoutMs,
         this.config.defaultTimeoutMs,
         this.config.maxTimeoutMs
       );
     } catch (error) {
+      if (error instanceof AppError && error.rule) error.auditId = attempted.auditId;
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "blocked", {
           errorCode: auditErrorCode(error, "COMMAND_BLOCKED")

@@ -31,6 +31,7 @@ $RefreshNetwork = $false
 $EnableFileTransfer = $false
 $EnableUpload = $false
 $EnableDownload = $false
+$ExecutionMode = ''
 $ConfigBackup = $null
 $script:addresses = @(
   [pscustomobject]@{ IPAddress = '8.8.8.8'; InterfaceIndex = 1; SkipAsSource = $false },
@@ -110,6 +111,20 @@ try {
   $EnableUpload = $false
   Set-TransferConfiguration
   Assert-True ([IO.File]::ReadAllText($ConfigFile) -eq $transferText) 'Omitted transfer switches reset saved settings.'
+  $ConfigBackup = $null
+  $ExecutionMode = 'guarded'
+  Set-ExecutionModeConfiguration
+  $guardedText = [IO.File]::ReadAllText($ConfigFile)
+  Assert-True ($guardedText -match '(?m)^COMMAND_BRIDGE_EXECUTION_MODE=guarded\r?$') 'Guarded mode not selected.'
+  Assert-True ($ConfigBackup -ceq $transferText) 'Mode switch did not save complete rollback configuration.'
+  $ExecutionMode = ''
+  Set-ExecutionModeConfiguration
+  Assert-True ([IO.File]::ReadAllText($ConfigFile) -ceq $guardedText) 'Omitted mode changed saved settings.'
+  $ExecutionMode = 'allowlist'
+  Set-ExecutionModeConfiguration
+  Assert-True ($ConfigBackup -ceq $transferText) 'Subsequent edits replaced rollback backup.'
+  Assert-True ([IO.File]::ReadAllText($ConfigFile) -ceq $transferText) 'Round-trip mode switch changed other settings.'
+  $ExecutionMode = ''
 } finally {
   foreach ($key in $savedEnvironment.Keys) {
     [Environment]::SetEnvironmentVariable($key, $savedEnvironment[$key])

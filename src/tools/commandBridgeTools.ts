@@ -17,7 +17,7 @@ const auditEventSchema = z.object({
   command: z.string(),
   shell: shellSchema.nullable(),
   cwd: z.string().nullable(),
-  executionMode: z.enum(["allowlist", "unrestricted"]),
+  executionMode: z.enum(["allowlist", "guarded", "unrestricted"]),
   source: z.enum(["http-bearer", "stdio"]),
   exitCode: z.number().int().nullable(),
   signal: z.string().nullable(),
@@ -60,7 +60,7 @@ export function registerCommandBridgeTools(
         cpuCount: z.number().int(),
         totalMemoryMb: z.number().int(),
         freeMemoryMb: z.number().int(),
-        executionMode: z.enum(["allowlist", "unrestricted"]),
+        executionMode: z.enum(["allowlist", "guarded", "unrestricted"]),
         fileTransfer: z.object({ uploadEnabled: z.boolean(), downloadEnabled: z.boolean(), maxBytes: z.number().int(), overwrite: z.literal(false) }).optional(),
         allowedShells: z.array(shellSchema),
         allowedCommands: z.array(z.string()),
@@ -82,7 +82,7 @@ export function registerCommandBridgeTools(
     {
       title: "Run Host Command",
       description:
-        "Run one command on this Linux or Windows host. Allowlist mode blocks shell control syntax and unconfigured commands. This tool may change host state when unrestricted mode is enabled.",
+        "Run one command on this Linux or Windows host. Allowlist mode blocks shell control syntax and unconfigured commands. Guarded mode rejects recognizable deletion and system modification; arbitrary programs can still change host state.",
       inputSchema: {
         command: z.string().min(1).max(20_000).describe("Command text to execute."),
         shell: shellSchema.optional().describe("Shell to use. Defaults to the first allowed shell."),

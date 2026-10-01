@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { AppError } from "../errors/AppError.js";
 import { loadCommandProfiles, type CommandProfile } from "./commandProfiles.js";
 
-export type ExecutionMode = "allowlist" | "unrestricted";
+export type ExecutionMode = "allowlist" | "guarded" | "unrestricted";
 export type ShellKind = "bash" | "sh" | "powershell" | "cmd";
 
 export interface CommandPolicyConfig {
@@ -61,7 +61,7 @@ export function assertCommandAllowed(
     );
   }
 
-  if (config.executionMode === "unrestricted") {
+  if (config.executionMode !== "allowlist") {
     return;
   }
 

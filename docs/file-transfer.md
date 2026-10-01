@@ -1,6 +1,6 @@
 # 安全檔案傳輸 / Secure file transfer (3.1.0)
 
-CommandBridge adds `command_bridge_upload_file` and `command_bridge_download_file`. Both are **disabled by default**, independently of command allowlist/unrestricted mode. They transfer bytes through MCP; they never execute, extract, fetch a URL, or invoke sudo. Clients must separately support reading/writing their own local files. These tools cannot directly access a path on the client's computer.
+CommandBridge adds `command_bridge_upload_file` and `command_bridge_download_file`. Both are **disabled by default**, independently of command allowlist/guarded/unrestricted mode. They transfer bytes through MCP; they never execute, extract, fetch a URL, or invoke sudo. Clients must separately support reading/writing their own local files. These tools cannot directly access a path on the client's computer.
 
 ## Enable explicitly / 明確啟用
 

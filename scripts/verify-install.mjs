@@ -5,6 +5,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
 const verificationCommand = process.argv[3] ?? 'hostname';
 const expectedStdout = process.argv[4];
+const expectedError = expectedStdout?.startsWith('error:') ? expectedStdout.slice(6) : undefined;
 let host = config.COMMAND_BRIDGE_HTTP_HOST;
 if (host === '0.0.0.0') host = '127.0.0.1';
 if (host === '::') host = '::1';
@@ -37,13 +38,17 @@ try {
   const before = await client.callTool({ name: 'command_bridge_list_audit_events', arguments: { limit: 100 } });
   const previousIds = new Set((before.structuredContent?.events ?? []).map(event => event.auditId));
   const result = await client.callTool({ name: 'command_bridge_run_command', arguments: { command: verificationCommand } });
-  if (result.isError || !result.structuredContent?.ok) throw new Error('Service account could not execute the verification command.');
-  if (expectedStdout !== undefined && result.structuredContent.stdout.trim() !== expectedStdout) throw new Error('Verification command returned unexpected output.');
+  if (expectedError) {
+    if (!result.isError || result.structuredContent?.error?.code !== expectedError) throw new Error('Expected command rejection was not returned.');
+  } else {
+    if (result.isError || !result.structuredContent?.ok) throw new Error('Service account could not execute the verification command.');
+    if (expectedStdout !== undefined && result.structuredContent.stdout.trim() !== expectedStdout) throw new Error('Verification command returned unexpected output.');
+  }
   let matched = false;
   for (let retry = 0; retry < 10 && !matched; retry++) {
     const after = await client.callTool({ name: 'command_bridge_list_audit_events', arguments: { limit: 100 } });
     const events = (after.structuredContent?.events ?? []).filter(event => !previousIds.has(event.auditId) && event.command === verificationCommand);
-    matched = events.some(event => event.phase === 'completed' && event.exitCode === 0 && events.some(attempt => attempt.auditId === event.auditId && attempt.phase === 'attempted'));
+    matched = events.some(event => (expectedError ? event.phase === 'blocked' && event.errorCode === expectedError : event.phase === 'completed' && event.exitCode === 0) && events.some(attempt => attempt.auditId === event.auditId && attempt.phase === 'attempted'));
     if (!matched) await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (!matched) throw new Error('Matching audit lifecycle was not returned.');

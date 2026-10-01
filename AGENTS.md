@@ -20,6 +20,8 @@ CommandBridge MCP 是跨平台的 MCP Server，讓 MCP 用戶端透過本機 std
 | src/transport/httpTransport.ts | HTTP 路由、Bearer Token 驗證、MCP transport |
 | src/tools/commandBridgeTools.ts | MCP 工具註冊、輸入輸出 schema 與錯誤回應 |
 | src/services/commandPolicy.ts | Shell、指令白名單與工作目錄政策 |
+| src/services/selfProtection.ts | 執行前的直接自改誤操作攔截；不解譯任意 Shell 或提供完整沙箱 |
+| src/services/guardedPolicy.ts | guarded 的直接刪除／系統修改誤操作攔截與受限制語法檢查 |
 | src/services/commandExecutor.ts | 程序執行、並行數、逾時、輸出限制與 Audit lifecycle |
 | src/services/auditLog.ts | Audit 事件、秘密遮罩與平台讀寫實作 |
 | src/services/systemInfoService.ts | 主機資訊與有效政策 |
@@ -94,7 +96,13 @@ npm start
 
 ## 修改時應維持的行為
 
-- 3.1.0 檔案傳輸授權獨立於 allowlist／unrestricted，預設皆關閉。只支援受保護傳輸目錄內的安全單層檔名、一般檔案與最多 5 MiB，不覆寫、不執行内容、不透過 Shell／sudo／網址抓取。Linux 固定目錄 descriptor；Windows 驗證 ACL 並持有原生目錄鎖，無法保護時拒絕。詳見 docs/file-transfer.md。
+- 4.1.1 起，guarded 需辨識 curl／wget 黏合輸出參數及 PowerShell Path／LiteralPath／Destination／FilePath 命名與冒號形式，不依參數順序猜測目的地。無法確定的參數明確拒絕；系統來源複製到一般工作目錄應可通過 guarded 路徑檢查。回歸測試使用無破壞性程式／不存在的程式路徑，不能以實際寫入系統位置驗證拒絕。
+
+- 4.1.0 新增可選 guarded 模式，allowlist 預設與 unrestricted 原有行為保持不變。guarded 攔截可辨識的刪除、系統位置寫入及常見系統管理修改；保留其他一般指令與既有 sudo。不能宣稱會解譯任意程式／外部腳本，或保證不刪檔／不改系統。語法不支援須明確拒絕；guarded 錯誤附規則及 Audit ID。Linux --guarded 與 --unrestricted 互斥；Windows -ExecutionMode 明確選擇才切換既有模式，保存完整回復備份。詳見 docs/guarded-mode.md。
+
+- 4.0.0 起，指令執行前檢查可辨識的直接自改操作，在建立子程序前拒絕並記錄 attempted／blocked、SELF_MODIFICATION_BLOCKED。allowlist、guarded 與 unrestricted 均適用；保留原本 sudo，不新增提權代理或唯讀隔離。攔截是防止誤操作，不是安全沙箱；不可宣稱能阻止腳本、變數、程式內部或外部 root 服務的間接修改。詳見 docs/self-protection.md。
+
+- 3.1.0 檔案傳輸授權獨立於 allowlist／guarded／unrestricted，預設皆關閉。只支援受保護傳輸目錄內的安全單層檔名、一般檔案與最多 5 MiB，不覆寫、不執行内容、不透過 Shell／sudo／網址抓取。Linux 固定目錄 descriptor；Windows 驗證 ACL 並持有原生目錄鎖，無法保護時拒絕。詳見 docs/file-transfer.md。
 - 檔案 Audit 沿用 schemaVersion 1 的選用 fileTransfer metadata，不記錄內容。初始失敗不操作；終結失敗不回傳下載內容，上傳已發布時明確回報可能存在，不宣稱回復。逾時後實際 I/O 未結束前不得釋放名額。
 
 - 維持 Linux／Windows 相容性；涉及 Shell、路徑、程序終止或服務部署時需分別考慮兩個平台。
@@ -117,7 +125,7 @@ npm start
 
 ## Linux 安裝模式選擇（3.0.0 起）
 
-- Linux 每次安裝／重裝依本次參數寫入執行模式：未加 `--unrestricted` 為 `allowlist`；明確搭配 `--run-as-installer --unrestricted` 才為 `unrestricted`。既有或繼承環境的執行模式不得覆蓋本次選擇。其他設定與 Token 保留，切換驗證失敗須回復原設定和服務。
+- Linux 每次安裝／重裝依本次參數寫入執行模式：未加 `--guarded` 或 `--unrestricted` 為 `allowlist`；4.1.0 起加 `--guarded` 為 `guarded`；明確搭配 `--run-as-installer --unrestricted` 才為 `unrestricted`。既有或繼承環境的執行模式不得覆蓋本次選擇。其他設定與 Token 保留，切換驗證失敗須回復原設定和服務。
 - 中英文 README 主指令保持白名單；文件須提醒需自由 Shell 的舊用戶每次重裝都要明確加參數。測試涵蓋新裝、雙向切換、重裝、缺失模式欄位、設定保留與失敗回復。
 
 ## 初步檢查紀錄（2026-09-22）

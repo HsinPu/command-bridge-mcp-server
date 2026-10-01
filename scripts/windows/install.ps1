@@ -6,7 +6,8 @@ param(
   [switch]$RefreshNetwork,
   [switch]$EnableFileTransfer,
   [switch]$EnableUpload,
-  [switch]$EnableDownload
+  [switch]$EnableDownload,
+  [ValidateSet('allowlist', 'guarded', 'unrestricted')][string]$ExecutionMode
 )
 
 Set-StrictMode -Version Latest
@@ -234,12 +235,13 @@ function New-SecureConfiguration {
   if (Test-Path -LiteralPath $ConfigFile) {
     Write-Log "Preserving existing configuration and bearer token at $ConfigFile."
     if ($RefreshNetwork) {
-      $script:ConfigBackup = [IO.File]::ReadAllText($ConfigFile)
+      if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = [IO.File]::ReadAllText($ConfigFile) }
       $httpHost = Get-AutomaticHttpHost
-      $updated = [regex]::Replace($script:ConfigBackup, '(?m)^COMMAND_BRIDGE_HTTP_HOST=.*$', "COMMAND_BRIDGE_HTTP_HOST=$httpHost")
+      $updated = [regex]::Replace([IO.File]::ReadAllText($ConfigFile), '(?m)^COMMAND_BRIDGE_HTTP_HOST=.*$', "COMMAND_BRIDGE_HTTP_HOST=$httpHost")
       $updated = [regex]::Replace($updated, '(?m)^COMMAND_BRIDGE_ALLOWED_HOSTS=.*$', "COMMAND_BRIDGE_ALLOWED_HOSTS=$httpHost")
       [IO.File]::WriteAllText($ConfigFile, $updated, (New-Object System.Text.UTF8Encoding($false)))
     }
+    Set-ExecutionModeConfiguration
     Set-TransferConfiguration
     return
   }
@@ -256,7 +258,7 @@ function New-SecureConfiguration {
 
   $httpHost = if ($env:COMMAND_BRIDGE_HTTP_HOST) { $env:COMMAND_BRIDGE_HTTP_HOST } elseif ($CodexUrl) { "127.0.0.1" } else { Get-AutomaticHttpHost }
   $port = if ($env:COMMAND_BRIDGE_HTTP_PORT) { $env:COMMAND_BRIDGE_HTTP_PORT } else { "8800" }
-  $mode = if ($env:COMMAND_BRIDGE_EXECUTION_MODE) { $env:COMMAND_BRIDGE_EXECUTION_MODE } else { "allowlist" }
+  $mode = if ($ExecutionMode) { $ExecutionMode } elseif ($env:COMMAND_BRIDGE_EXECUTION_MODE) { $env:COMMAND_BRIDGE_EXECUTION_MODE } else { "allowlist" }
   $allowedHosts = if ($env:COMMAND_BRIDGE_ALLOWED_HOSTS) { $env:COMMAND_BRIDGE_ALLOWED_HOSTS } else { "" }
   if (-not $allowedHosts -and $httpHost -notin @("127.0.0.1", "localhost", "::1", "0.0.0.0", "::")) {
     $allowedHosts = $httpHost
@@ -267,8 +269,8 @@ function New-SecureConfiguration {
   if ($port -notmatch "^[0-9]+$" -or [int]$port -lt 1 -or [int]$port -gt 65535) {
     throw "COMMAND_BRIDGE_HTTP_PORT must be between 1 and 65535."
   }
-  if ($mode -notin @("allowlist", "unrestricted")) {
-    throw "COMMAND_BRIDGE_EXECUTION_MODE must be allowlist or unrestricted."
+  if ($mode -notin @("allowlist", "guarded", "unrestricted")) {
+    throw "COMMAND_BRIDGE_EXECUTION_MODE must be allowlist, guarded or unrestricted."
   }
   if ($httpHost -notin @("127.0.0.1", "localhost", "::1") -and [string]::IsNullOrWhiteSpace($allowedHosts)) {
     throw "COMMAND_BRIDGE_ALLOWED_HOSTS is required for a non-loopback HTTP host."
@@ -295,6 +297,16 @@ function New-SecureConfiguration {
   $encoding = New-Object System.Text.UTF8Encoding($false)
   [IO.File]::WriteAllText($ConfigFile, (($lines -join $newLine) + $newLine), $encoding)
   Set-TransferConfiguration
+}
+
+function Set-ExecutionModeConfiguration {
+  if (-not $ExecutionMode) { return }
+  $text = [IO.File]::ReadAllText($ConfigFile)
+  if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = $text }
+  $pattern = '(?m)^[ \t]*(?:export[ \t]+)?COMMAND_BRIDGE_EXECUTION_MODE[ \t]*=[^\r\n]*'
+  if ([regex]::IsMatch($text, $pattern)) { $text = [regex]::Replace($text, $pattern, "COMMAND_BRIDGE_EXECUTION_MODE=$ExecutionMode") }
+  else { $text = $text.TrimEnd("`r", "`n") + [Environment]::NewLine + "COMMAND_BRIDGE_EXECUTION_MODE=$ExecutionMode" + [Environment]::NewLine }
+  [IO.File]::WriteAllText($ConfigFile, $text, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 function Set-TransferConfiguration {

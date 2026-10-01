@@ -12,7 +12,7 @@ const rawEnvSchema = z.object({
   COMMAND_BRIDGE_HTTP_HOST: z.string().min(1).default("127.0.0.1"),
   COMMAND_BRIDGE_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(8800),
   COMMAND_BRIDGE_ALLOWED_HOSTS: z.string().optional(),
-  COMMAND_BRIDGE_EXECUTION_MODE: z.enum(["allowlist", "unrestricted"]).default("allowlist"),
+  COMMAND_BRIDGE_EXECUTION_MODE: z.enum(["allowlist", "guarded", "unrestricted"]).default("allowlist"),
   COMMAND_BRIDGE_ALLOWED_SHELLS: z.string().optional(),
   COMMAND_BRIDGE_ALLOWED_COMMANDS: z.string().optional(),
   COMMAND_BRIDGE_ALLOWED_ROOTS: z.string().optional(),

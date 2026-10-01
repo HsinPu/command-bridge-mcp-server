@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 3.1.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.1.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -29,7 +29,7 @@ The README uses installer-account mode with the allowlist on every installation;
 
 ## Return to allowlist mode
 
-Since 3.0.0, rerun the README command to restore allowlist enforcement: every Linux installation writes `allowlist` unless `--unrestricted` is explicitly passed with `--run-as-installer`. Saved execution mode and inherited `COMMAND_BRIDGE_EXECUTION_MODE` environment values no longer override that selection. This is a breaking upgrade change: add `--unrestricted` on every install if unrestricted execution is required. Tokens, network settings, custom roots and policy files are preserved; validation failures restore the old configuration and service.
+Since 3.0.0, rerun the README command to restore allowlist enforcement: every Linux installation writes `allowlist` unless `--guarded` or `--run-as-installer --unrestricted` is explicitly passed. Saved execution mode and inherited `COMMAND_BRIDGE_EXECUTION_MODE` environment values no longer override that selection. This is a breaking upgrade change: add `--unrestricted` on every install if unrestricted execution is required. Tokens, network settings, custom roots and policy files are preserved; validation failures restore the old configuration and service.
 
 For an existing installation before upgrading, you can also change the mode manually:
 
@@ -58,7 +58,7 @@ If MCP commands must use the same access as the non-root login account that runs
 (installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --run-as-installer --unrestricted)
 ```
 
-On every install, leave off `--unrestricted` to select allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation selects the mode from the current options rather than the saved mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
+On every install, leave off both `--guarded` and `--unrestricted` to select allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation selects the mode from the current options rather than the saved mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
 
 The installer-account unit uses that account's UID and normal group memberships, plus the dedicated `command-bridge` group to read the root-owned policy. It allows home access and normal filesystem permissions. It does not apply the dedicated account's read-only filesystem, private temporary directory or capability ceiling, so existing sudo privileges remain usable. Anyone holding the bearer token can invoke the selected command policy using this account. Keep the endpoint on a trusted LAN/VPN or private HTTPS route and guard the token accordingly.
 
@@ -107,8 +107,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v3.1.0-<source-sha>
-├── releases/v3.1.0-<source-sha>/
+├── current -> releases/v4.1.1-<source-sha>
+├── releases/v4.1.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -322,3 +322,11 @@ See [the migration guide](migration-1.0.md) for custom native policies, audit ba
 ## Optional file transfer (3.1.0)
 
 Upload/download are disabled by default and independent of unrestricted mode. See [secure file transfer](file-transfer.md) for opt-in installer flags, private directories, 5 MiB limits, no-overwrite behavior and Audit/failure handling. Omitted transfer flags preserve existing transfer settings; edit the saved environment settings to disable.
+
+## Command preflight self-protection (4.0.0)
+
+Recognizable direct self-maintenance commands are rejected before execution in all modes. Existing sudo remains available; no broker, privilege ceiling or read-only OS isolation is added. Use a separate administrator terminal for CommandBridge configuration/program/service changes. This is accidental-command prevention, not protection from arbitrary root code. See [the guard and migration guide](self-protection.md) for supported patterns, path checks, false positives and bypass limits.
+
+## Optional guarded mode (4.1.0)
+
+Use `--guarded` (optionally with `--run-as-installer`) to permit general commands while rejecting recognizable deletion and system changes. Existing sudo/OS permissions remain unchanged; arbitrary scripts/programs can bypass this accident guard. Existing primary installation commands remain allowlist. See [rules, mode selection and limitations](guarded-mode.md).

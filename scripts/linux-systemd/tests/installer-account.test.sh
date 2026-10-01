@@ -161,6 +161,26 @@ install_configuration
 grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$CONFIG_FILE"
 
 # Execute provisioning only inside this fixture, with the selected identity mocked.
+ENABLE_GUARDED=1
+cp "$CONFIG_FILE" "$work/before-guarded.env"
+install_configuration
+grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=guarded' "$CONFIG_FILE"
+sed 's/^COMMAND_BRIDGE_EXECUTION_MODE=.*/COMMAND_BRIDGE_EXECUTION_MODE=allowlist/' "$CONFIG_FILE" > "$work/guarded-roundtrip.env"
+cmp "$work/before-guarded.env" "$work/guarded-roundtrip.env"
+if ( ENABLE_UNRESTRICTED=1 parse_arguments --guarded ) > "$work/guarded-conflict" 2>&1; then echo 'Conflicting modes accepted.'; exit 1; fi
+cp "$CONFIG_FILE" "$work/guarded.env"
+if (
+  INSTALL_SUCCEEDED=0
+  ENABLE_GUARDED=0
+  trap cleanup EXIT
+  install_configuration
+  exit 37
+); then echo 'Guarded rollback injection did not fail'; exit 1; else [[ "$?" == 37 ]]; fi
+cmp "$work/guarded.env" "$CONFIG_FILE"
+ENABLE_GUARDED=0
+install_configuration
+cmp "$work/before-guarded.env" "$CONFIG_FILE"
+
 runuser() {
   [[ "$1" == -u && "$2" == alice && "$3" == -- ]]
   shift 3

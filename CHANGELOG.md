@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.1.1 — 2026-10-01
+
+PATCH from 4.1.0: fix guarded preflight bypasses for curl/wget compact output options and PowerShell named write targets. Resolve Path/LiteralPath/Destination/FilePath and colon-bound values independently of argument order; reject unsupported or ambiguous parameters rather than guessing. Preserve ordinary work-directory targets and system-source copies. Add harmless policy/executor regressions proving blocked Audit lifecycle and untouched files, and synchronize three-mode documentation. Existing modes, defaults, tool interfaces and sudo permissions are unchanged.
+
+## 4.1.0 — 2026-09-30
+
+MINOR from 4.0.0: add optional guarded execution mode while preserving allowlist defaults and unrestricted behavior. Guarded inspects common deletion commands, destructive synchronization options, system file writes, package/account/service/network/disk/registry/task changes and literal command chains before spawn. Unsupported expansion and complex syntax fail explicitly. Preserve existing sudo permissions and always-on MCP self-protection; arbitrary scripts/programs remain outside the guarantee.
+
+Expose rule and Audit ID on guarded rejections, retaining attempted/blocked lifecycle and schemaVersion 1. Add Linux --guarded and Windows -ExecutionMode choices with preserved configuration backups; keep bootstrap primary commands unchanged. Add cross-platform behavior, MCP/Audit, configuration switch/rollback tests and disposable service probes; synchronize package, guides and validation records.
+
+## 4.0.0 — 2026-09-30
+
+MAJOR from 3.1.0: add an always-on command preflight guard that rejects recognizable direct writes to CommandBridge configuration, policy, application, Audit helper and service assets. Previously valid unrestricted self-maintenance commands now fail with `SELF_MODIFICATION_BLOCKED`, so administrators must perform those operations outside MCP. Preserve tool interfaces, existing sudo permissions, service-account modes and installer entry points; no privilege broker or OS sandbox is introduced.
+
+Check common mutation commands, output redirections, literal nested Shell calls, relative/case-normalized paths, symlink/junction parents and destructive ancestor targets. Rejections happen before spawn and produce attempted/blocked Audit lifecycle events. Add cross-platform behavior tests and explicit bypass/false-positive documentation: scripts, variables, arbitrary program internals, filesystem races and external privileged services are not reliably contained. Synchronize versions, README files, platform guidance and validation records.
+
 ## 3.1.0 — 2026-09-30
 
 MINOR from 3.0.0: add optional `command_bridge_upload_file` and `command_bridge_download_file` with independent default-disabled permissions, SHA-256/canonical Base64 validation and a maximum 5 MiB file size. Preserve existing tools and command policies; fix the optional absent Bearer Token schema for local stdio while retaining required HTTP authentication. Restrict transfers to private managed directories and flat filenames; reject links, special files, unsafe ACLs and existing destinations. First release deliberately does not support conditional overwrite because portable filesystem APIs cannot guarantee atomic compare-and-replace.

@@ -1,10 +1,11 @@
 [CmdletBinding()]
-param([switch]$Uninstall, [switch]$Yes, [switch]$Purge, [switch]$DryRun, [switch]$PrintCodexSetup, [string]$CodexUrl, [string]$CodexName, [switch]$RefreshNetwork, [switch]$EnableFileTransfer, [switch]$EnableUpload, [switch]$EnableDownload)
+param([switch]$Uninstall, [switch]$Yes, [switch]$Purge, [switch]$DryRun, [switch]$PrintCodexSetup, [string]$CodexUrl, [string]$CodexName, [switch]$RefreshNetwork, [switch]$EnableFileTransfer, [switch]$EnableUpload, [switch]$EnableDownload, [ValidateSet('allowlist', 'guarded', 'unrestricted')][string]$ExecutionMode)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $arguments = @{}
+if ($Uninstall -and $PSBoundParameters.ContainsKey('ExecutionMode')) { throw 'ExecutionMode applies only to installation.' }
 if ($Uninstall -and $PSBoundParameters.ContainsKey('CodexName')) { throw 'CodexName applies only to installation.' }
-foreach ($key in @('Yes', 'Purge', 'DryRun', 'PrintCodexSetup', 'CodexUrl', 'CodexName', 'RefreshNetwork', 'EnableFileTransfer', 'EnableUpload', 'EnableDownload')) {
+foreach ($key in @('Yes', 'Purge', 'DryRun', 'PrintCodexSetup', 'CodexUrl', 'CodexName', 'RefreshNetwork', 'EnableFileTransfer', 'EnableUpload', 'EnableDownload', 'ExecutionMode')) {
   if ($PSBoundParameters.ContainsKey($key)) { $arguments[$key] = $PSBoundParameters[$key] }
 }
 $installed = Join-Path $env:ProgramFiles 'CommandBridgeMCP\uninstall.ps1'
