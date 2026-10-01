@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.3, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.4, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.4 validation
+
+The 4.1.3 hosted Windows run failed only the native directory-lease test while multiple test files launched cold PowerShell/compiler processes concurrently. Windows test files now run sequentially; production lock readiness remains five seconds and lease safety assertions remain intact. Local Windows npm test passed 79/90 with 11 platform skips; Ubuntu WSL using checksum-verified Node.js 24.18.0 passed 82/90 with eight skips. All Bash scripts/Audit reader and PowerShell scripts/WinSW XML passed syntax checks; package/lockfile versions, document links and git diff --check passed. Hosted CI, real installed services and channel publication are pending this commit; Oracle Linux Enforcing and actual reboot have not been reverified.
 
 ## 4.1.3 validation
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.4 — 2026-10-01
+
+PATCH from 4.1.3: run Windows test files sequentially to avoid concurrent cold PowerShell compiler startups exhausting the directory-lease readiness deadline on hosted CI. Keep the production five-second lock deadline, all safety assertions and Linux test concurrency unchanged. Synchronize current version references; guarded installation remains gated by cross-platform tests and real service validation.
+
 ## 4.1.3 — 2026-10-01
 
 PATCH from 4.1.2: record the required automatic Git commit after each completed, versioned and validated batch in AGENTS.md. Synchronize current version references; runtime behavior and the guarded one-command installation choice remain unchanged.
