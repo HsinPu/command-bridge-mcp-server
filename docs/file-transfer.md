@@ -33,6 +33,10 @@ The hash is the lowercase SHA-256 of the decoded bytes. Base64 must be canonical
 
 Linux operations anchor the directory through an open descriptor under `/proc/self/fd`. Windows verifies protected directory/ancestor ACLs and holds a native directory handle without delete sharing throughout the operation. It rejects failure to obtain or retain that protection. Downloads check descriptor identity, link count, size and modification times before and after reading. This protects the transfer boundary; it is not a filesystem sandbox against administrators, a compromised service account, or separately enabled unrestricted commands.
 
+The Windows managed configuration parent and transfer directory belong to Administrators. Transfer ancestors also recognize the fixed privileged Windows TrustedInstaller SID, while the transfer directory itself still requires SYSTEM/Administrators ownership. This does not authorize ordinary users to write, delete or change ancestor ACLs.
+
+Windows 受管理的設定父目錄與傳輸目錄由 Administrators 擁有；上層系統目錄也辨識 Windows 固定的高權限 TrustedInstaller SID，傳輸根目錄本身仍只接受 SYSTEM／Administrators 擁有者。一般使用者對上層目錄的寫入、刪除或 ACL 修改仍受檢查。
+
 The Windows lock helper loads fixed native interop compiled by npm run build; npm run dev prepares these build assets automatically and resolves the same assembly from source mode. Its control temporary directory is removed after release or startup failure. Its readiness deadline remains five seconds. Lock failures identify only the startup, load or open stage; they do not expose compiler output or internal paths. Windows test files run sequentially to avoid unrelated helper startup contention.
 
 Windows 目錄鎖 helper 載入 npm run build 預先編譯的固定原生介面；npm run dev 會自動準備建置資產，來源模式使用相同組件。控制用暫存目錄在釋放或啟動失敗後會清除。鎖定就緒期限維持 5 秒；失敗只提供啟動、載入或開啟階段，不公開編譯輸出或內部路徑。Windows 測試逐檔執行，避免其他 helper 同時啟動的資源競爭。

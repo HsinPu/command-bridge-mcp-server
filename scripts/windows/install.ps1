@@ -359,6 +359,8 @@ function Set-RestrictedAcl {
   $icacls = Join-Path $env:SystemRoot "System32\icacls.exe"
   Invoke-External $icacls @($StagedInstallRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")
   Invoke-External $icacls @($ConfigRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")
+  # The transfer validator requires protected ownership of its managed parent.
+  Invoke-External $icacls @($ConfigRoot, '/setowner', '*S-1-5-32-544')
   Invoke-External $icacls @($WorkDirectory, "/grant:r", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M")
   Invoke-External $icacls @($LogsDirectory, "/grant:r", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M")
   $transferRoot = Join-Path $ConfigRoot 'transfers'

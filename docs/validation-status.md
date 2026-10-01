@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.13, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.14, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.14 validation
+
+Hosted 4.1.13 passed both general test jobs, but its early real LocalService upload failed with FILE_ROOT_UNSAFE:owner. The installer now assigns Administrators ownership to its managed configuration parent; the validator recognizes the fixed privileged TrustedInstaller SID only on ancestors, retaining strict transfer-root ownership and non-administrator modification checks. Read-only native checks confirmed TrustedInstaller owns the local Windows volume root and SYSTEM owns ProgramData. Local Windows npm test passed 80/92 with 12 skips, including unavailable elevation. All PowerShell scripts, build script syntax and git diff --check passed; version-synchronized Bash fixture syntax passed. Full local Linux tests last passed for 4.1.12 (82/92, ten skips); current functional changes are Windows-specific. Hosted elevated owner regression, early real upload/full service gates and channel publication are pending. Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.13 validation
 

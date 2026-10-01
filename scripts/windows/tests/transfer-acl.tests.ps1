@@ -25,6 +25,7 @@ try {
   }
   $script:TransferDirectoryCreated = $true
   Set-RestrictedAcl -StagedInstallRoot $application
+  if ([IO.Directory]::GetAccessControl($ConfigRoot).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne 'S-1-5-32-544') { throw 'Incorrect managed parent owner.' }
   # Read directly through .NET; CI's parent PowerShell 7 module path must not
   # redirect Windows PowerShell's Microsoft.PowerShell.Security discovery.
   $acl = [IO.Directory]::GetAccessControl($transfer)

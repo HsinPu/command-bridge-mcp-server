@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.14 — 2026-10-01
+
+PATCH from 4.1.13: assign Administrators ownership to the installer-managed Windows configuration parent and recognize the fixed privileged TrustedInstaller SID only for transfer ancestors (Windows volume roots use this owner). Keep transfer-root ownership limited to SYSTEM/Administrators and retain non-administrator write/delete/ACL checks. Extend the native installer ACL regression to verify managed-parent ownership. The early real LocalService probe identified FILE_ROOT_UNSAFE:owner instead of failing late with a generic upload error.
+
 ## 4.1.13 — 2026-10-01
 
 PATCH from 4.1.12: canonicalize the Windows unsafe-root test's temporary directory before requesting upload. Hosted TEMP uses an 8.3 RUNNER~1 alias, so the stricter regression was stopped by the earlier canonical-path check instead of exercising ACL rejection. Preserve production path restrictions and require a real owner/readable/writable ACL result; keep early LocalService transfer verification and full release gates.
