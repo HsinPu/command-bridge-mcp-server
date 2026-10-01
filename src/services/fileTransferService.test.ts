@@ -109,6 +109,19 @@ test("Windows directory lease permits exclusive file publication and prevents di
   } finally { await lease?.release(); await rm(root, { recursive: true, force: true }); await rm(root + "-moved", { recursive: true, force: true }); }
 });
 
+test("Windows directory lease reports a failed native open and cleans its compiler temporary directory", { skip: process.platform !== "win32" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-files-missing-"));
+  const before = new Set((await readdir(tmpdir())).filter(name => name.startsWith("cb-root-lease-")));
+  try {
+    await assert.rejects(lockWindowsRoot(join(root, "absent")), error => {
+      assert.match((error as Error).message, /transfer directory \(open\)/);
+      return true;
+    });
+    const remaining = (await readdir(tmpdir())).filter(name => name.startsWith("cb-root-lease-") && !before.has(name));
+    assert.deepEqual(remaining, []);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("Linux transfer cancellation and terminal Audit failure withhold content and report committed uploads", { skip: process.platform !== "linux" }, async () => {
   const root = await mkdtemp(join(tmpdir(), "cb-files-failure-")), audit = new MemoryAudit(), files = new FileTransferService(config(root), audit);
   try {

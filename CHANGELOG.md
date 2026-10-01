@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.5 — 2026-10-01
+
+PATCH from 4.1.4: supply the native Windows directory-lock helper with its own private TEMP/TMP directory for .NET compilation. Preserve the five-second readiness deadline and fail-closed transfer behavior. Report only safe startup/compile/open stage names on failure, never compiler output or paths; cover failed native opens and compiler-directory cleanup. Sequential Windows tests alone did not resolve hosted CI; installation publication remains gated by real cross-platform validation.
+
 ## 4.1.4 — 2026-10-01
 
 PATCH from 4.1.3: run Windows test files sequentially to avoid concurrent cold PowerShell compiler startups exhausting the directory-lease readiness deadline on hosted CI. Keep the production five-second lock deadline, all safety assertions and Linux test concurrency unchanged. Synchronize current version references; guarded installation remains gated by cross-platform tests and real service validation.
