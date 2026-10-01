@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.8, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.9, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.9 validation
+
+The hosted elevated 4.1.8 native ACL regression failed before service tests: removing inherited rights first denied later owner assignment. Production now preserves explicit SYSTEM/Administrators rights, assigns the owner, then removes inheritance and grants LocalService access. Local Windows npm test passed 80/92 with 12 skips, including the elevated-owner regression because this host is not elevated; modified PowerShell scripts and version-synchronized Bash fixtures passed syntax checks. Full local Linux tests were last run for 4.1.8 (82/92, ten skips); the 4.1.7 hosted Linux service/migration gate passed. Hosted 4.1.9 elevated ACL/general/service tests and channel publication are pending this commit; Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.8 validation
 

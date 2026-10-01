@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.9 — 2026-10-01
+
+PATCH from 4.1.8: grant explicit SYSTEM/Administrators full control before assigning the Windows transfer-directory owner and removing inherited permissions. The elevated native ACL regression caught owner assignment being denied after inheritance removal left no explicit administrator rights. Keep the same final protected ACL and LocalService publication rights, and retain the native regression and complete service publication gate.
+
 ## 4.1.8 — 2026-10-01
 
 PATCH from 4.1.7: apply Windows transfer-directory inheritance removal and owner assignment in separate icacls calls; combining /inheritance:r with /setowner was rejected during real service installation. Retain the Administrators owner, SYSTEM/Administrators full control and LocalService directory/file rights. Add an elevated disposable-directory behavior test using the production ACL function to verify owner, protected inheritance and directory publication without deletion rights; explicitly skip when elevation is unavailable. Linux 4.1.7 service lifecycle and 1.x migration/rollback have passed hosted CI; keep the full Windows service validation gate before publication.
