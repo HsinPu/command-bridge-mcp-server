@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.13 — 2026-10-01
+
+PATCH from 4.1.12: canonicalize the Windows unsafe-root test's temporary directory before requesting upload. Hosted TEMP uses an 8.3 RUNNER~1 alias, so the stricter regression was stopped by the earlier canonical-path check instead of exercising ACL rejection. Preserve production path restrictions and require a real owner/readable/writable ACL result; keep early LocalService transfer verification and full release gates.
+
 ## 4.1.12 — 2026-10-01
 
 PATCH from 4.1.11: query Windows transfer ACLs through .NET rather than Get-Acl auto-loading and retain all existing owner/access rules. Provide only fixed ACL failure categories and safe MCP error codes in file-transfer verification. Run the real LocalService file-transfer probe immediately after initial service setup, before longer lifecycle/rollback cases, while retaining the final post-reinstall probe. Hosted 4.1.10 reached real upload but its generic failure lacked an actionable category; publication remains blocked until the complete service gate passes.

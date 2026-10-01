@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm, writeFile, symlink, link, chmod, rename, unlink } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile, symlink, link, chmod, rename, unlink, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -86,7 +86,9 @@ test("Linux transfers round-trip binary data, preserve lifecycle metadata and ne
 });
 
 test("Windows transfers refuse ordinary user-owned or unverified roots", { skip: process.platform !== "win32" }, async () => {
-  const root = await mkdtemp(join(tmpdir(), "cb-files-acl-")), audit = new MemoryAudit();
+  // Hosted Windows TEMP can use RUNNER~1; reach ACL validation with its
+  // canonical path rather than testing the earlier alias rejection instead.
+  const root = await realpath(await mkdtemp(join(tmpdir(), "cb-files-acl-"))), audit = new MemoryAudit();
   try {
     const files = new FileTransferService(config(root), audit);
     await assert.rejects(files.upload(payload(Buffer.from("data"))), /ACL check failed \((owner|readable|writable)\)/);

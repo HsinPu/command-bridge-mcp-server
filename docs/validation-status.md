@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.12, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.13, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.13 validation
+
+The stricter hosted 4.1.12 unsafe-root test never reached ACL validation because TEMP used the RUNNER~1 short alias. Its fixture now uses realpath; production canonical-path checks remain unchanged. Local Windows npm test passed 80/92 with 12 skips and now requires a real ACL owner/access rejection. Source verifier syntax and git diff --check passed. Full local Linux tests last passed for 4.1.12 (82/92, ten skips); this change affects only the Windows fixture and version references. Hosted early LocalService transfer/full lifecycle checks and channel publication are pending this commit. Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.12 validation
 
