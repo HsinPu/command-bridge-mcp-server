@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.9, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.10, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.10 validation
+
+Hosted 4.1.9 executed all production transfer ACL commands successfully; its regression then failed when inherited PowerShell 7 module paths prevented Windows PowerShell from auto-loading Get-Acl. The regression now reads ACLs directly through .NET, preserving all security assertions. Local Windows npm test passed 80/92 with 12 skips (including unavailable elevation). Direct Windows PowerShell .NET ACL reads and permission-enum checks passed. Modified PowerShell scripts, version-synchronized Bash fixtures, package versions and git diff --check passed. Hosted elevated ACL/general/service tests and channel publication are pending this commit; previous 4.1.7 hosted Linux service/migration succeeded. Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.9 validation
 

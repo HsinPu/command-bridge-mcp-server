@@ -74,7 +74,7 @@ MOCK_MODE=Enforcing
 expect_failure bash -c 'source "$1"; trap - EXIT ERR; command() { if [[ "$1 $2" == "-v restorecon" ]]; then return 1; fi; builtin command "$@"; }; detect_selinux' _ "$work/installer.sh"
 detect_selinux
 
-BUILT_PACKAGE_VERSION=4.1.9
+BUILT_PACKAGE_VERSION=4.1.10
 SOURCE_REF=1111111111111111111111111111111111111111
 runtime="$RUNTIME_DIR/node-v${NODE_VERSION}-linux-x64"
 release="$RELEASES_DIR/v${BUILT_PACKAGE_VERSION}-${SOURCE_REF}"

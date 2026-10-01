@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.10 — 2026-10-01
+
+PATCH from 4.1.9: read ACLs through the native .NET Directory API in the elevated Windows regression so inherited PowerShell 7 module paths cannot redirect Windows PowerShell Security module discovery. Hosted 4.1.9 successfully executed the production ACL sequence; the regression then failed only while auto-loading Get-Acl. Preserve all owner/inheritance/publication/deletion assertions and service release gates.
+
 ## 4.1.9 — 2026-10-01
 
 PATCH from 4.1.8: grant explicit SYSTEM/Administrators full control before assigning the Windows transfer-directory owner and removing inherited permissions. The elevated native ACL regression caught owner assignment being denied after inheritance removal left no explicit administrator rights. Keep the same final protected ACL and LocalService publication rights, and retain the native regression and complete service publication gate.
