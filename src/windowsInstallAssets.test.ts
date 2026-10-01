@@ -63,6 +63,13 @@ test("Windows installer config, health, runtime PATH and audit checks work under
   assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
 });
 const installer = readFileSync(resolve(projectRoot, "scripts/windows/install.ps1"), "utf8");
+test("Windows installer applies native protected transfer directory ACLs", { skip: process.platform !== "win32" }, context => {
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+    resolve(projectRoot, "scripts/windows/tests/transfer-acl.tests.ps1")], { encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+  if (result.stdout.includes("SKIP_ADMIN_REQUIRED")) context.skip("Native owner assignment requires an elevated disposable host.");
+  else assert.match(result.stdout, /Native transfer ACL owner, inheritance and publication rights passed/);
+});
 const uninstaller = readFileSync(resolve(projectRoot, "scripts/windows/uninstall.ps1"), "utf8");
 const writer = readFileSync(
   resolve(projectRoot, "scripts/windows/audit/write-audit-event.ps1"),

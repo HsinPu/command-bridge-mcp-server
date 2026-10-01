@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.8 — 2026-10-01
+
+PATCH from 4.1.7: apply Windows transfer-directory inheritance removal and owner assignment in separate icacls calls; combining /inheritance:r with /setowner was rejected during real service installation. Retain the Administrators owner, SYSTEM/Administrators full control and LocalService directory/file rights. Add an elevated disposable-directory behavior test using the production ACL function to verify owner, protected inheritance and directory publication without deletion rights; explicitly skip when elevation is unavailable. Linux 4.1.7 service lifecycle and 1.x migration/rollback have passed hosted CI; keep the full Windows service validation gate before publication.
+
 ## 4.1.7 — 2026-10-01
 
 PATCH from 4.1.6: deploy the file-transfer verifier alongside the installation verifier, and run guarded/file-transfer service smoke verifiers from the active deployed release on both platforms so they resolve its installed MCP SDK, rather than requiring dependencies in the source checkout. Resolve the Windows active release again after reinstall and verify copied Linux asset contents. Preserve real MCP/Audit assertions and all publication gates. Hosted 4.1.6 general tests passed on both platforms; Linux lifecycle exposed the missing checkout SDK before file-transfer verification.

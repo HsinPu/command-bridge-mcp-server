@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.7, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.8, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.8 validation
+
+Hosted 4.1.7 Linux general/service/migration tests passed. The preceding Windows service run exposed icacls rejecting combined inheritance/owner options during transfer enablement. Those operations are now separate and an elevated disposable-directory regression invokes the production ACL function, checking Administrators ownership, protected inheritance and LocalService publication without directory deletion/control rights. Local Windows npm test passed 80/92 with 12 skips (11 platform skips plus the elevated-owner test); WSL with checksum-verified Node.js 24.18.0 passed 82/92 with ten platform skips. A non-elevated native CLI fixture with current-user ownership verified separate ACL commands, protected inheritance and non-deleting directory rights; it does not establish the Administrators-owner result. Bash/Audit reader and PowerShell syntax, versions, links and git diff --check passed. Hosted elevated ACL/full Windows service verification and channel publication are pending this commit; Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.7 validation
 

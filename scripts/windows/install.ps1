@@ -364,7 +364,8 @@ function Set-RestrictedAcl {
   $transferRoot = Join-Path $ConfigRoot 'transfers'
   if ($script:TransferDirectoryCreated) {
     if ((Get-Item -LiteralPath $transferRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unsafe transfer directory.' }
-    Invoke-External $icacls @($transferRoot, '/inheritance:r', '/setowner', '*S-1-5-32-544')
+    Invoke-External $icacls @($transferRoot, '/inheritance:r')
+    Invoke-External $icacls @($transferRoot, '/setowner', '*S-1-5-32-544')
     Invoke-External $icacls @($transferRoot, '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(RX,WD)', '*S-1-5-19:(OI)(CI)(IO)M')
   }
 }
