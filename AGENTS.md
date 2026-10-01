@@ -41,7 +41,7 @@ npm start
 ```
 
 - npm test 會先建置，再由 scripts/test.mjs 自動探索 dist/ 內所有 .test.js。
-- npm run dev 使用 tsx 執行 src/index.ts；npm start 執行建置後的 dist/index.js。
+- npm run dev 會先建置以準備 Windows 原生目錄鎖資產，再使用 tsx 執行 src/index.ts；npm start 執行建置後的 dist/index.js。
 - 本機設定範本為 .env.example；.env、node_modules/、dist/ 已列入 .gitignore。
 - CI 另檢查 Linux Shell 語法、PowerShell 語法、WinSW XML 與 systemd unit。
 

@@ -170,7 +170,7 @@ export async function lockWindowsRoot(root: string): Promise<{ child: ChildProce
   const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
   const control = await mkdtemp(join(tmpdir(), "cb-root-lease-"));
   const releaseFile = join(control, "release");
-  const child = spawn(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { windowsHide: true, env: { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: join(systemRoot, "System32"), PSModulePath: join(systemRoot, "System32/WindowsPowerShell/v1.0/Modules"), CB_LEASE_ASSEMBLY: fileURLToPath(new URL("../windows-directory-lease.dll", import.meta.url)), CB_ROOT: root, CB_RELEASE: releaseFile }, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn(join(systemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { windowsHide: true, env: { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: join(systemRoot, "System32"), PSModulePath: join(systemRoot, "System32/WindowsPowerShell/v1.0/Modules"), CB_LEASE_ASSEMBLY: fileURLToPath(new URL("../../dist/windows-directory-lease.dll", import.meta.url)), CB_ROOT: root, CB_RELEASE: releaseFile }, stdio: ["pipe", "pipe", "pipe"] });
   // Load only the fixed assembly built with this application; never compile
   // native interop while holding a file-transfer request.
   let stage = "startup";

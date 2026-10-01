@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.10, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.11, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.11 validation
+
+Preserve Windows source-mode file transfer after moving interop compilation into the build: predev prepares assets and both src/dist resolve the same fixed dist assembly. Local Windows npm test passed 80/92 with 12 skips, including unavailable elevation. npm run predev and a direct tsx source-mode lease probe passed, including rejection of directory replacement while locked. Version/lockfile consistency, document links, Bash fixture syntax and git diff --check passed. Hosted 4.1.10 general tests, including elevated native ACL behavior, have passed both platforms; its service gate is still running. Hosted 4.1.11 full verification/channel publication is pending this commit; Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.10 validation
 

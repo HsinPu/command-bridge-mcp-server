@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.11 — 2026-10-01
+
+PATCH from 4.1.10: resolve the Windows directory-lease assembly from the application dist directory in both source and built execution. Prepare build assets through predev so npm run dev retains file-transfer support after moving interop compilation out of requests. Production deadlines, ACLs and MCP interfaces remain unchanged; preserve the full CI/service publication gate.
+
 ## 4.1.10 — 2026-10-01
 
 PATCH from 4.1.9: read ACLs through the native .NET Directory API in the elevated Windows regression so inherited PowerShell 7 module paths cannot redirect Windows PowerShell Security module discovery. Hosted 4.1.9 successfully executed the production ACL sequence; the regression then failed only while auto-loading Get-Acl. Preserve all owner/inheritance/publication/deletion assertions and service release gates.

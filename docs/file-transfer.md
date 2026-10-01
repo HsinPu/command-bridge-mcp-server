@@ -33,9 +33,9 @@ The hash is the lowercase SHA-256 of the decoded bytes. Base64 must be canonical
 
 Linux operations anchor the directory through an open descriptor under `/proc/self/fd`. Windows verifies protected directory/ancestor ACLs and holds a native directory handle without delete sharing throughout the operation. It rejects failure to obtain or retain that protection. Downloads check descriptor identity, link count, size and modification times before and after reading. This protects the transfer boundary; it is not a filesystem sandbox against administrators, a compromised service account, or separately enabled unrestricted commands.
 
-The Windows lock helper loads fixed native interop compiled by npm run build; its control temporary directory is removed after release or startup failure. Its readiness deadline remains five seconds. Lock failures identify only the startup, load or open stage; they do not expose compiler output or internal paths. Windows test files run sequentially to avoid unrelated helper startup contention.
+The Windows lock helper loads fixed native interop compiled by npm run build; npm run dev prepares these build assets automatically and resolves the same assembly from source mode. Its control temporary directory is removed after release or startup failure. Its readiness deadline remains five seconds. Lock failures identify only the startup, load or open stage; they do not expose compiler output or internal paths. Windows test files run sequentially to avoid unrelated helper startup contention.
 
-Windows 目錄鎖 helper 載入 npm run build 預先編譯的固定原生介面，控制用暫存目錄在釋放或啟動失敗後會清除。鎖定就緒期限維持 5 秒；失敗只提供啟動、載入或開啟階段，不公開編譯輸出或內部路徑。Windows 測試逐檔執行，避免其他 helper 同時啟動的資源競爭。
+Windows 目錄鎖 helper 載入 npm run build 預先編譯的固定原生介面；npm run dev 會自動準備建置資產，來源模式使用相同組件。控制用暫存目錄在釋放或啟動失敗後會清除。鎖定就緒期限維持 5 秒；失敗只提供啟動、載入或開啟階段，不公開編譯輸出或內部路徑。Windows 測試逐檔執行，避免其他 helper 同時啟動的資源競爭。
 
 Only one transfer is active at a time; there is no waiting queue. The directory is limited to 1,000 entries, each transfer to 5 MiB and a 15-second response deadline. HTTP authenticates before parsing upload bodies, caps body size and permits at most four concurrent MCP requests when transfers are enabled. Timed-out storage operations retain the transfer slot until actual cleanup finishes, rather than starting unlimited work. Filesystem calls themselves may outlive a deadline.
 
