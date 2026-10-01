@@ -35,9 +35,9 @@ try {
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-ExecutionMode', 'guarded')
   $guardedConfig = [IO.File]::ReadAllText($config)
   if ([regex]::Replace($guardedConfig, '(?m)^COMMAND_BRIDGE_EXECUTION_MODE=[^\r\n]*', 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist') -cne $modeBefore) { throw 'Mode switch changed other settings.' }
-  & $node (Join-Path $root 'scripts\verify-install.mjs') $config 'Remove-Item C:\command-bridge-guarded-absent' 'error:DELETE_OPERATION_BLOCKED'
+  & $node (Join-Path $release 'scripts\verify-install.mjs') $config 'Remove-Item C:\command-bridge-guarded-absent' 'error:DELETE_OPERATION_BLOCKED'
   if ($LASTEXITCODE -ne 0) { throw 'Guarded deletion/Audit verification failed.' }
-  & $node (Join-Path $root 'scripts\verify-install.mjs') $config 'Restart-Service example' 'error:SYSTEM_MODIFICATION_BLOCKED'
+  & $node (Join-Path $release 'scripts\verify-install.mjs') $config 'Restart-Service example' 'error:SYSTEM_MODIFICATION_BLOCKED'
   if ($LASTEXITCODE -ne 0) { throw 'Guarded system/Audit verification failed.' }
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-ExecutionMode', 'allowlist')
   if ([IO.File]::ReadAllText($config) -cne $modeBefore) { throw 'Mode round trip changed settings.' }
@@ -83,7 +83,9 @@ try {
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Yes')
   if (-not (Test-Path -LiteralPath $config) -or -not (Test-Path -LiteralPath $preserved)) { throw 'Uninstall deleted preserved data.' }
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-EnableFileTransfer')
-  & $node (Join-Path $root 'scripts\verify-file-transfer.mjs') $config
+  [xml]$activeDefinition = [IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml'))
+  $activeRelease = Split-Path -Parent (Split-Path -Parent (([string]$activeDefinition.service.arguments).Trim('"').Replace('%BASE%', $install)))
+  & $node (Join-Path $activeRelease 'scripts\verify-file-transfer.mjs') $config
   if ($LASTEXITCODE -ne 0) { throw 'Service file transfer/Audit verification failed.' }
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Purge', '-Yes')
   if (Test-Path -LiteralPath $config) { throw 'Purge left configuration.' }

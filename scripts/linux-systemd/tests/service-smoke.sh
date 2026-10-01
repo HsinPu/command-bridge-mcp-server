@@ -169,7 +169,7 @@ sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted --enable-file-transfer
-sudo "$node" "$root/scripts/verify-file-transfer.mjs" "$config"
+sudo "$node" /opt/command-bridge/current/scripts/verify-file-transfer.mjs "$config"
 sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
 sudo test ! -e /var/lib/command-bridge-installer
 [[ "$(id -u)" == "$login_uid" ]]

@@ -349,6 +349,7 @@ function Copy-ApplicationPayload {
   New-Item -ItemType Directory -Path $auditDestination -Force | Out-Null
   Copy-Item -Path (Join-Path $auditSource "*") -Destination $auditDestination -Force
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-install.mjs') -Destination (Join-Path $Destination 'scripts\verify-install.mjs')
+  Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-file-transfer.mjs') -Destination (Join-Path $Destination 'scripts\verify-file-transfer.mjs')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmdlet.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmdlet.ps1')
   [IO.File]::WriteAllText((Join-Path $Destination 'install-info.json'), (@{ version = $PackageVersion; sourceSha = $SourceRef; runtimeVersion = $NodeVersion } | ConvertTo-Json))
 }

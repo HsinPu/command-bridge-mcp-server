@@ -1047,6 +1047,7 @@ install_runtime_and_release() {
     install -m 0755 "${source_dir}/scripts/linux-systemd/uninstall.sh" "${release_staging}/uninstall.sh"
     install -d -m 0755 "${release_staging}/scripts"
     install -m 0644 "${source_dir}/scripts/verify-install.mjs" "${release_staging}/scripts/verify-install.mjs"
+    install -m 0644 "${source_dir}/scripts/verify-file-transfer.mjs" "${release_staging}/scripts/verify-file-transfer.mjs"
     printf '{"version":"%s","sourceSha":"%s","runtimeVersion":"%s"}\n' "${package_version}" "${SOURCE_REF}" "${NODE_VERSION}" > "${release_staging}/install-info.json"
     chown -R root:root "${release_staging}"
     chmod -R go-w "${release_staging}"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.7 — 2026-10-01
+
+PATCH from 4.1.6: deploy the file-transfer verifier alongside the installation verifier, and run guarded/file-transfer service smoke verifiers from the active deployed release on both platforms so they resolve its installed MCP SDK, rather than requiring dependencies in the source checkout. Resolve the Windows active release again after reinstall and verify copied Linux asset contents. Preserve real MCP/Audit assertions and all publication gates. Hosted 4.1.6 general tests passed on both platforms; Linux lifecycle exposed the missing checkout SDK before file-transfer verification.
+
 ## 4.1.6 — 2026-10-01
 
 PATCH from 4.1.5: compile the fixed Windows directory-lease interop assembly during npm run build, then load it from the installed application at runtime. Hosted stage diagnostics confirmed .NET compilation exceeded the unchanged five-second request readiness deadline even with private TEMP/TMP. Remove request-time compilation instead of widening that deadline; retain native handle protection, failed-open cleanup tests and fail-closed behavior. Build failure stops deployment and the cross-platform release gate remains intact.

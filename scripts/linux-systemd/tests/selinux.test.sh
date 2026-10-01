@@ -74,7 +74,7 @@ MOCK_MODE=Enforcing
 expect_failure bash -c 'source "$1"; trap - EXIT ERR; command() { if [[ "$1 $2" == "-v restorecon" ]]; then return 1; fi; builtin command "$@"; }; detect_selinux' _ "$work/installer.sh"
 detect_selinux
 
-BUILT_PACKAGE_VERSION=4.1.6
+BUILT_PACKAGE_VERSION=4.1.7
 SOURCE_REF=1111111111111111111111111111111111111111
 runtime="$RUNTIME_DIR/node-v${NODE_VERSION}-linux-x64"
 release="$RELEASES_DIR/v${BUILT_PACKAGE_VERSION}-${SOURCE_REF}"
@@ -106,7 +106,7 @@ TEMP_DIR="$work/staging"
 mkdir -p "$TEMP_DIR/node-runtime/bin" "$TEMP_DIR/source/dist" "$TEMP_DIR/source/node_modules" \
   "$TEMP_DIR/source/scripts/linux-systemd"
 cp "$runtime/bin/node" "$TEMP_DIR/node-runtime/bin/node"
-for file in package.json package-lock.json README.md SECURITY.md scripts/verify-install.mjs scripts/linux-systemd/uninstall.sh; do
+for file in package.json package-lock.json README.md SECURITY.md scripts/verify-install.mjs scripts/verify-file-transfer.mjs scripts/linux-systemd/uninstall.sh; do
   printf 'fixture\n' > "$TEMP_DIR/source/$file"
 done
 chown() { :; }
@@ -114,6 +114,7 @@ SOURCE_REF=2222222222222222222222222222222222222222
 install_runtime_and_release arm64
 [[ "$("$RUNTIME_DIR/node-v${NODE_VERSION}-linux-arm64/bin/node")" == v24.18.0 ]]
 [[ -f "$CURRENT_LINK/install-info.json" ]]
+cmp "$TEMP_DIR/source/scripts/verify-file-transfer.mjs" "$CURRENT_LINK/scripts/verify-file-transfer.mjs"
 SOURCE_REF=1111111111111111111111111111111111111111
 
 # Missing labeling/verification means no activation links are created.
