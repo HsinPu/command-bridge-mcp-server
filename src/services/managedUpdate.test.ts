@@ -128,3 +128,20 @@ test("control diagnostics expose only validated numeric locations", async () => 
   await assert.rejects(runUpdateControl(process.execPath,["-e","console.log(JSON.stringify({controlError:true,stage:2,hresult:-2147024891,line:8}));process.exit(1)"]),/control-stage=2, hresult=-2147024891, line=8/);
   await assert.rejects(runUpdateControl(process.execPath,["-e","console.log(JSON.stringify({controlError:true,stage:2,hresult:0,line:8,secret:'must-stay-hidden'}));process.exit(1)"]), error=>error instanceof Error && !error.message.includes("must-stay-hidden") && !error.message.includes("control-stage"));
 });
+
+
+test("Linux deployment permissions remain readable under strict updater umask", {skip:process.platform!=="linux"}, async()=>{
+ const {spawnSync}=await import("node:child_process");
+ const result=spawnSync("bash",["scripts/linux-systemd/tests/program-permissions.test.sh"],{encoding:"utf8",timeout:15000});
+ assert.equal(result.status,0,result.stderr);
+});
+test("real Windows request script retains numeric diagnostics with restricted environment", {skip:process.platform!=="win32"}, async()=>{
+ const fs=await import("node:fs/promises"), os=await import("node:os"), path=await import("node:path");
+ const fixture=await fs.mkdtemp(path.join(os.tmpdir(),"cb-control-regression-"));
+ try {
+  await fs.copyFile("scripts/managed-update/request.ps1",path.join(fixture,"request.ps1"));
+  await fs.writeFile(path.join(fixture,"common.ps1"),"function Read-UpdateRecord { throw 'No record' }\nfunction Get-UpdateTask { throw [InvalidOperationException]::new('Fixture failure') }\n");
+  const ps=path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe");
+  await assert.rejects(runUpdateControl(ps,["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",path.join(fixture,"request.ps1")]),/control-stage=2/);
+ } finally {await fs.rm(fixture,{recursive:true,force:true});}
+});

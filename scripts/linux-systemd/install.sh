@@ -1055,6 +1055,14 @@ rollback_audit_access() {
   AUDIT_ACCESS_INSTALLED=0
 }
 
+normalize_program_permissions() {
+  local path=$1
+  [[ -d "$path" && ! -L "$path" ]] || { fail "Program permission normalization requires a regular directory."; return 1; }
+  # Only managed program assets, never configuration or user work data.
+  find -P "$path" -xdev -type d -exec chmod a+rX,go-w {} +
+  find -P "$path" -xdev -type f -exec chmod a+rX,go-w {} +
+}
+
 install_runtime_and_release() {
   local node_arch=$1
   local source_dir="${TEMP_DIR}/source"
@@ -1085,7 +1093,7 @@ install_runtime_and_release() {
     install -d -m 0755 "${runtime_staging}"
     cp -a --no-preserve=context "${TEMP_DIR}/node-runtime/." "${runtime_staging}/"
     chown -R root:root "${runtime_staging}"
-    chmod -R go-w "${runtime_staging}"
+    normalize_program_permissions "${runtime_staging}"
     mv "${runtime_staging}" "${runtime_final}"
   fi
 
@@ -1112,9 +1120,12 @@ install_runtime_and_release() {
     install -m 0644 "${source_dir}/scripts/verify-file-transfer.mjs" "${release_staging}/scripts/verify-file-transfer.mjs"
     printf '{"version":"%s","sourceSha":"%s","runtimeVersion":"%s"}\n' "${package_version}" "${SOURCE_REF}" "${NODE_VERSION}" > "${release_staging}/install-info.json"
     chown -R root:root "${release_staging}"
-    chmod -R go-w "${release_staging}"
+    normalize_program_permissions "${release_staging}"
     mv "${release_staging}" "${release_final}"
   fi
+
+  normalize_program_permissions "${runtime_final}"
+  normalize_program_permissions "${release_final}"
 
   # Also repair reused runtimes/releases left behind by a failed installation.
   restore_current_selinux_layout || fail "SELinux deployment labels could not be prepared; service activation stopped."
@@ -1545,7 +1556,7 @@ main() {
   parse_arguments "$@"
   require_root_systemd_linux
   for command_name in \
-    awk chown chmod cp curl df env flock getent grep groupadd groupdel gzip id install \
+    awk chown chmod cp curl df env find flock getent grep groupadd groupdel gzip id install \
     ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
     tr uname unlink useradd userdel sed; do
     require_command "${command_name}"

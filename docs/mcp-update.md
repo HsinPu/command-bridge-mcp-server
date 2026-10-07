@@ -1,4 +1,4 @@
-# MCP service updates — 4.4.0
+# MCP service updates (introduced in 4.4.0)
 
 Managed Linux and Windows service installations enable `COMMAND_BRIDGE_MCP_UPDATE_ENABLED=true` by default. Existing deployments must first run their existing CLI update or fixed bootstrap installation once. npm/stdio installations do not create the privileged worker; use your package manager there.
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
-import { createAuditEvent, type AuditLog } from "./auditLog.js";
+import { createAuditEvent, buildWindowsAuditEnvironment, type AuditLog } from "./auditLog.js";
 
 export const updateJobSchema = z.object({
   schemaVersion: z.literal(1), jobId: z.string().uuid(), state: z.enum(["accepted", "running", "succeeded", "failed", "interrupted"]),
@@ -20,7 +20,7 @@ export interface UpdateAdapter { start(): Promise<UpdateJob>; status(jobId?: str
 export function runUpdateControl(executable: string, args: string[], deadlineMs = 15_000): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "ignore"],
-      env: process.platform === "win32" ? { SystemRoot: process.env.SystemRoot ?? "C:\\Windows", windir: process.env.SystemRoot ?? "C:\\Windows", ProgramFiles: process.env.ProgramFiles ?? "C:\\Program Files", ProgramData: process.env.ProgramData ?? "C:\\ProgramData", TEMP: process.env.TEMP ?? "C:\\Windows\\Temp", PATH: (process.env.SystemRoot ?? "C:\\Windows") + "\\System32" } : { PATH: "/usr/sbin:/usr/bin:/sbin:/bin" } });
+      env: process.platform === "win32" ? { ...buildWindowsAuditEnvironment(process.env.SystemRoot ?? "C:\\Windows"), ProgramFiles: process.env.ProgramFiles ?? "C:\\Program Files", ProgramData: process.env.ProgramData ?? "C:\\ProgramData" } : { PATH: "/usr/sbin:/usr/bin:/sbin:/bin" } });
     let output = "", settled = false;
     const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); error ? reject(error) : resolve(output); };
     const failure = () => {

@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.2, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.3, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.3 validation
+
+4.4.2 general jobs passed; Linux numerical diagnosis located candidate health failure. The root worker's 0027 umask produces unreadable root-owned program assets after deployment. Normalize program read/traverse permissions only, retaining private configuration and external symlink targets. Windows request acceptance remains under diagnosis; reuse the proven Audit PowerShell environment and add native controlled-script tests. Local Windows npm test passed 107/124 (17 skips), WSL Node.js 24.18.0 passed 110/124 (14 skips). The strict-umask fixture verified program readability, unchanged external private files and rejection of a symlink root; native Windows request-script diagnostics passed. PowerShell/Bash syntax and git diff --check passed. Hosted service validation and publication remain pending; channel remains 4.3.3.
 
 ## 4.4.2 validation
 

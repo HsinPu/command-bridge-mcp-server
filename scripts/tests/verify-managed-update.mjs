@@ -31,6 +31,8 @@ import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 function diagnostics(reply) {
   if (process.env.GITHUB_ACTIONS !== 'true') return;
+  const errorCode = reply?.structuredContent?.error?.code;
+  for (const code of ['UPDATE_CONTROL_FAILED','UPDATE_DISABLED','UNEXPECTED_ERROR','AUDIT_LOG_WRITE_FAILED','UPDATE_ACCEPTED_AUDIT_FAILED']) if (code === errorCode) console.error('Request error category:',code);
   const location = /control-stage=(\d+), hresult=(-?\d+), line=(\d+)/.exec(reply?.structuredContent?.error?.message ?? '');
   if (location) console.error('Control error location:',location.slice(1).map(Number));
   const root = process.platform === 'win32' ? process.env.ProgramData + '/CommandBridgeUpdate' : '/var/lib/command-bridge-update';

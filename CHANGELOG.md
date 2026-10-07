@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.4.3 — 2026-10-07
+
+PATCH: make managed program assets readable after builds with restrictive updater umask; retain private configuration/data permissions.
+
+- Normalize only physical managed Runtime/release assets, including reused deployments, without following symlinks or widening configuration/work-data access.
+- Reuse the existing restricted Windows Audit environment for PowerShell control; add native request-script and strict-umask regression tests.
+- Keep service activation/readiness and publication gates mandatory.
+
 ## 4.4.2 — 2026-10-07
 
 PATCH: supply deterministic Windows control environment defaults and strict numeric request diagnostics.
