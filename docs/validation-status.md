@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.3.3, adding service update/check commands while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.0, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.0 validation
+
+Local Windows npm test passed 105/121 with 16 platform/elevation skips; WSL with checksum-verified Node.js 24.18.0 passed 108/121 with 13 skips. Tests include real MCP protocol reconnect, strict input rejection, initial/terminal Audit failure, concurrency, bounded child control, settings parsing and pinned disposable fixtures. All PowerShell/Bash syntax checks and git diff --check passed. Cross-platform CI and real managed-worker service tests have not yet run for this version. The install channel remains the previously verified source until all publication gates pass. Oracle Linux SELinux Enforcing and actual host reboot are not claimed by local Windows/WSL checks.
 
 ## 4.3.3 validation
 

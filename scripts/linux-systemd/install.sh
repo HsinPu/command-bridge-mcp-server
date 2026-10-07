@@ -34,7 +34,7 @@ readonly LEGACY_AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-aud
 SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SYSTEMD_UNIT_SHA256="1745d6fc446b0af776e45b76d648cef21938da44e39b0c3730c36cf1c21a5e00"
+readonly SYSTEMD_UNIT_SHA256="ce8fb105ca99860a6627b5d9086ce731b36f0e48c323f26c80b8ae8148dc6738"
 readonly INSTALLER_UNIT_SHA256="9b1cc2cc158be63113fe5f30d832ab81de8377aceaf5d0d7ca3a2d3047f8519d"
 readonly AUDIT_READER_SHA256="58b2381e2a5ff3284f81c6916fca9d8bac80eaaa836fa2b4b7c851519acc7e49"
 readonly BUILD_USER="command-bridge-build-$$"
@@ -1376,6 +1376,7 @@ rollback_activation() {
   [[ "${labels_ok}" == 1 ]] || log "WARNING: Rollback files restored, but SELinux label repair failed; restored service was not restarted."
   ACTIVATION_STARTED=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then LEGACY_ROLLBACK_DONE=1; fi
+  restore_managed_update_assets
   ROLLBACK_IN_PROGRESS=0
 }
 
@@ -1538,6 +1539,7 @@ print_codex_setup() {
 }
 
 main() {
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/managed-update.sh"
   local node_arch available_kb
 
   parse_arguments "$@"
@@ -1584,11 +1586,13 @@ main() {
   DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   install_runtime_and_release "${node_arch}"
   if [[ "${RUN_AS_INSTALLER}" == 0 ]]; then install_audit_access; fi
+  prepare_managed_update_state
   install_and_start_service
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
   install_cli_entry
   [[ "$("${CLI_LINK}" --version)" == "${BUILT_PACKAGE_VERSION}" ]] || fail "Installed CLI version verification failed."
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then remove_audit_access_for_installer; fi
+  install_managed_update
   finish_legacy_migration
   ACTIVATION_STARTED=0
   INSTALL_SUCCEEDED=1

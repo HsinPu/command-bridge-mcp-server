@@ -1,0 +1,11 @@
+#!/bin/bash -p
+set -euo pipefail
+[[ "$#" == 0 && "$EUID" == 0 ]] || exit 1
+exec 9>/var/lib/command-bridge-update/request.lock
+/usr/bin/flock -w 5 9 || exit 1
+case "$(/usr/bin/systemctl show command-bridge-update.service --property=ActiveState --value)" in
+  active|activating|deactivating) ;;
+  *) exec 10</run/command-bridge-mcp-server/install.lock; /usr/bin/flock -n 10 || exit 1 ;;
+esac
+# Preserve only sudo's authenticated UID, never NODE_OPTIONS or loader variables.
+exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin SUDO_UID="${SUDO_UID:-}" /opt/command-bridge/runtime/current/bin/node /usr/local/libexec/command-bridge-update/state.mjs request

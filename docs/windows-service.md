@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 4.3.3; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 4.4.0; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
@@ -200,3 +200,7 @@ From 4.3.1, dependency pruning uses `--no-save` to preserve the source manifests
 From 4.3.2, disposable health-failure fixtures preserve CLI version queries and inject only into server startup for the deployed SHA. Source build/version checks cannot create startup evidence; rollback gates still require the real new-service marker and restored MCP/Audit verification.
 
 From 4.3.3, service restart retries reuse matching startup evidence without replacing the designated failure with a file-exists error. Unexpected evidence remains an error, and each test case still requires its marker to be absent before deployment.
+
+## MCP-managed updates (4.4.0)
+
+Managed service installation provisions the default-enabled fixed-purpose update worker. See [MCP update operations](mcp-update.md) for permissions, status, disabling requests and retained records. This adds narrowly scoped updater authorization, not general sudo rights. Existing command policies and installation mode selection remain unchanged.

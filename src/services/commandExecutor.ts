@@ -6,6 +6,7 @@ import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import { ManagedUpdateService } from "./managedUpdate.js";
 import { FileTransferService } from "./fileTransferService.js";
 import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { assertNoSelfModification } from "./selfProtection.js";
@@ -68,6 +69,7 @@ const defaultEnvironmentKeys = [
 
 export class CommandExecutor {
   readonly files: FileTransferService;
+  readonly updates: ManagedUpdateService;
   private activeCommands = 0;
   private stopping = false;
   private readonly running = new Set<() => void>();
@@ -81,6 +83,7 @@ export class CommandExecutor {
   ) {
     this.auditLog = auditLog instanceof BoundedAuditLog ? auditLog : new BoundedAuditLog(auditLog);
     this.files = new FileTransferService(config, this.auditLog);
+    this.updates = new ManagedUpdateService(config, this.auditLog);
   }
 
   execute(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
@@ -92,12 +95,14 @@ export class CommandExecutor {
 
   async shutdown(): Promise<void> {
     const fileShutdown = this.files.shutdown();
+    const updateShutdown = this.updates.shutdown();
     this.stopping = true;
+    this.updates.stop();
     for (const stop of this.running) stop();
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        Promise.allSettled([...this.pending, fileShutdown, ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
+        Promise.allSettled([...this.pending, fileShutdown, updateShutdown, ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
     } finally { if (timer) clearTimeout(timer); }

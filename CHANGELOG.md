@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.4.0 — 2026-10-07
+
+MINOR: adds compatible, default-enabled MCP service-update and status tools without changing existing tools or execution modes.
+
+- Provision a fixed root systemd worker / SYSTEM scheduled task outside the application deployment, with no caller-supplied source or command arguments.
+- Update only the pinned verified CI channel through existing deployment locks, validation and rollback; retain safe job metadata across service restarts.
+- Audit each acceptance request and worker lifecycle; honor saved disable settings independently, serialize jobs and protect updater assets from direct command modification.
+- Remove updater authorization/assets on uninstall, retain job records unless purging, and add real service-update/failure/disable CI checks.
+
 ## 4.3.3 — 2026-10-07
 
 PATCH from 4.3.2: make disposable startup-failure evidence idempotent across service restart attempts. Preserve the first valid SHA/stage/fault marker and keep emitting the designated failure instead of EEXIST; reject mismatched evidence. Retain stale-marker preflight and both fault/evidence assertions. Add repeated-startup and mismatched-marker regressions; production behavior and publication gates are unchanged.

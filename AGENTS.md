@@ -157,3 +157,10 @@ npm start
 - 4.3.2 起，故障測試不得用整個替換啟動入口而破壞版本查詢。保留正式 CLI 引數處理，在指定部署 SHA 的服務啟動階段注入；來源建置及版本查詢不得產生啟動證據。缺少證據一律拒絕視為回復測試成功。
 
 - 4.3.3 起，健康故障注入在服務重試時只重用相同 SHA、stage 與 fault 的標記，維持指定故障訊息；不接受不符證據，案例開始前仍須確認標記不存在。回復驗證不可取消故障訊息與啟動證據的雙重斷言。
+
+## MCP 自我更新（4.4.0 起）
+
+- 新增 command_bridge_update 與 command_bridge_get_update_status，受管理服務預設 COMMAND_BRIDGE_MCP_UPDATE_ENABLED=true；更新會短暫中斷連線。接受任務不代表更新成功，須以任務終結狀態與來源 SHA 判定。
+- Linux 使用獨立 root oneshot command-bridge-update.service 與只允許目前服務 UID 執行無參數 request 的 sudoers；Windows 使用 SYSTEM 手動排程工作 CommandBridgeUpdate，LocalService 僅讀取／執行。這是既有無一般 sudo 授權規則的固定更新例外。
+- 不接受使用者來源、Shell、版本或安裝參數；只走 CI channel 與既有驗證回復。後端獨立讀取保存的停用設定；npm／stdio 不建立特權更新程序。
+- 更新狀態與 root Audit 保存在部署外；一般卸載移除工作與授權但保留紀錄，purge 才移除。測試必須包含真實服務更新、重連、失敗、設定保留及停用。

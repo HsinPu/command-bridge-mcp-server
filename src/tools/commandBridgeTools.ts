@@ -32,6 +32,18 @@ export function registerCommandBridgeTools(
   config: AppConfig,
   executor: CommandExecutor
 ): void {
+  server.registerTool("command_bridge_update", {
+    title: "Update this CommandBridge service",
+    description: "Request an independent managed update from the fixed verified CI channel. Enabled by default for service installations. Returns acceptance and a job ID, not installation success. The MCP connection may disconnect during restart; reconnect and query update status. No URL, shell, version or installer arguments are accepted.",
+    inputSchema: z.object({}).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
+  }, async (_request, extra) => { try { return toToolResult(await executor.updates.start(extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_get_update_status", {
+    title: "Get managed update status",
+    description: "Read the root-managed update task record after reconnecting. Omit jobId to recover the latest accepted request. No installation logs, internal paths or secrets are returned.",
+    inputSchema: z.object({ jobId: z.string().uuid().optional() }).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, async ({ jobId }) => { try { return toToolResult(await executor.updates.status(jobId)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
   server.registerTool("command_bridge_upload_file", {
     title: "Upload file to transfer directory",
     description: "Upload a Base64 file into the dedicated transfer directory. Independently disabled by default. Single filenames only, at most 5 MiB, no overwrite, no execution or extraction.",
@@ -61,6 +73,7 @@ export function registerCommandBridgeTools(
         totalMemoryMb: z.number().int(),
         freeMemoryMb: z.number().int(),
         executionMode: z.enum(["allowlist", "guarded", "unrestricted"]),
+        managedUpdate: z.object({ enabled: z.boolean(), serviceInstallationRequired: z.literal(true) }).optional(),
         fileTransfer: z.object({ uploadEnabled: z.boolean(), downloadEnabled: z.boolean(), maxBytes: z.number().int(), overwrite: z.literal(false) }).optional(),
         allowedShells: z.array(shellSchema),
         allowedCommands: z.array(z.string()),

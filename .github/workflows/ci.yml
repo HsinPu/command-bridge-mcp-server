@@ -44,6 +44,7 @@ jobs:
           while IFS= read -r -d '' script; do bash -n "$script"; done < <(find scripts -name '*.sh' -print0)
           bash -n packaging/linux/audit-reader
           bash -n packaging/linux/command-bridge
+          bash -n packaging/linux/update-request
 
       - name: Check Windows installer assets
         if: runner.os == 'Windows'
@@ -122,6 +123,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+      - name: Install verifier dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Linux service lifecycle
         if: runner.os == 'Linux'
         run: bash scripts/linux-systemd/tests/service-smoke.sh

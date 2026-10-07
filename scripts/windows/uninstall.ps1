@@ -55,6 +55,12 @@ Assert-Administrator
 . (Join-Path $PSScriptRoot 'deployment-lock.ps1')
 $DeploymentLock = Enter-CommandBridgeDeploymentLock
 try {
+$updateTask = Get-ScheduledTask -TaskName CommandBridgeUpdate -ErrorAction SilentlyContinue
+if ($updateTask) {
+  $expectedWorker = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + (Join-Path $env:ProgramFiles 'CommandBridgeUpdate\worker.ps1') + '"'
+  if (@($updateTask.Actions).Count -ne 1 -or $updateTask.Actions[0].Execute -ine "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -or $updateTask.Actions[0].Arguments -cne $expectedWorker -or $updateTask.Principal.UserId -notin @('SYSTEM','S-1-5-18')) { throw 'An unrelated task uses the managed updater name.' }
+}
+if ($updateTask -and $updateTask.State -eq 'Running') { throw 'A managed update is active; wait before uninstalling.' }
 $service = Get-ManagedService
 Assert-ManagedServicePath $service
 
@@ -82,6 +88,12 @@ if ($service) {
   }
 }
 
+if ($updateTask) { Invoke-Change { Unregister-ScheduledTask -TaskName CommandBridgeUpdate -Confirm:$false } "remove managed update task" }
+$updaterProgram = Join-Path $env:ProgramFiles 'CommandBridgeUpdate'
+if (Test-Path -LiteralPath $updaterProgram) {
+  if ((Get-Item -LiteralPath $updaterProgram).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unsafe updater removal path.' }
+  Invoke-Change { Remove-Item -LiteralPath $updaterProgram -Recurse -Force } "remove managed update assets"
+}
 if (Test-Path -LiteralPath $InstallRoot) {
   Invoke-Change { Remove-Item -LiteralPath $InstallRoot -Recurse -Force } "remove application files"
 }
@@ -94,6 +106,11 @@ if ($Purge -and (Test-Path -LiteralPath $ConfigRoot)) {
   Invoke-Change { Remove-Item -LiteralPath $ConfigRoot -Recurse -Force } "purge configuration and work data"
 }
 
+$updateState = Join-Path $env:ProgramData 'CommandBridgeUpdate'
+if ($Purge -and (Test-Path -LiteralPath $updateState)) {
+  if ((Get-Item -LiteralPath $updateState).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unsafe update state removal path.' }
+  Invoke-Change { Remove-Item -LiteralPath $updateState -Recurse -Force } "purge update task records"
+}
 if ($DryRun) {
   Write-Log "Dry run complete; no changes were made."
 } elseif ($Purge) {

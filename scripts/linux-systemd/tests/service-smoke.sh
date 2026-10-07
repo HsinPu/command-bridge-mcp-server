@@ -56,6 +56,12 @@ sudo bash scripts/linux-systemd/install.sh --refresh-network >/dev/null
 sudo systemctl restart "$service"
 wait_for_listener
 sudo /opt/command-bridge/runtime/current/bin/node /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+# Exercise the independent worker against an immutable disposable source archive.
+update_archive="$fixture/managed-source.tar.gz"
+tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=.env -czf "$update_archive" --transform='s,^,command-bridge-fixture/,' .
+version=$(node -p 'JSON.parse(require("fs").readFileSync("package.json")).version')
+sudo env GITHUB_ACTIONS=true /opt/command-bridge/runtime/current/bin/node scripts/tests/managed-update-fixture.mjs linux "$update_archive" "$version"
+sudo env GITHUB_ACTIONS=true /opt/command-bridge/runtime/current/bin/node scripts/tests/verify-managed-update.mjs "$config" "$(printf '4%.0s' {1..40})"
 old=$(readlink /opt/command-bridge/current)
 node=/opt/command-bridge/runtime/current/bin/node
 work=/var/lib/command-bridge/work

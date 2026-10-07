@@ -643,6 +643,8 @@ function Rollback-Installation {
 
 try {
   Assert-Administrator
+  . (Join-Path $PSScriptRoot "managed-update.ps1")
+  $script:UpdaterChanged = $false
   . (Join-Path $PSScriptRoot 'deployment-lock.ps1')
   $DeploymentLock = Enter-CommandBridgeDeploymentLock
   if ($Update) {
@@ -717,6 +719,7 @@ try {
   Wait-ForHealth
   Invoke-External (Join-Path $InstallRoot 'runtime\node.exe') @((Join-Path $InstallRoot "$ApplicationRelativePath\scripts\verify-install.mjs"), $ConfigFile)
 
+  Install-ManagedUpdater $sourceRoot
   $ActivationSucceeded = $true
   if (Test-Path -LiteralPath $PreviousRoot) {
     Remove-Item -LiteralPath $PreviousRoot -Recurse -Force
@@ -726,6 +729,7 @@ try {
   Write-Log "Application Event Log source: $EventSource"
   Print-CodexSetup
 } catch {
+  if (-not $ActivationSucceeded) { try { Restore-ManagedUpdater } catch { Write-Warning "Managed updater rollback failed." } }
   if ($ActivationSucceeded) {
     Write-Warning 'The new service passed verification. Post-install cleanup or output failed; the running installation has been retained.'
   } elseif ($InstallCommitted -or $ServicePreviouslyInstalled) {

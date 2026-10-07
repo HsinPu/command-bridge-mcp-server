@@ -90,7 +90,7 @@ test("default uninstall preserves configuration data and service identity", () =
   const main = uninstaller.slice(uninstaller.indexOf("main() {"));
   assert.match(
     main,
-    /remove_tree "\$\{INSTALL_ROOT\}"\s+remove_legacy_alias "\$\{LEGACY_INSTALL_ROOT\}" "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{INSTALLER_STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+remove_legacy_alias "\$\{LEGACY_CONFIG_DIR\}" "\$\{CONFIG_DIR\}"\s+remove_legacy_alias "\$\{LEGACY_STATE_DIR\}" "\$\{STATE_DIR\}"\s+fi/
+    /remove_tree "\$\{INSTALL_ROOT\}"\s+remove_legacy_alias "\$\{LEGACY_INSTALL_ROOT\}" "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{INSTALLER_STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+remove_tree \/var\/lib\/command-bridge-update\s+remove_legacy_alias "\$\{LEGACY_CONFIG_DIR\}" "\$\{CONFIG_DIR\}"\s+remove_legacy_alias "\$\{LEGACY_STATE_DIR\}" "\$\{STATE_DIR\}"\s+fi/
   );
   assert.doesNotMatch(uninstaller, /userdel "\$\{SUDO_USER\}"/);
 });

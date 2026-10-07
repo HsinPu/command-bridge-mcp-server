@@ -5,6 +5,7 @@ import type { ExecutionMode, ShellKind } from "../services/commandPolicy.js";
 import { loadCommandProfiles, validateEnabledProfiles, type CommandProfile } from "../services/commandProfiles.js";
 
 const rawEnvSchema = z.object({
+  COMMAND_BRIDGE_MCP_UPDATE_ENABLED: z.enum(["true", "false"]).default("true"),
   COMMAND_BRIDGE_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
   COMMAND_BRIDGE_AUDIT_BACKEND: z.enum(["auto", "journal", "eventlog", "file"]).default("auto"),
   COMMAND_BRIDGE_POLICY_FILE: z.string().min(1).optional(),
@@ -28,6 +29,7 @@ const rawEnvSchema = z.object({
 });
 
 export interface AppConfig {
+  mcpUpdateEnabled?: boolean;
   fileTransfer?: { upload: boolean; download: boolean; root?: string; maxBytes: number };
   commandProfiles?: Map<string, CommandProfile>;
   policyFile?: string;
@@ -104,6 +106,7 @@ export function loadConfig(): AppConfig {
   const commandProfiles = loadCommandProfiles(raw.COMMAND_BRIDGE_POLICY_FILE);
   if (raw.COMMAND_BRIDGE_EXECUTION_MODE === "allowlist") validateEnabledProfiles(commandProfiles, allowedCommands, allowedShells);
   return {
+    mcpUpdateEnabled: raw.COMMAND_BRIDGE_MCP_UPDATE_ENABLED === "true",
     fileTransfer: { upload: raw.COMMAND_BRIDGE_UPLOAD_ENABLED === "true", download: raw.COMMAND_BRIDGE_DOWNLOAD_ENABLED === "true", root: raw.COMMAND_BRIDGE_TRANSFER_ROOT, maxBytes: raw.COMMAND_BRIDGE_TRANSFER_MAX_BYTES },
     commandProfiles,
     policyFile: raw.COMMAND_BRIDGE_POLICY_FILE,

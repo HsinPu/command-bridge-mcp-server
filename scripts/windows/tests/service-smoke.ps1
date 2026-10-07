@@ -4,6 +4,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') { throw 'Di
 $root = (Get-Location).Path
 $config = Join-Path $env:ProgramData 'CommandBridgeMCP\command-bridge.env'
 $install = Join-Path $env:ProgramFiles 'CommandBridgeMCP'
+$updateFixture = $null
 $fixture = Join-Path $env:RUNNER_TEMP ('command-bridge-smoke-' + [guid]::NewGuid())
 function Run-Installer([string]$Path, [string[]]$Extra = @()) {
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Path @Extra
@@ -20,6 +21,21 @@ try {
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1')
   if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Service is not running.' }
   if ((Get-CimInstance Win32_Service -Filter "Name='CommandBridgeMCP'").StartMode -ne 'Auto') { throw 'Service is not automatic.' }
+  # Keep the verifier executable outside the deployment being replaced.
+  $updateFixture = Join-Path $env:RUNNER_TEMP ('command-bridge-update-source-' + [guid]::NewGuid())
+  New-Item -ItemType Directory -Path $updateFixture | Out-Null
+  $updateSource = Join-Path $updateFixture 'source'
+  New-Item -ItemType Directory -Path $updateSource | Out-Null
+  Get-ChildItem -LiteralPath $root -Force | Where-Object { $_.Name -notin @('.git','node_modules','dist','.env') } | Copy-Item -Destination $updateSource -Recurse -Force
+  $updateArchive = Join-Path $updateFixture 'source.zip'
+  Compress-Archive -LiteralPath $updateSource -DestinationPath $updateArchive
+  $externalNode = Join-Path $updateFixture 'node.exe'
+  Copy-Item -LiteralPath (Join-Path $install 'runtime\node.exe') -Destination $externalNode
+  $updateVersion = (Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version
+  & $externalNode (Join-Path $root 'scripts\tests\managed-update-fixture.mjs') win32 $updateArchive $updateVersion
+  if ($LASTEXITCODE -ne 0) { throw 'Managed update fixture failed.' }
+  & $externalNode (Join-Path $root 'scripts\tests\verify-managed-update.mjs') $config ('4' * 40)
+  if ($LASTEXITCODE -ne 0) { throw 'Managed MCP update verification failed.' }
   # Probe LocalService file access before the lengthy rollback/reinstall cases.
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-EnableFileTransfer')
   $node = Join-Path $install 'runtime\node.exe'
@@ -90,6 +106,8 @@ try {
   if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Migration stopped existing service.' }
   [IO.File]::WriteAllText($config, $validConfig)
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Yes')
+  if (Get-ScheduledTask -TaskName CommandBridgeUpdate -ErrorAction SilentlyContinue) { throw 'Uninstall left updater task.' }
+  if (-not (Test-Path -LiteralPath (Join-Path $env:ProgramData 'CommandBridgeUpdate\latest.json'))) { throw 'Uninstall removed update records.' }
   if (-not (Test-Path -LiteralPath $config) -or -not (Test-Path -LiteralPath $preserved)) { throw 'Uninstall deleted preserved data.' }
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-EnableFileTransfer')
   [xml]$activeDefinition = [IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml'))
@@ -98,7 +116,13 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Service file transfer/Audit verification failed.' }
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Purge', '-Yes')
   if (Test-Path -LiteralPath $config) { throw 'Purge left configuration.' }
+  if (Test-Path -LiteralPath (Join-Path $env:ProgramData 'CommandBridgeUpdate')) { throw 'Purge left update records.' }
 } finally {
+  if ($updateFixture) {
+    $updateResolved = [IO.Path]::GetFullPath($updateFixture)
+    if (-not $updateResolved.StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe update fixture cleanup path.' }
+    if (Test-Path -LiteralPath $updateResolved) { Remove-Item -LiteralPath $updateResolved -Recurse -Force }
+  }
   $resolved = [IO.Path]::GetFullPath($fixture)
   if (-not $resolved.StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe test cleanup path.' }
   if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }

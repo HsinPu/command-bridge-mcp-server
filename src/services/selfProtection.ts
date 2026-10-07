@@ -24,6 +24,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
   const dotenv = process.env.DOTENV_CONFIG_PATH;
   if (dotenv && dotenv !== "/dev/null") paths.push(resolve(dotenv));
   if (platform === "linux") paths.push(
+    "/usr/local/libexec/command-bridge-update", "/var/lib/command-bridge-update", "/etc/sudoers.d/command-bridge-update", "/etc/systemd/system/command-bridge-update.service",
     "/etc/command-bridge", "/opt/command-bridge", "/usr/local/libexec/command-bridge", "/usr/local/bin/command-bridge",
     "/etc/systemd/system/command-bridge.service", "/etc/sudoers.d/command-bridge-audit-reader",
     "/etc/command-bridge-mcp-server", "/opt/command-bridge-mcp-server",
@@ -31,6 +32,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
   );
   if (platform === "win32") {
     const data = join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeMCP");
+    paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeUpdate"), join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeUpdate"));
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeMCP"),
       join(data, "command-bridge.env"), join(data, "policy.json"));
   }
@@ -88,6 +90,10 @@ export function assertNoSelfModification(command: string, cwd: string, options: 
       }
       const name = paths.basename(segment[head] ?? "").replace(/\.exe$/i, "");
       const args = segment.slice(head + 1);
+      if (name.toLowerCase() === "request" && overlaps(segment[head] ?? "")) reject();
+      if (/^(?:powershell|pwsh|bash|sh)$/i.test(name) && args.some(arg => /(?:^|[/\\])(?:request\.ps1|worker\.ps1|update-request)$/i.test(arg) && overlaps(arg))) reject();
+      if (/^systemctl$/i.test(name) && args.some(arg => /^command-bridge-update(?:\.service)?$/i.test(arg)) && args.some(arg => /^(?:start|restart|stop|edit|disable|enable|mask|unmask)$/i.test(arg))) reject();
+      if (/^schtasks$/i.test(name) && args.some(arg => /^\\?CommandBridgeUpdate$/i.test(arg)) && args.some(arg => /^\/(?:run|end|change|delete|create)$/i.test(arg))) reject();
       if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/i.test(name) && args[0]?.toLowerCase() === "update" &&
           !(args.length === 2 && args[1]?.toLowerCase() === "--check")) reject();
       if (/^(?:bash|sh|powershell|pwsh)$/i.test(name) && args.some(arg =>

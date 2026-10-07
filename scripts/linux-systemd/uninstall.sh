@@ -136,6 +136,7 @@ print_plan() {
   printf '\n'
   log "Planned removal:"
   printf '  Service and unit: %s.service\n' "${SERVICE_NAME}"
+  printf '  Managed updater: command-bridge-update.service and restricted request rule\n'
   printf '  Application: %s\n' "${INSTALL_ROOT}"
   printf '  Managed version command: %s\n' "${CLI_LINK}"
   printf '  Audit reader: %s\n' "${AUDIT_READER_PATH}"
@@ -193,7 +194,7 @@ confirm_removal() {
 
 assert_safe_tree_path() {
   case "$1" in
-    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}")
+    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update")
       ;;
     *)
       fail "Refusing to remove an unexpected path: $1"
@@ -460,6 +461,9 @@ main() {
   fi
 
   acquire_lock
+  if [[ -f /etc/systemd/system/command-bridge-update.service ]] && systemctl is-active --quiet command-bridge-update.service; then
+    fail "A managed update is active; wait for its terminal status before uninstalling."
+  fi
   print_plan
   confirm_removal
 
@@ -477,6 +481,11 @@ main() {
 
   stop_disable_and_remove_service
   remove_audit_access
+  for updater_file in /etc/systemd/system/command-bridge-update.service /etc/sudoers.d/command-bridge-update; do
+    if [[ -e "$updater_file" || -L "$updater_file" ]]; then run_command rm -f -- "$updater_file"; fi
+  done
+  remove_tree /usr/local/libexec/command-bridge-update
+  run_command systemctl daemon-reload
   if [[ "${PURGE}" == "1" ]]; then
     validate_service_identity_for_purge
   fi
@@ -490,11 +499,13 @@ main() {
     remove_tree "${STATE_DIR}"
     remove_tree "${INSTALLER_STATE_DIR}"
     remove_tree "${SERVICE_HOME}"
+    remove_tree /var/lib/command-bridge-update
     remove_legacy_alias "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
     remove_legacy_alias "${LEGACY_STATE_DIR}" "${STATE_DIR}"
   fi
 
   print_summary
+  log "Update task records in /var/lib/command-bridge-update are preserved unless --purge is used."
 }
 
 main "$@"

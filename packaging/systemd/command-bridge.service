@@ -31,12 +31,12 @@ MemoryMax=512M
 
 StateDirectory=command-bridge
 StateDirectoryMode=0750
-ReadWritePaths=/var/lib/command-bridge/work
+ReadWritePaths=/var/lib/command-bridge/work /var/lib/command-bridge-update
 
-# The only permitted privilege transition is the root-owned, no-argument audit
-# reader authorized by /etc/sudoers.d/command-bridge-audit-reader.
+# Root-owned, no-argument Audit and update-request helpers are authorized by
+# separate restricted sudoers rules. Updates run in a separate systemd unit.
 # Keep the service account out of sudo and systemd-journal groups; do not grant
-# any other sudo command. Seccomp-based hardening and PrivateDevices imply
+# any general sudo command. Seccomp-based hardening and PrivateDevices imply
 # NoNewPrivileges even when explicitly false, and therefore block this reader.
 NoNewPrivileges=false
 PrivateTmp=true
@@ -45,7 +45,7 @@ ProtectSystem=strict
 ProtectHome=true
 ProtectControlGroups=true
 RemoveIPC=true
-# Permit sudo's UID/GID transition for the fixed audit reader. These are only
+# Permit sudo's UID/GID transition for the fixed helpers. These are only
 # a ceiling; the unprivileged Node process receives no ambient capabilities.
 CapabilityBoundingSet=CAP_SETUID CAP_SETGID
 AmbientCapabilities=

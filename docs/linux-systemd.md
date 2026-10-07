@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.3.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.4.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -58,7 +58,7 @@ If MCP commands must use the same access as the non-root login account that runs
 (installer="$(mktemp)" && trap 'rm -f -- "${installer}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${installer}" && sudo bash "${installer}" --print-codex-setup --run-as-installer --unrestricted)
 ```
 
-On every install, leave off both `--guarded` and `--unrestricted` to select allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation selects the mode from the current options rather than the saved mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** add that account to sudoers, change its persistent groups or grant any general privilege. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
+On every install, leave off both `--guarded` and `--unrestricted` to select allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation selects the mode from the current options rather than the saved mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** change its persistent groups or grant any general privilege. From 4.4.0, a separate exact no-argument sudoers rule permits only the fixed managed-update request helper. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
 
 The installer-account unit uses that account's UID and normal group memberships, plus the dedicated `command-bridge` group to read the root-owned policy. It allows home access and normal filesystem permissions. It does not apply the dedicated account's read-only filesystem, private temporary directory or capability ceiling, so existing sudo privileges remain usable. Anyone holding the bearer token can invoke the selected command policy using this account. Keep the endpoint on a trusted LAN/VPN or private HTTPS route and guard the token accordingly.
 
@@ -119,8 +119,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.3.3-<source-sha>
-├── releases/v4.3.3-<source-sha>/
+├── current -> releases/v4.4.0-<source-sha>
+├── releases/v4.4.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -368,3 +368,7 @@ From 4.3.1, dependency pruning uses `--no-save` to preserve the source manifests
 From 4.3.2, disposable health-failure fixtures preserve CLI version queries and inject only into server startup for the deployed SHA. Source build/version checks cannot create startup evidence; rollback gates still require the real new-service marker and restored MCP/Audit verification.
 
 From 4.3.3, service restart retries reuse matching startup evidence without replacing the designated failure with a file-exists error. Unexpected evidence remains an error, and each test case still requires its marker to be absent before deployment.
+
+## MCP-managed updates (4.4.0)
+
+Managed service installation provisions the default-enabled fixed-purpose update worker. See [MCP update operations](mcp-update.md) for permissions, status, disabling requests and retained records. This adds narrowly scoped updater authorization, not general sudo rights. Existing command policies and installation mode selection remain unchanged.
