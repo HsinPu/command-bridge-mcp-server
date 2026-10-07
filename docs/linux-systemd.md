@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.4.7. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.5.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -13,7 +13,7 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 - At least 400 MB free under `/opt`
 - Outbound HTTPS access to `nodejs.org`, `github.com`, and the npm registry
 - Standard administration tools including `curl`, `tar`, `gzip`, `sha256sum`, `flock`, `useradd`, `userdel`, `groupdel`, `pgrep`, and `runuser`
-- <code>sudo</code>, <code>stat</code>, and <code>rmdir</code> at their normal system paths; the default dedicated-account mode also needs <code>visudo</code> and <code>/usr/bin/journalctl</code> for its fixed Audit reader
+- <code>sudo</code>, <code>stat</code>, and <code>rmdir</code> at their normal system paths; both account modes also need <code>visudo</code> and <code>/usr/bin/journalctl</code> for the fixed diagnostic reader; dedicated-account mode additionally provisions its Audit reader
 
 Synology DSM is not a systemd host. Use Container Manager or a DSM-specific package there instead.
 
@@ -119,8 +119,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.4.7-<source-sha>
-├── releases/v4.4.7-<source-sha>/
+├── current -> releases/v4.5.0-<source-sha>
+├── releases/v4.5.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -305,9 +305,9 @@ Then restrict port 8800 with the host firewall and restart the service. `COMMAND
 
 ## Permission boundary
 
-The default service is a low-privilege diagnostic agent, not a root shell. Its account has no login shell, Docker access, or supplementary groups. It has one fixed no-argument sudoers permission solely for the root-owned audit reader; it has no generic sudo command access. Commands such as <code>systemctl restart</code>, package installation, firewall changes, and arbitrary file modification are intentionally unavailable.
+The default service is a low-privilege diagnostic agent, not a root shell. Its account has no login shell, Docker access, or supplementary groups. It has exact no-argument sudoers permissions for the root-owned Audit reader, diagnostics and updater; it has no generic sudo command access. Commands such as <code>systemctl restart</code>, package installation, firewall changes, and arbitrary file modification are intentionally unavailable.
 
-Installer-account mode is a different trust choice: the unit runs as the login user, keeps its ordinary groups and access, and uses file Audit instead of the privileged reader. With `--unrestricted`, it can execute the account's shell commands, including `sudo -n` operations already permitted by host policy. No new sudo rights are granted; losing or changing those rights changes MCP behavior as well.
+Installer-account mode is a different trust choice: the unit runs as the login user, keeps its ordinary groups and access, and uses file Audit instead of the privileged reader. With `--unrestricted`, it can execute the account's shell commands, including `sudo -n` operations already permitted by host policy. No general sudo rights are granted; fixed diagnostic and update permissions are installed separately. Losing or changing ordinary sudo rights changes command behavior as well.
 
 The controlled reader requires a sudo privilege transition, so the systemd unit cannot use <code>NoNewPrivileges=true</code> or <code>RestrictSUIDSGID=true</code>. Do not change that exception into broad sudo access or add the service account to privileged groups.
 
@@ -372,3 +372,11 @@ From 4.3.3, service restart retries reuse matching startup evidence without repl
 ## MCP-managed updates (4.4.0)
 
 Managed service installation provisions the default-enabled fixed-purpose update worker. See [MCP update operations](mcp-update.md) for permissions, status, disabling requests and retained records. This adds narrowly scoped updater authorization, not general sudo rights. Existing command policies and installation mode selection remain unchanged.
+
+## Independent MCP diagnostics (4.5.0)
+
+`command_bridge_get_diagnostics` is enabled by default and shares the existing Bearer/Host checks. See [diagnostics and recovery](diagnostics.md) for field meanings, volatile history, strict bounds and Audit-only startup. No configuration flag or ordinary command/sudo policy change is required. Older installations need an upgrade before the tool exists.
+
+Both dedicated and installer-account installations provision `/usr/local/libexec/command-bridge-diagnostics/{reader,reader.mjs}` and `/etc/sudoers.d/command-bridge-diagnostics`. Programs are pinned to source digests, root-owned, not writable by the service, and restored to host SELinux policy. The exact numeric service UID may run only the no-argument reader with `NOSETENV`. It reads fixed `command-bridge.service` metadata, the last 100 journal entries for known diagnostic codes, and fixed deployment/work/storage metadata; it returns no raw log messages. It does not grant generic journal/root access or replace the existing Audit reader. Installer-account file Audit still needs no privileged Audit reader.
+
+New assets and the previous authorization are backed up before changes and restored before restarting the old deployment after activation failure. The installer verifies the running fixed reader through MCP in addition to readiness, hostname and its Audit lifecycle. Normal uninstall and purge remove the diagnostic program and rule; preserved configuration/work/Audit behavior is unchanged. A diagnostic-only service is not accepted as a successful installation. CI fixtures check no-argument authorization and uninstall cleanup; hosted lifecycle checks must still execute before publication.

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.4.7-blue)
+![Version](https://img.shields.io/badge/version-4.5.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -39,6 +39,8 @@ Each host runs its own MCP endpoint. The server supports local `stdio` and remot
 ```mermaid
 flowchart LR
     Client["Codex / MCP client"] --> Transport["stdio / Streamable HTTP"]
+    Transport --> Diagnostics["Read-only diagnostics"]
+    Diagnostics --> State["Runtime + fixed host probes"]
     Transport --> Policy["Command policy checks"]
     Policy --> Executor["Linux / Windows command executor"]
     Policy --> Audit["Audit log"]
@@ -83,7 +85,7 @@ On a glibc Linux host with systemd (x64/ARM64), run this from your non-root logi
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
-The Linux command above uses `--run-as-installer --guarded`. New installations and reinstalls run as your login account with guarded preflight checks: general commands are available, while recognizable deletion and system modifications are rejected. Existing sudo permissions remain unchanged; no general sudo rights are added. Installation provisions only the fixed-purpose MCP updater authorization described below. This mode does not create a dedicated service user and uses private rotating file Audit. To use the dedicated-account mode on a fresh install, omit `--run-as-installer`.
+The Linux command above uses `--run-as-installer --guarded`. New installations and reinstalls run as your login account with guarded preflight checks: general commands are available, while recognizable deletion and system modifications are rejected. Existing sudo permissions remain unchanged; no general sudo rights are added. Installation provisions only the fixed-purpose MCP updater and read-only diagnostic reader authorizations described below. This mode does not create a dedicated service user and uses private rotating file Audit. To use the dedicated-account mode on a fresh install, omit `--run-as-installer`.
 
 **Since 3.0.0, each Linux installation selects the execution mode from its options.** Without `--guarded` or `--unrestricted`, it writes `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`, including when upgrading an unrestricted installation. To retain unrestricted execution, explicitly pass `--unrestricted` together with `--run-as-installer` on every install. The README commands explicitly select guarded on reinstall; other settings such as tokens, network settings, custom roots and policy files are preserved; failed validation restores the prior settings. See [Return to allowlist mode](docs/linux-systemd.md#return-to-allowlist-mode). Unrestricted execution remains an explicit advanced choice described in the [platform guide](docs/linux-systemd.md#installer-account-mode); the allowlist is not a complete filesystem sandbox.
 
@@ -148,6 +150,7 @@ Windows: run `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update -
 
 | Tool | Purpose |
 | --- | --- |
+| `command_bridge_get_diagnostics` | Read bounded service/Audit failure metadata and recent command summaries, even when Audit is unavailable. |
 | `command_bridge_get_system_info` | Read host information and effective shell, command, working-directory, and concurrency policies. |
 | `command_bridge_run_command` | Execute one command and return stdout, stderr, exit code, duration, and timeout/truncation status. |
 | `command_bridge_list_audit_events` | Read recent audit events: 50 by default, up to 1,000 per request. |
@@ -192,6 +195,12 @@ Service installation defaults:
 | Concurrent commands | 2 |
 
 Long commands must explicitly request `timeoutMs: 300000` (up to five minutes). Printed Codex setup waits six minutes (`tool_timeout_sec = 360`). Existing timeout settings are preserved on upgrade; see the platform guides to update both the service and client settings.
+
+## Read-only diagnostics
+
+From 4.5.0, `command_bridge_get_diagnostics` is enabled by default. Use `{}` for 20 recent command summaries, `{"limit":100}` for the maximum, or `{"auditId":"<id>"}` to inspect one exact ID. It reports version, service state, active command slots, the first Audit fault and bounded storage/reader status without depending on Audit reads or writes. The last 100 command summaries are held in memory and disappear on restart; they contain no command text or stdout/stderr. Historical records remain in `command_bridge_list_audit_events`.
+
+Audit-only startup failures retain authenticated diagnostics while `/ready` fails and new commands, transfers and updates remain blocked. Invalid configuration, policy or other dependencies still prevent startup; successful installation still requires real MCP/Audit verification. A stopped process, blocked network or frozen event loop requires an administrator terminal. See [diagnostic fields, limits and recovery](docs/diagnostics.md).
 
 ## Audit logging
 

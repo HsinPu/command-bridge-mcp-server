@@ -48,6 +48,8 @@ sudo systemctl is-enabled --quiet "$service"
 pid=$(sudo systemctl show "$service" --property=MainPID --value)
 sudo awk '/^CapEff:/ { effective = ($2 == "0000000000000000") } /^CapAmb:/ { ambient = ($2 == "0000000000000000") } /^NoNewPrivs:/ { sudo_allowed = ($2 == "0") } END { exit !(effective && ambient && sudo_allowed) }' "/proc/$pid/status"
 sudo runuser -u command-bridge -- sudo -n /usr/local/libexec/command-bridge/audit-reader >/dev/null
+sudo runuser -u command-bridge -- sudo -n /usr/local/libexec/command-bridge-diagnostics/reader >/dev/null
+if sudo runuser -u command-bridge -- sudo -n /usr/local/libexec/command-bridge-diagnostics/reader unexpected >/dev/null 2>&1; then echo 'Diagnostic reader accepted arguments.'; exit 1; fi
 before=$(sudo sha256sum "$config")
 sudo touch /var/lib/command-bridge/work/preserved
 sudo bash scripts/linux-systemd/install.sh
@@ -100,6 +102,8 @@ if sudo bash "$root/scripts/linux-systemd/install.sh"; then echo 'Expected migra
 [[ "$(readlink /opt/command-bridge/current)" == "$old" ]]
 sudo mv "$config.backup" "$config"
 sudo bash /opt/command-bridge/current/uninstall.sh --yes
+sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
+sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test ! -e /etc/systemd/system/command-bridge-update.service
 sudo test ! -e /etc/sudoers.d/command-bridge-update
 sudo test ! -e /usr/local/libexec/command-bridge-update
@@ -186,6 +190,8 @@ sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestri
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
 sudo bash /opt/command-bridge/current/uninstall.sh --yes
+sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
+sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
@@ -193,5 +199,7 @@ sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestri
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted --enable-file-transfer
 sudo "$node" /opt/command-bridge/current/scripts/verify-file-transfer.mjs "$config"
 sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
+sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
+sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test ! -e /var/lib/command-bridge-installer
 [[ "$(id -u)" == "$login_uid" ]]

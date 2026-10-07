@@ -14,6 +14,8 @@ export class FileAuditLog implements AuditLog {
     private readonly maxBytes = 10 * 1024 * 1024
   ) {}
 
+  get storageDirectory(): string { return this.directory; }
+
   private async prepare(): Promise<void> {
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const stat = await lstat(this.directory);

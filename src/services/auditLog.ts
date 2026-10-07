@@ -68,6 +68,7 @@ export interface AuditEventList {
 }
 
 export interface AuditLog {
+  readonly storageDirectory?: string;
   write(event: CommandAuditEvent): Promise<void>;
   list(limit: number): Promise<AuditEventList>;
 }
@@ -83,9 +84,12 @@ export interface WindowsEventLogAuditLogDependencies {
 
 type WindowsAuditScriptName = "write-audit-event.ps1" | "read-audit-events.ps1";
 
+export function effectiveAuditBackend(config: AppConfig): "file"|"journal"|"eventlog" {
+  return config.auditBackend && config.auditBackend!=="auto"?config.auditBackend:config.transport==="stdio"?"file":process.platform==="win32"?"eventlog":"journal";
+}
+
 export function createAuditLog(config: AppConfig): AuditLog {
-  const backend = config.auditBackend && config.auditBackend !== "auto" ? config.auditBackend
-    : config.transport === "stdio" ? "file" : process.platform === "win32" ? "eventlog" : "journal";
+  const backend = effectiveAuditBackend(config);
   if (backend === "file") return new FileAuditLog();
   if (backend === "eventlog" && process.platform === "win32") return new WindowsEventLogAuditLog();
   if (backend === "journal" && process.platform === "linux") return new LinuxJournalAuditLog();
@@ -584,7 +588,7 @@ export function runFixedProcess(
     };
     const timeout = setTimeout(() => {
       stopHelper();
-      fail(new Error("Audit helper timed out."));
+      fail(new AppError("AUDIT_HELPER_TIMEOUT", "Audit helper timed out."));
     }, 5_000);
 
     child.once("error", fail);
@@ -592,7 +596,7 @@ export function runFixedProcess(
       output += chunk.toString("utf8");
       if (Buffer.byteLength(output, "utf8") > MAX_AUDIT_READER_OUTPUT_BYTES) {
         stopHelper();
-        fail(new Error("Fixed audit helper output exceeded its safe limit."));
+        fail(new AppError("AUDIT_READER_OUTPUT_LIMIT", "Fixed audit helper output exceeded its safe limit."));
       }
     });
     child.once("close", (code) => {
@@ -600,7 +604,7 @@ export function runFixedProcess(
         return;
       }
       if (code !== 0) {
-        fail(new Error("Fixed audit helper exited unsuccessfully."));
+        fail(new AppError("AUDIT_READER_FAILED", "Fixed audit helper exited unsuccessfully."));
         return;
       }
       settled = true;

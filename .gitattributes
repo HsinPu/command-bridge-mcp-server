@@ -12,3 +12,5 @@ packaging/linux/command-bridge text eol=lf
 *.service text eol=lf
 *.yml text eol=lf
 packaging/linux/update-request text eol=lf
+packaging/linux/diagnostic-reader text eol=lf
+scripts/diagnostics/read-linux.mjs text eol=lf

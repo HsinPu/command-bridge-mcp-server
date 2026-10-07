@@ -1,0 +1,4 @@
+#!/bin/bash -p
+set -euo pipefail
+[[ "$#" == 0 && "$EUID" == 0 ]] || exit 64
+exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C /opt/command-bridge/runtime/current/bin/node /usr/local/libexec/command-bridge-diagnostics/reader.mjs

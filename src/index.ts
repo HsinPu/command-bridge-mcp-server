@@ -19,14 +19,16 @@ async function main(): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const [{ StdioServerTransport }, { loadConfig }, { createCommandBridgeServer }, { CommandExecutor }, { startHttpTransport }] = await Promise.all([
+  const [{ StdioServerTransport }, { loadConfig }, { createCommandBridgeServer }, { CommandExecutor }, { startHttpTransport }, { permitsDiagnosticStartup }] = await Promise.all([
     import("@modelcontextprotocol/sdk/server/stdio.js"), import("./config/env.js"), import("./server.js"),
-    import("./services/commandExecutor.js"), import("./transport/httpTransport.js")
+    import("./services/commandExecutor.js"), import("./transport/httpTransport.js"), import("./startupPolicy.js")
   ]);
   const config = loadConfig();
   const executor = new CommandExecutor(config);
   const readiness = await executor.readiness();
-  if (!readiness.ready) throw new Error("Startup dependency checks failed: " + Object.entries(readiness.checks).filter(([, ok]) => !ok).map(([name]) => name).join(", "));
+  if (!permitsDiagnosticStartup(readiness)) throw new Error("Startup dependency checks failed: " + Object.entries(readiness.checks).filter(([, ok]) => !ok).map(([name]) => name).join(", "));
+
+  if (!readiness.ready) console.error("CommandBridge diagnostic-only startup: Audit unavailable; new operations remain blocked.");
 
   if (config.transport === "http") {
     const httpServer = await startHttpTransport(config, executor);

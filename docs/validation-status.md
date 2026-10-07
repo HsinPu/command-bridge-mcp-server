@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.7, supporting up to 1,000 events per Audit query, default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.5.0, adding independent read-only diagnostics and Audit-only startup while supporting up to 1,000 events per Audit query, default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.5.0 validation
+
+Local full Windows npm test passed 131/150 with 19 platform/elevation skips. WSL Ubuntu with checksum-verified Node.js 24.18.0 passed 132/150 with 18 platform skips. All 20 PowerShell scripts, Bash scripts/fixed launchers, WinSW XML and git diff --check passed. Both READMEs retain their unchanged bootstrap commands and valid documentation links. A final native Windows reader regression also passed after classifying unknown service-query errors without guessing permission denial. Added real authenticated MCP rejection/diagnostics tests in every execution mode, actual Audit-only HTTP/stdio startup with invalid-work-directory rejection, metadata privacy, bounded/coalesced probes, native process termination/output limits, fixed reader execution and installer asset checks. Hosted service activation/upgrade/rollback/uninstall, Linux real sudo/SELinux and Windows LocalService behavior have not executed for this unpushed batch. Oracle Linux Enforcing and actual host reboot remain unverified. Publication remains gated by cross-platform tests and real service smoke.
 
 ## 4.4.7 validation
 

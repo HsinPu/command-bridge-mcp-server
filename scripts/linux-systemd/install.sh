@@ -37,6 +37,8 @@ readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}
 readonly SYSTEMD_UNIT_SHA256="ce8fb105ca99860a6627b5d9086ce731b36f0e48c323f26c80b8ae8148dc6738"
 readonly INSTALLER_UNIT_SHA256="9b1cc2cc158be63113fe5f30d832ab81de8377aceaf5d0d7ca3a2d3047f8519d"
 readonly AUDIT_READER_SHA256="7e193ae6d90ab2097ecfecdf1529ce6ec165bd3ac2dd51fe778885c1b4418e6e"
+readonly DIAGNOSTIC_READER_SHA256="3e3a0fb41e5c82738488725e218381b7d9a44704fcd9c0da0b0f66cdfc9e2b60"
+readonly DIAGNOSTIC_PROGRAM_SHA256="17a552b05926113e70f7e8adfb681723e6ca9ae5c2fcc41670ae302607d4769d"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 
@@ -685,6 +687,9 @@ prepare_source() {
   [[ "${audit_reader_hash}" == "${AUDIT_READER_SHA256}" ]] || \
     fail "The audit reader does not match the installer-pinned SHA-256 digest."
 
+  [[ "$(sha256sum "${source_dir}/packaging/linux/diagnostic-reader" | awk '{ print $1 }')" == "$DIAGNOSTIC_READER_SHA256" ]] || fail "Diagnostic reader digest mismatch."
+  [[ "$(sha256sum "${source_dir}/scripts/diagnostics/read-linux.mjs" | awk '{ print $1 }')" == "$DIAGNOSTIC_PROGRAM_SHA256" ]] || fail "Diagnostic program digest mismatch."
+
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
     sed -e "s/__INSTALLER_UID__/${INSTALLER_UID}/g" \
         -e "s/__INSTALLER_GID__/${INSTALLER_GID}/g" \
@@ -1332,6 +1337,7 @@ rollback_activation() {
   fi
 
   rollback_audit_access
+  restore_diagnostic_assets || labels_ok=0
   if [[ "${LEGACY_MIGRATION}" == "0" && -z "${PREVIOUS_RELEASE}" ]]; then
     systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
   fi
@@ -1384,7 +1390,7 @@ rollback_activation() {
       systemctl restart "${SERVICE_NAME}.service" || log "WARNING: Restored service could not be restarted."
     fi
   fi
-  [[ "${labels_ok}" == 1 ]] || log "WARNING: Rollback files restored, but SELinux label repair failed; restored service was not restarted."
+  [[ "${labels_ok}" == 1 ]] || log "WARNING: Rollback could not complete helper restoration or SELinux label repair; restored service was not restarted."
   ACTIVATION_STARTED=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then LEGACY_ROLLBACK_DONE=1; fi
   restore_managed_update_assets
@@ -1551,6 +1557,7 @@ print_codex_setup() {
 
 main() {
   source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/managed-update.sh"
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/diagnostics.sh"
   local node_arch available_kb
 
   parse_arguments "$@"
@@ -1558,7 +1565,7 @@ main() {
   for command_name in \
     awk chown chmod cp curl df env find flock getent grep groupadd groupdel gzip id install \
     ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
-    tr uname unlink useradd userdel sed; do
+    tr uname unlink useradd userdel sed touch; do
     require_command "${command_name}"
   done
 
@@ -1598,6 +1605,7 @@ main() {
   install_runtime_and_release "${node_arch}"
   if [[ "${RUN_AS_INSTALLER}" == 0 ]]; then install_audit_access; fi
   prepare_managed_update_state
+  install_diagnostic_assets
   install_and_start_service
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
   install_cli_entry

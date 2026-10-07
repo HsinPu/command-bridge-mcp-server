@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 4.4.7; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 4.5.0; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
@@ -204,3 +204,11 @@ From 4.3.3, service restart retries reuse matching startup evidence without repl
 ## MCP-managed updates (4.4.0)
 
 Managed service installation provisions the default-enabled fixed-purpose update worker. See [MCP update operations](mcp-update.md) for permissions, status, disabling requests and retained records. This adds narrowly scoped updater authorization, not general sudo rights. Existing command policies and installation mode selection remain unchanged.
+
+## Independent MCP diagnostics (4.5.0)
+
+The default-enabled `command_bridge_get_diagnostics` uses the existing authenticated MCP connection, independently of Audit. See [fields, limits and recovery](diagnostics.md). A fixed `scripts/windows/diagnostics/read-diagnostics.ps1` is staged under the protected application release with administrator/SYSTEM write access and service read/execute access. It runs through system Windows PowerShell without inheriting arbitrary secrets or module paths; no new privileged broker or service-account permission is added.
+
+The script reads only `CommandBridgeMCP` status, fixed volume capacity and bounded tails of the current WinSW `.err.log` and `.out.log` files. Only recognized structured diagnostic codes are returned; raw lines, commands, paths and exception text are discarded. A missing source or denied access is reported as unavailable/unknown metadata, not bypassed by elevation. Rotated files remain available to administrator startup troubleshooting; MCP diagnostics intentionally inspect only the active fixed log files. File Audit metadata probes do not create files or modify ACLs.
+
+The installer validates running-reader diagnostics through a real MCP connection as well as readiness/hostname/Audit. Existing protected release backup/rollback covers the script, and application uninstall removes it. Audit-only startup can keep diagnostics reachable while `/ready` remains 503 and new operations remain blocked; other failed dependencies still prevent startup. This does not prove hosted LocalService execution or actual reboot until those checks execute.

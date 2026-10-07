@@ -8,6 +8,8 @@ import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import { ManagedUpdateService } from "./managedUpdate.js";
 import { FileTransferService } from "./fileTransferService.js";
+import { DiagnosticsService } from "./diagnosticsService.js";
+import { RecentDiagnosticRequests, type RecentDiagnosticRequest } from "./diagnosticTypes.js";
 import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { assertNoSelfModification } from "./selfProtection.js";
 import { assertGuardedCommand } from "./guardedPolicy.js";
@@ -68,6 +70,9 @@ const defaultEnvironmentKeys = [
 ];
 
 export class CommandExecutor {
+  readonly diagnostics: DiagnosticsService;
+  private readonly recentDiagnostics = new RecentDiagnosticRequests();
+  private readonly diagnosticStartTimes = new WeakMap<CommandAuditEvent, string>();
   readonly files: FileTransferService;
   readonly updates: ManagedUpdateService;
   private activeCommands = 0;
@@ -75,6 +80,7 @@ export class CommandExecutor {
   private readonly running = new Set<() => void>();
   private readonly pending = new Set<Promise<CommandResult>>();
   private readonly auditLog: BoundedAuditLog;
+  private readinessDependencies?:Record<string,boolean>;
   private pendingReadiness?: Promise<{ ready: boolean; checks: Record<string, boolean> }>;
 
   constructor(
@@ -82,6 +88,12 @@ export class CommandExecutor {
     auditLog: AuditLog = createAuditLog(config)
   ) {
     this.auditLog = auditLog instanceof BoundedAuditLog ? auditLog : new BoundedAuditLog(auditLog);
+    this.diagnostics = new DiagnosticsService(config, this.auditLog, () => ({
+      accepting: !this.stopping && this.auditLog.available,
+      mode: this.stopping ? "stopping" : this.auditLog.available ? "normal" : "diagnostic-only",
+      activeCommands: this.activeCommands, maxParallelCommands: this.config.maxParallelCommands,
+      recentRequests: this.recentDiagnostics.list(undefined,100)
+    }));
     this.files = new FileTransferService(config, this.auditLog);
     this.updates = new ManagedUpdateService(config, this.auditLog);
   }
@@ -97,12 +109,13 @@ export class CommandExecutor {
     const fileShutdown = this.files.shutdown();
     const updateShutdown = this.updates.shutdown();
     this.stopping = true;
+    this.diagnostics.stop();
     this.updates.stop();
     for (const stop of this.running) stop();
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        Promise.allSettled([...this.pending, fileShutdown, updateShutdown, ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
+        Promise.allSettled([...this.pending, fileShutdown, updateShutdown, this.diagnostics.drain(), ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
     } finally { if (timer) clearTimeout(timer); }
@@ -119,12 +132,16 @@ export class CommandExecutor {
     let timer: NodeJS.Timeout | undefined;
     try {
       return await Promise.race([this.pendingReadiness, new Promise<{ ready: boolean; checks: Record<string, boolean> }>(resolve => {
-        timer = setTimeout(() => resolve({ ready: false, checks: { accepting: !this.stopping, audit: false, verification: false } }), 5_000);
+        timer = setTimeout(() => {
+          if(this.readinessDependencies) this.auditLog.expireReadiness();
+          resolve({ ready:false, checks:{...this.readinessDependencies,accepting:!this.stopping && this.auditLog.available,audit:false,verification:false} });
+        }, 5_000);
       })]);
     } finally { if (timer) clearTimeout(timer); }
   }
 
   private async readinessInternal(): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
+    this.readinessDependencies=undefined;
     const checks: Record<string, boolean> = { accepting: !this.stopping, workingDirectory: true, shells: true, audit: true };
     try { for (const root of this.config.allowedRoots) await access(root, constants.R_OK | constants.X_OK); }
     catch { checks.workingDirectory = false; }
@@ -144,6 +161,7 @@ export class CommandExecutor {
       const found = await Promise.all(paths.map(p => access(p, constants.X_OK).then(() => true, () => false)));
       if (!found.some(Boolean)) checks.shells = false;
     }
+    this.readinessDependencies={...checks};
     try {
       await this.auditLog.write(createAuditEvent({ command: "CommandBridge readiness verification", phase: "completed", executionMode: this.config.executionMode, source: this.auditSource() }));
       await this.auditLog.list(1);
@@ -216,6 +234,7 @@ export class CommandExecutor {
       throw error;
     }
 
+    this.recordDiagnostic(attempted,"running");
     this.activeCommands += 1;
     try {
       let result: CommandResult;
@@ -271,7 +290,7 @@ export class CommandExecutor {
       | "errorCode"
     >>
   ): CommandAuditEvent {
-    return createAuditEvent({
+    const event = createAuditEvent({
       auditId: attempted.auditId,
       phase,
       command: attempted.command,
@@ -286,16 +305,25 @@ export class CommandExecutor {
       truncated: overrides.truncated ?? false,
       errorCode: overrides.errorCode ?? null
     });
+    this.diagnosticStartTimes.set(event, attempted.timestamp);
+    return event;
   }
 
   private auditSource(): "http-bearer" | "stdio" {
     return this.config.transport === "http" ? "http-bearer" : "stdio";
   }
 
+  private recordDiagnostic(event: CommandAuditEvent, phase: RecentDiagnosticRequest["phase"] = event.phase, errorCode = event.errorCode): void {
+    this.recentDiagnostics.record({ auditId:event.auditId, startedAt:this.diagnosticStartTimes.get(event) ?? this.recentDiagnostics.list(event.auditId,1)[0]?.startedAt ?? event.timestamp, phase, durationMs:event.durationMs, exitCode:event.exitCode, timedOut:event.timedOut, errorCode });
+  }
+
   private async writeAuditEvent(event: CommandAuditEvent): Promise<void> {
+    if(event.phase === "attempted") this.recordDiagnostic(event);
     try {
       await this.auditLog.write(event);
+      this.recordDiagnostic(event);
     } catch (error) {
+      this.recordDiagnostic(event,"auditUnavailable","AUDIT_LOG_WRITE_FAILED");
       if (isAuditWriteFailure(error)) {
         throw error;
       }

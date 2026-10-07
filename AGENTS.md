@@ -7,7 +7,7 @@ CommandBridge MCP 是跨平台的 MCP Server，讓 MCP 用戶端透過本機 std
 - 技術：TypeScript、Node.js、ES modules、MCP SDK、Express、Zod。
 - 2026-09-22 初次檢視時版本為 0.3.0（pre-1.0）；目前版本以 package.json 為準。
 - Node.js 需求為 >=20；目前 CI 使用 24.18.0，涵蓋 Ubuntu 與 Windows。
-- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events，以及 3.1.0 新增的 command_bridge_upload_file、command_bridge_download_file，以及 4.4.0 新增的 command_bridge_update、command_bridge_get_update_status。
+- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events，以及 3.1.0 新增的 command_bridge_upload_file、command_bridge_download_file，以及 4.4.0 新增的 command_bridge_update、command_bridge_get_update_status，以及 4.5.0 新增的 command_bridge_get_diagnostics。
 - 預設使用 stdio 與 allowlist 執行模式；HTTP 模式需要至少 32 字元的 Bearer Token。
 
 ## 程式結構
@@ -100,6 +100,10 @@ npm start
 - 純介紹或排版修改時，仍須升 PATCH 並更新 CHANGELOG；確認四個一行指令沒有意外變動、相對文件連結有效、中英文內容一致，並執行 git diff --check。不需為排版新增程式測試。
 
 ## 修改時應維持的行為
+
+- 4.5.0 起，`command_bridge_get_diagnostics` 預設開啟，使用既有 Bearer／Host 驗證，但不依賴 Audit 成功。僅回傳固定 schema 的版本／服務／儲存狀態、首次 Audit 故障與最多 100 筆記憶體指令摘要；禁止回傳指令文字、cwd、stdout／stderr、Token、設定、原始錯誤／日誌或完整內部路徑。限制總回應 64 KiB／5 秒、完成結果快取 2 秒；底層 I/O 未結束時必須共用實際工作，不能因回應逾時反覆新增 helper。
+- 診斷讀取器只能使用固定來源，Linux 兩帳號模式都使用 root 管理的無參數 reader 與精確 numeric UID／NOSETENV sudoers；Windows 使用受保護的固定腳本，不增加通用提權。安裝需保存／回復資產、驗證 SELinux／ACL 並通過真實 MCP 診斷及 Audit，卸載移除讀取器授權。
+- 只有 Audit 故障且所有非 Audit 依賴已確認成功時，可保留唯讀診斷啟動；`/ready` 必須失敗，新的指令、傳輸及更新仍維持 Audit 先寫入規則。其他設定、政策或依賴錯誤拒絕啟動；診斷模式不得作為安裝成功或自動恢復 Audit 的依據。詳見 docs/diagnostics.md。
 
 - 4.2.0 起支援 `--version`／`-V`，必須在載入設定、SDK、Audit 與 listener 前回應。Linux `/usr/local/bin/command-bridge` 的版本查詢跟隨啟用 release；4.3.0 另支援 update／check；安裝不可覆寫同名外部入口，需標籤檢查、驗證、失敗回復，卸載只移除管理的連結。Windows 安裝根目錄的 `command-bridge.cmd` 使用內附 Runtime 與選定 release，不修改 PATH。npm 保留長名稱並提供短名稱；無參數啟動 MCP 的既有行為不變。版本查詢不代表服務健康或 GitHub 最新版本。
 

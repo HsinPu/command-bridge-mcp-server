@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { toErrorPayload } from "../errors/AppError.js";
+import { diagnosticInputSchema } from "../services/diagnosticsService.js";
 import { DEFAULT_AUDIT_EVENT_LIMIT, MAX_AUDIT_EVENT_LIMIT } from "../services/auditLog.js";
 import { CommandExecutor } from "../services/commandExecutor.js";
 import { getSystemInfo } from "../services/systemInfoService.js";
@@ -56,6 +57,11 @@ export function registerCommandBridgeTools(
     inputSchema: { path: z.string().max(120) },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   }, async ({ path }, extra) => { try { return toToolResult(await executor.files.download(path, extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_get_diagnostics", { title:"Get CommandBridge Diagnostics", description:"Read bounded CommandBridge diagnostic metadata independently of Audit availability. No command text, output, raw logs, paths or secrets are returned. Recent command summaries are volatile, not durable Audit evidence.", inputSchema:diagnosticInputSchema, annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false} }, async (input,extra) => {
+    try {return toToolResult(await executor.diagnostics.get(input,extra.signal));}
+    catch {return toToolResult({error:{code:"DIAGNOSTIC_UNAVAILABLE",message:"Diagnostic summary is unavailable.",action:"Inspect the host through an administrator terminal."}},true);}
+  });
+
   server.registerTool(
     "command_bridge_get_system_info",
     {

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.4.7-blue)
+![Version](https://img.shields.io/badge/version-4.5.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -39,6 +39,8 @@ CommandBridge 是部署在目標主機上的 [Model Context Protocol（MCP）](h
 ```mermaid
 flowchart LR
     Client["Codex / MCP 用戶端"] --> Transport["stdio / Streamable HTTP"]
+    Transport --> Diagnostics["唯讀診斷"]
+    Diagnostics --> State["程序狀態與固定主機來源"]
     Transport --> Policy["指令政策檢查"]
     Policy --> Executor["Linux / Windows 指令執行器"]
     Policy --> Audit["Audit Log"]
@@ -83,7 +85,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
-上方 Linux 指令包含 `--run-as-installer --guarded`。新安裝與重新安裝都以登入者帳號運作並設定為 guarded：一般指令可用，可辨識的刪除與系統修改會被拒絕。既有 sudo 權限保持不變，不新增一般 sudo 權限；安裝器只另外建立下方說明的固定 MCP 更新授權。此模式不建立專用服務使用者，使用私有輪替檔案記錄 Audit。全新安裝若要使用專用帳號模式，移除 `--run-as-installer`。
+上方 Linux 指令包含 `--run-as-installer --guarded`。新安裝與重新安裝都以登入者帳號運作並設定為 guarded：一般指令可用，可辨識的刪除與系統修改會被拒絕。既有 sudo 權限保持不變，不新增一般 sudo 權限；安裝器只另外建立固定 MCP 更新與唯讀診斷讀取器授權。此模式不建立專用服務使用者，使用私有輪替檔案記錄 Audit。全新安裝若要使用專用帳號模式，移除 `--run-as-installer`。
 
 **3.0.0 起，每次 Linux 安裝都依本次參數設定執行模式。** 未加 `--guarded` 或 `--unrestricted` 就寫入 `COMMAND_BRIDGE_EXECUTION_MODE=allowlist`，舊版自由 Shell 安裝也會切回白名單。要保留自由 Shell，必須每次安裝都明確搭配 `--run-as-installer --unrestricted`。README 指令重新安裝會明確切換為 guarded；Token、網路設定、自訂工作根目錄與政策檔仍保留；驗證失敗會回復原設定。詳見 [恢復白名單模式](docs/linux-systemd.md#return-to-allowlist-mode)。自由 Shell 仍是需明確啟用的進階選項，操作說明放在 [平台指南](docs/linux-systemd.md#installer-account-mode)；白名單不是完整檔案系統沙箱。
 
@@ -148,6 +150,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 | 工具 | 功能 |
 | --- | --- |
+| `command_bridge_get_diagnostics` | 唯讀查詢服務／Audit 故障資訊及近期指令摘要；Audit 無法使用時仍可查詢。 |
 | `command_bridge_get_system_info` | 取得主機資訊及目前的 Shell、指令白名單、工作目錄與並行限制。 |
 | `command_bridge_run_command` | 執行一個指令，回傳 stdout、stderr、exit code、耗時與逾時／截斷狀態。 |
 | `command_bridge_list_audit_events` | 查詢最近的 Audit 事件，預設 50 筆，最多 1,000 筆。 |
@@ -192,6 +195,12 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 | 同時執行數 | 2 |
 
 長指令需明確指定 `timeoutMs: 300000`（最多五分鐘）；安裝輸出的 Codex 設定等待六分鐘（`tool_timeout_sec = 360`）。升級會保留既有逾時設定；請依平台指南同步調整服務與用戶端。
+
+## 唯讀診斷
+
+4.5.0 起，`command_bridge_get_diagnostics` 預設開啟。`{}` 查詢最近 20 筆指令摘要，`{"limit":100}` 為上限，`{"auditId":"<id>"}` 篩選單一完整 ID。可查看版本、服務狀態、指令並行占用、首次 Audit 故障及有界儲存／讀取器狀態，不依賴 Audit 讀寫。記憶體只保留最近 100 筆指令摘要，重啟後清空，不含指令文字、stdout 或 stderr；歷史紀錄仍使用 `command_bridge_list_audit_events`。
+
+只有 Audit 啟動故障時，才保留通過驗證的唯讀診斷連線；此時 `/ready` 失敗，新的指令、傳輸及更新仍會被阻擋。設定、政策或其他依賴無效時仍拒絕啟動；安裝成功仍須通過真實 MCP／Audit 驗證。程序停止、網路不通或事件迴圈卡死時，需要管理者終端處理。詳見 [診斷欄位、限制與恢復方式](docs/diagnostics.md)。
 
 ## 操作紀錄
 

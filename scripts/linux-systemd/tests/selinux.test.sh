@@ -11,6 +11,9 @@ sed -e "s|/opt/command-bridge|${work}/opt/command-bridge|g" \
     -e "s|/etc/sudoers.d/|${work}/sudoers/|g" \
     scripts/linux-systemd/install.sh > "$work/installer.sh"
 source "$work/installer.sh"
+# main normally loads these modules; isolated function tests must do so too.
+source scripts/linux-systemd/managed-update.sh
+source scripts/linux-systemd/diagnostics.sh
 trap - EXIT ERR
 trap 'rm -rf -- "$work"' EXIT
 export LABEL_EVENTS="$work/events" LABEL_STATE="$work/labels"

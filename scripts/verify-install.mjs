@@ -52,5 +52,11 @@ try {
     if (!matched) await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (!matched) throw new Error('Matching audit lifecycle was not returned.');
+  const diagnostics = await client.callTool({name:'command_bridge_get_diagnostics',arguments:{limit:20}});
+  const summary = diagnostics.structuredContent;
+  if(diagnostics.isError || !summary?.audit?.available || summary.mode!=='normal') throw new Error('Independent diagnostics verification failed.');
+  const managed = process.platform==='win32' ? new URL(import.meta.url).pathname.toLowerCase().includes('/commandbridgemcp/') : new URL(import.meta.url).pathname.startsWith('/opt/command-bridge/');
+  const probe = summary.probes?.host;
+  if(managed && (probe?.status!=='ok' || probe.data?.reader?.status!=='ok' || probe.data?.service?.state!=='running')) throw new Error('Installed fixed diagnostic reader verification failed.');
   console.log('Service account MCP execution and audit verification passed.');
 } finally { clearTimeout(timer); await client.close(); }

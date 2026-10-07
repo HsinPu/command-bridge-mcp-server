@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.5.0 — 2026-10-07
+
+MINOR: add a compatible, default-enabled read-only MCP diagnostics tool while preserving existing command, transfer and update authorization.
+
+- Add `command_bridge_get_diagnostics` with bounded volatile command summaries, first Audit failure metadata, actual Audit I/O/queue counts, fixed service/storage probes, optional exact Audit ID filtering and a 1–100 summary limit (20 default). No command text, output, secrets, arbitrary paths or raw logs are returned.
+- Keep diagnostics independent of the failed Audit sink, coalesce actual pending probes, cap responses at 64 KiB and five seconds, and cache completed probes for two seconds.
+- Permit diagnostic-only startup only after non-Audit dependencies pass; retain authenticated HTTP access and failing readiness. Commands, transfers and new updates continue to fail closed. Installation still requires real readiness/MCP/Audit and fixed-reader verification.
+- Provision a pinned root-owned no-argument Linux diagnostic reader with an exact numeric-UID sudo rule, SELinux labeling and transactional rollback/removal. Stage the fixed read-only Windows script with application ACLs; no new Windows elevation broker.
+- Cover protocol authentication, native readers, privacy, timeouts, coalescing, Audit failures, real startup and deployment assets; synchronize operating guides and project rules. Hosted service/rollback/release validation remains pending push and CI.
+
 ## 4.4.7 — 2026-10-07
 
 PATCH: increase the existing Audit query capacity without changing tool inputs, defaults or result shape.

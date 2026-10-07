@@ -45,6 +45,7 @@ jobs:
           bash -n packaging/linux/audit-reader
           bash -n packaging/linux/command-bridge
           bash -n packaging/linux/update-request
+          bash -n packaging/linux/diagnostic-reader
 
       - name: Check Windows installer assets
         if: runner.os == 'Windows'

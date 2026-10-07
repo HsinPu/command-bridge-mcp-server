@@ -136,6 +136,7 @@ print_plan() {
   printf '\n'
   log "Planned removal:"
   printf '  Service and unit: %s.service\n' "${SERVICE_NAME}"
+  printf '  Diagnostic reader and restricted sudo rule\n'
   printf '  Managed updater: command-bridge-update.service and restricted request rule\n'
   printf '  Application: %s\n' "${INSTALL_ROOT}"
   printf '  Managed version command: %s\n' "${CLI_LINK}"
@@ -194,7 +195,7 @@ confirm_removal() {
 
 assert_safe_tree_path() {
   case "$1" in
-    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update")
+    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-diagnostics" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update")
       ;;
     *)
       fail "Refusing to remove an unexpected path: $1"
@@ -485,6 +486,8 @@ main() {
     if [[ -e "$updater_file" || -L "$updater_file" ]]; then run_command rm -f -- "$updater_file"; fi
   done
   remove_tree /usr/local/libexec/command-bridge-update
+  if [[ -e /etc/sudoers.d/command-bridge-diagnostics || -L /etc/sudoers.d/command-bridge-diagnostics ]]; then run_command rm -f -- /etc/sudoers.d/command-bridge-diagnostics; fi
+  remove_tree /usr/local/libexec/command-bridge-diagnostics
   run_command systemctl daemon-reload
   if [[ "${PURGE}" == "1" ]]; then
     validate_service_identity_for_purge
