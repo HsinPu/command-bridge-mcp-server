@@ -20,10 +20,17 @@ export interface UpdateAdapter { start(): Promise<UpdateJob>; status(jobId?: str
 export function runUpdateControl(executable: string, args: string[], deadlineMs = 15_000): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "ignore"],
-      env: process.platform === "win32" ? { SystemRoot: process.env.SystemRoot, ProgramFiles: process.env.ProgramFiles, ProgramData: process.env.ProgramData, TEMP: process.env.TEMP, PATH: process.env.PATH } : { PATH: "/usr/sbin:/usr/bin:/sbin:/bin" } });
+      env: process.platform === "win32" ? { SystemRoot: process.env.SystemRoot ?? "C:\\Windows", windir: process.env.SystemRoot ?? "C:\\Windows", ProgramFiles: process.env.ProgramFiles ?? "C:\\Program Files", ProgramData: process.env.ProgramData ?? "C:\\ProgramData", TEMP: process.env.TEMP ?? "C:\\Windows\\Temp", PATH: (process.env.SystemRoot ?? "C:\\Windows") + "\\System32" } : { PATH: "/usr/sbin:/usr/bin:/sbin:/bin" } });
     let output = "", settled = false;
     const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); error ? reject(error) : resolve(output); };
-    const failure = () => new AppError("UPDATE_CONTROL_FAILED", "Update control did not acknowledge the request.", "Query update status before retrying; an independent job may already have started.");
+    const failure = () => {
+      let location = "";
+      try {
+        const diagnostic = z.object({controlError:z.literal(true),stage:z.number().int().min(0).max(10),hresult:z.number().int().min(-2147483648).max(2147483647),line:z.number().int().min(0).max(10000)}).strict().parse(JSON.parse(output));
+        location = ` (control-stage=${diagnostic.stage}, hresult=${diagnostic.hresult}, line=${diagnostic.line})`;
+      } catch {}
+      return new AppError("UPDATE_CONTROL_FAILED", "Update control did not acknowledge the request." + location, "Query update status before retrying; an independent job may already have started.");
+    };
     const timer = setTimeout(() => { child.kill(); finish(failure()); }, deadlineMs);
     child.stdout.on("data", chunk => { output += chunk.toString(); if (output.length > 8192) { child.kill(); finish(failure()); } });
     child.once("error", () => finish(failure()));

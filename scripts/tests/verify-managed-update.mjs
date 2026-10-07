@@ -29,8 +29,10 @@ async function serviceFetch(input, init) {
 
 import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-function diagnostics() {
+function diagnostics(reply) {
   if (process.env.GITHUB_ACTIONS !== 'true') return;
+  const location = /control-stage=(\d+), hresult=(-?\d+), line=(\d+)/.exec(reply?.structuredContent?.error?.message ?? '');
+  if (location) console.error('Control error location:',location.slice(1).map(Number));
   const root = process.platform === 'win32' ? process.env.ProgramData + '/CommandBridgeUpdate' : '/var/lib/command-bridge-update';
   let job;
   try {
@@ -48,7 +50,14 @@ function diagnostics() {
   // Report only numeric test indices and a fixed errno vocabulary; never log text.
   if (job && /^[a-f0-9-]{36}$/.test(job.jobId) && existsSync(root+'/diagnostics/'+job.jobId+'.log')) {
     const log=readFileSync(root+'/diagnostics/'+job.jobId+'.log','utf8');
-    console.error('Failed test indices:', [...log.matchAll(/not ok (\d+)/g)].map(match=>Number(match[1])));
+    const source = readFileSync(new URL('../linux-systemd/install.sh', import.meta.url),'utf8');
+    const messages = [...source.matchAll(/fail "([^"\n]+)/g)].map(match=>match[1].split('$')[0]);
+    console.error('Installer error indices:', messages.flatMap((prefix,index)=>prefix.length>12 && log.includes(prefix) ? [index+1] : []));
+    const bootstrapSource = readFileSync(new URL('../bootstrap.sh', import.meta.url),'utf8');
+    const bootstrapMessages = [...bootstrapSource.matchAll(/echo '([^']+)'/g)].map(match=>match[1]);
+    console.error('Bootstrap error indices:', bootstrapMessages.flatMap((prefix,index)=>prefix.length>12 && log.includes(prefix) ? [index+1] : []));
+    console.error('Curl exit codes:', [...log.matchAll(/curl: \((\d+)\)/g)].map(match=>Number(match[1])));
+    console.error('Failed test indices:' , [...log.matchAll(/not ok (\d+)/g)].map(match=>Number(match[1])));
     console.error('Known error categories:', ['EACCES','ENOENT','EEXIST','ERR_ASSERTION','ECONNREFUSED','EPERM'].filter(code=>log.includes(code)));
   }
 }
@@ -85,7 +94,7 @@ const timer = setTimeout(() => { console.error('Managed update verification time
 try {
   const beforeConfig = readFileSync(process.argv[2]);
   const accepted = await call('command_bridge_update');
-  if (accepted.isError || accepted.structuredContent.state !== 'accepted') { diagnostics(); throw Error('Managed request was not accepted'); }
+  if (accepted.isError || accepted.structuredContent.state !== 'accepted') { diagnostics(accepted); throw Error('Managed request was not accepted'); }
   const first = accepted.structuredContent;
   const duplicate = await call('command_bridge_update');
   if (duplicate.isError || duplicate.structuredContent.jobId !== first.jobId) throw Error('Concurrent request created another job');

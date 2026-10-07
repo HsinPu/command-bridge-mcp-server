@@ -122,3 +122,9 @@ test("disposable fixture pins one SHA and archive without relaxing production bo
     assert.throws(()=>helper.fixtureBootstrap(original,platform,"main","4.4.0",archive));
   }
 });
+
+
+test("control diagnostics expose only validated numeric locations", async () => {
+  await assert.rejects(runUpdateControl(process.execPath,["-e","console.log(JSON.stringify({controlError:true,stage:2,hresult:-2147024891,line:8}));process.exit(1)"]),/control-stage=2, hresult=-2147024891, line=8/);
+  await assert.rejects(runUpdateControl(process.execPath,["-e","console.log(JSON.stringify({controlError:true,stage:2,hresult:0,line:8,secret:'must-stay-hidden'}));process.exit(1)"]), error=>error instanceof Error && !error.message.includes("must-stay-hidden") && !error.message.includes("control-stage"));
+});

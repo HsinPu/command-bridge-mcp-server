@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.4.2 — 2026-10-07
+
+PATCH: supply deterministic Windows control environment defaults and strict numeric request diagnostics.
+
+- Report only validated control stage/HResult/line values, rejecting additional fields and never exposing child stderr.
+- Keep installer diagnosis numeric through fixed source-error indices and curl exit codes; preserve all publication gates.
+
 ## 4.4.1 — 2026-10-07
 
 PATCH: improve bounded updater control and administrator-only failure diagnostics after the first hosted service checks rejected publication.

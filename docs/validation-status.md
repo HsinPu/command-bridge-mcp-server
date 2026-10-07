@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.1, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.2, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.2 validation
+
+4.4.1 general jobs passed but both service gates failed; the Windows OS reports the task has not run, and Linux accepted then failed without test failures. Supply Windows environment defaults and numerical control/source diagnostics. Local Windows npm test passed 106/122 (16 platform/elevation skips), including numeric diagnostic validation and extra-field rejection. PowerShell and JavaScript syntax plus git diff --check passed. WSL has not been rerun for this patch; hosted Linux/service validation and publication are pending. Channel remains 4.3.3.
 
 ## 4.4.1 validation
 
