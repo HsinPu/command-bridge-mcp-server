@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.2.0-blue)
+![Version](https://img.shields.io/badge/version-4.3.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -127,6 +127,22 @@ Windows PowerShell：
 ```
 
 也支援 `-V`。查詢使用內附 Runtime，顯示本機目前選用的安裝版本；不啟動 MCP／Audit、不檢查服務健康，也不連 GitHub。舊版安裝需先升級。npm 使用者可執行短名稱，或保留原本的 `command-bridge-mcp-server --version`。
+
+## 更新已安裝的服務
+
+4.3.0 起，可先檢查已通過 CI 的更新來源，不修改主機：
+
+```bash
+command-bridge update --check
+```
+
+Linux 在獨立的管理員終端更新：
+
+```bash
+sudo command-bridge update
+```
+
+Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check` 檢查；在系統管理員 PowerShell 執行 `update` 更新。更新保留目前服務帳號、執行模式、Token、網路、政策及工作資料，會短暫重啟服務，切換驗證失敗則回復舊部署。來源 SHA 相同時不重建、不重啟；只有加上 `--print-codex-setup` 才印出 Token。舊安裝需先使用既有一鍵安裝升級一次，才會有此指令。重新執行一鍵安裝仍依參數選擇模式，`update` 則保留目前模式；npm 安裝請透過 npm 更新。詳細說明見平台指南。
 
 ## MCP 工具
 

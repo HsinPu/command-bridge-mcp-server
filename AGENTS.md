@@ -101,7 +101,7 @@ npm start
 
 ## 修改時應維持的行為
 
-- 4.2.0 起支援 `--version`／`-V`，必須在載入設定、SDK、Audit 與 listener 前回應。Linux `/usr/local/bin/command-bridge` 只接受版本查詢，跟隨啟用 release；安裝不可覆寫同名外部入口，需標籤檢查、驗證、失敗回復，卸載只移除管理的連結。Windows 安裝根目錄的 `command-bridge.cmd` 使用內附 Runtime 與選定 release，不修改 PATH。npm 保留長名稱並提供短名稱；無參數啟動 MCP 的既有行為不變。版本查詢不代表服務健康或 GitHub 最新版本。
+- 4.2.0 起支援 `--version`／`-V`，必須在載入設定、SDK、Audit 與 listener 前回應。Linux `/usr/local/bin/command-bridge` 的版本查詢跟隨啟用 release；4.3.0 另支援 update／check；安裝不可覆寫同名外部入口，需標籤檢查、驗證、失敗回復，卸載只移除管理的連結。Windows 安裝根目錄的 `command-bridge.cmd` 使用內附 Runtime 與選定 release，不修改 PATH。npm 保留長名稱並提供短名稱；無參數啟動 MCP 的既有行為不變。版本查詢不代表服務健康或 GitHub 最新版本。
 
 - 4.1.16 起，程序執行結束即釋放指令名額；終結 Audit 成功前不得回傳輸出。共用 Audit 讀寫的排隊及 I/O 回應等待最多 5 秒，未完成操作上限 64；失敗後停止新作業，排除儲存故障並重啟才恢復。逾時不代表底層 I/O 已取消，必須追蹤實際操作，禁止啟動過期排隊寫入或重複終結事件；停機仍在 15 秒上限內等待。Readiness 需限時並共用尚未結束的檢查。不能宣稱此修正已確認現場 Docker 卡住的原因。
 
@@ -145,3 +145,9 @@ npm start
 2. **已替換：Shell 白名單執行。** allowlist 僅接受字面參數與精確 argv 政策；原生程式直接啟動，PowerShell Cmdlet 透過固定包裝程式。自訂政策只允許受管理的原生執行檔，政策檔及其所在目錄不可讓服務帳號寫入。unrestricted 必須明確啟用，不因政策錯誤自動切換。
 
 後續完成修正或驗證時，更新以上紀錄，避免把歷史觀察當作目前狀態。
+
+## 管理命令更新（4.3.0 起）
+
+- 服務安裝的 `command-bridge update`／`update --check` 使用本機保存的 bootstrap，固定已通過 CI 的完整 SHA。check 不變更部署；同 SHA 不重建或重啟，不以版本號相同取代 SHA 核對。npm 安裝仍透過 npm 更新。
+- update 與一鍵重裝區分：完整保留設定、模式及服務帳號，禁止附帶模式、網路與帳號變更參數；Linux 安裝者帳號必須經原登入者 sudo 更新。變更需要管理員終端，不自動提權；可辨識的 MCP 自我更新要阻擋，Token 只在明確要求設定輸出時顯示。
+- 沿用安裝鎖、實際服務／MCP／Audit 驗證與回復，鎖內核對先前讀到的來源 SHA。Windows 安裝、更新及卸載共用 mutex。更新資產需位於受保護部署，暫存清理及失敗回復都必須測試。

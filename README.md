@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.2.0-blue)
+![Version](https://img.shields.io/badge/version-4.3.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -127,6 +127,22 @@ Windows PowerShell:
 ```
 
 `-V` also works. Queries use the bundled runtime and report the locally selected installed release; they do not start MCP/Audit, check service health, or contact GitHub. Older installations must upgrade first. npm users can use either `command-bridge --version` or the existing `command-bridge-mcp-server --version`.
+
+## Update an installed service
+
+From 4.3.0, check the verified CI channel without changing the host:
+
+```bash
+command-bridge update --check
+```
+
+Update Linux from a separate administrator terminal:
+
+```bash
+sudo command-bridge update
+```
+
+Windows: run `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`; apply `update` from an elevated PowerShell terminal. Updates preserve the existing service account, execution mode, Token, network, policy and work data. The service briefly restarts, and failed activation restores the previous deployment. Identical source SHA skips rebuilding/restarting. Only `--print-codex-setup` prints the Token. Earlier installations need one upgrade through the existing installer before this command exists. Re-running that installer still selects the execution mode from its arguments; `update` preserves it. npm installations use npm for updates. See the platform guides for details.
 
 ## MCP tools
 

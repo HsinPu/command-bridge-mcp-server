@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.2.0, adding installed-version queries while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.3.0, adding service update/check commands while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.3.0 validation
+
+Local full Windows npm test passed 94/110 with 16 platform/elevation skips; WSL with checksum-verified Node.js 24.18.0 passed 97/110 with 13 platform skips. Disposable update tests cover identical SHA/no activation, same-version different SHA, immutable channel selection, invalid/failed downloads, deployment failure propagation, temporary cleanup, data-only mode parsing, exact configuration preservation, stale installed SHA and service account mismatches. Native Windows tests cover update bootstrap/wrapper execution outside the deployment, failure cleanup and real cross-process mutex contention/reacquisition. Hosted service cases now exercise preserved-mode updates and startup-failure rollback with deployed-SHA evidence. Bash/PowerShell syntax and version/bootstrap checks passed. Final Windows update/version/self-protection tests passed 11/15 with four Linux skips; affected Windows installer assets passed 12/17 with five skips. Final WSL update/version launcher tests passed six/eight with two Windows skips. Production ACL argument construction confirms public program read/execute without exposing configuration. Full hosted service/migration/rollback, Oracle Linux Enforcing and actual reboot remain unverified for this commit; publication depends on the CI channel.
 
 ## 4.2.0 validation
 

@@ -88,6 +88,13 @@ export function assertNoSelfModification(command: string, cwd: string, options: 
       }
       const name = paths.basename(segment[head] ?? "").replace(/\.exe$/i, "");
       const args = segment.slice(head + 1);
+      if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/i.test(name) && args[0]?.toLowerCase() === "update" &&
+          !(args.length === 2 && args[1]?.toLowerCase() === "--check")) reject();
+      if (/^(?:bash|sh|powershell|pwsh)$/i.test(name) && args.some(arg =>
+          /(?:^|[/\\])(?:bootstrap\.sh|bootstrap\.ps1|update\.ps1)$/i.test(arg) && overlaps(arg)) &&
+          args.some(arg => /^(?:--update|-update)$/i.test(arg)) && !args.some(arg => /^(?:--check|-check)$/i.test(arg))) reject();
+      if (/^(?:powershell|pwsh)$/i.test(name) && args.some(arg => /(?:^|[/\\])update\.ps1$/i.test(arg) && overlaps(arg)) &&
+          !args.some(arg => /^-check$/i.test(arg))) reject();
       if (writes.test(name) || (/^(sed|perl)$/i.test(name) && args.some(arg => /^--in-place(?:=|$)|^-[a-z]*i(?:\.|$)/i.test(arg)))) {
         const operands: string[] = [];
         for (let i = 0; i < args.length; i++) {

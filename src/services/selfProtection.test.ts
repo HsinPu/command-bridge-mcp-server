@@ -12,6 +12,21 @@ test("Linux managed version entry is protected from direct writes", () => {
 });
 import type { AuditLog, CommandAuditEvent } from "./auditLog.js";
 
+test("direct administration updates are blocked while version and update checks remain readable", () => {
+  for (const platform of ["linux", "win32"] as const) {
+    for (const command of ['sudo -n command-bridge update', 'command-bridge update --print-codex-setup', 'command-bridge.cmd update', 'command-bridge-mcp-server update'])
+      assert.throws(() => assertNoSelfModification(command, platform === "linux" ? "/tmp" : "C:\\temp", { platform }), { code: "SELF_MODIFICATION_BLOCKED" });
+    assert.doesNotThrow(() => assertNoSelfModification('command-bridge update --check', platform === "linux" ? "/tmp" : "C:\\temp", { platform }));
+  }
+  const linux = { platform: "linux" as const, protectedPaths: ["/opt/command-bridge"] };
+  assert.throws(() => assertNoSelfModification('bash /opt/command-bridge/current/bootstrap.sh --update', '/tmp', linux), { code: 'SELF_MODIFICATION_BLOCKED' });
+  assert.doesNotThrow(() => assertNoSelfModification('bash /tmp/other-app/bootstrap.sh --update', '/tmp', linux));
+  assert.doesNotThrow(() => assertNoSelfModification('bash /opt/command-bridge/current/bootstrap.sh --update --check', '/tmp', linux));
+  const windows = { platform: "win32" as const, protectedPaths: ['C:\\cb'] };
+  assert.throws(() => assertNoSelfModification('powershell -File C:\\cb\\update.ps1', 'C:\\temp', windows), { code: 'SELF_MODIFICATION_BLOCKED' });
+  assert.doesNotThrow(() => assertNoSelfModification('powershell -File C:\\cb\\update.ps1 -Check', 'C:\\temp', windows));
+});
+
 test("preflight blocks direct Linux self writes without blocking other sudo or reads", () => {
   const cfg = { platform: "linux" as const, protectedPaths: ["/etc/command-bridge", "/opt/command-bridge"] };
   for (const command of [

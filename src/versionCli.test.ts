@@ -17,6 +17,8 @@ test("version flags work without runtime dependencies, valid config or Audit", (
     }
     const bad = spawnSync(process.execPath, [join(dir, "index.js"), "--version", "extra"], { encoding: "utf8", timeout: 3_000 });
     assert.equal(bad.status, 2); assert.equal(bad.stdout, "");
+    const update = spawnSync(process.execPath, [join(dir, "index.js"), "update"], { encoding: "utf8", timeout: 3_000 });
+    assert.equal(update.status, 2); assert.match(update.stderr, /npm installations are updated through npm/);
     assert.equal(readdirSync(dir).length, 3);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -38,6 +40,9 @@ test("Linux version launcher uses only its bundled runtime and handles spaces", 
     const r = spawnSync(path, ["-V"], { encoding: "utf8", timeout: 3_000 });
     assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), version);
     assert.equal(spawnSync(path, [], { encoding: "utf8", timeout: 3_000 }).status, 2);
+    writeFileSync(join(dir, "current/bootstrap.sh"), '#!/bin/bash\nprintf "%s\\n" "$@"\nexit 7\n');
+    const update = spawnSync(path, ["update", "--check"], { encoding: "utf8", timeout: 3_000 });
+    assert.equal(update.status, 7); assert.equal(update.stdout, "--update\n--check\n");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 test("Windows installed launcher resolves a bundled runtime in paths with spaces", { skip: process.platform !== "win32" }, () => {
@@ -53,6 +58,11 @@ test("Windows installed launcher resolves a bundled runtime in paths with spaces
     for (const flag of ["--version", "-V"]) {
       const r = spawnSync("cmd.exe", ["/d", "/s", "/c", `""${join(dir, "command-bridge.cmd")}" ${flag}"`], { encoding: "utf8", windowsHide: true, timeout: 5_000, windowsVerbatimArguments: true });
       assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), version);
+    }
+    writeFileSync(join(dir, "update.ps1"), 'param([switch]$Check,[switch]$PrintCodexSetup)\nWrite-Output ("check=" + [bool]$Check + ";setup=" + [bool]$PrintCodexSetup)\n');
+    for (const [flags, expected] of [["update", "check=False;setup=False"], ["update --check", "check=True;setup=False"], ["update --print-codex-setup", "check=False;setup=True"]]) {
+      const r = spawnSync("cmd.exe", ["/d", "/s", "/c", `""${join(dir, "command-bridge.cmd")}" ${flags}"`], { encoding: "utf8", windowsHide: true, timeout: 5_000, windowsVerbatimArguments: true });
+      assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), expected);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

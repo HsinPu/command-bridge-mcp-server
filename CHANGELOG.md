@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.3.0 — 2026-10-07
+
+MINOR from 4.2.0: add service-installed `command-bridge update` and `update --check`, comparing full source SHA against the verified CI channel. Use locally saved bootstrap assets, pin one snapshot, preserve complete configuration and service identity, require administrator privileges for changes and retain existing service/MCP/Audit verification and rollback. Detect installation changes under the deployment lock; serialize Windows installation/removal with a shared mutex. Keep checks read-only and Token output opt-in, clean temporary files after failures, and block recognizable direct MCP self-updates. npm installs continue to use npm. Add disposable update/channel/account/cleanup/lock tests and hosted service update/rollback cases.
+
 ## 4.2.0 — 2026-10-07
 
 MINOR from 4.1.16: add --version/-V before configuration, Audit or transport initialization, and a compatible command-bridge npm bin alias. Linux installs a root-managed /usr/local/bin/command-bridge symlink following the active release, validates collisions/parent permissions, restores labels, verifies output before committing activation and rolls back new entries; uninstall preserves unrelated entries. Windows installs a bundled-runtime command-bridge.cmd without modifying PATH. Protect the Linux entry from direct MCP self-modification. Document installed-version semantics and migration; retain existing server startup with no arguments and the long npm name.

@@ -81,7 +81,7 @@ sudo "$node" scripts/tests/rollback-fixture.mjs assert "$verify_marker" "$verify
 assert_restored
 cp "$root/scripts/verify-install.mjs" "$fixture/scripts/verify-install.mjs"
 sudo "$node" scripts/tests/rollback-fixture.mjs prepare "$fixture" health "$health_sha" "$health_marker"
-if sudo bash "$fixture/scripts/linux-systemd/install.sh" > "$health_log" 2>&1; then echo 'Expected service health failure.'; exit 1; fi
+if sudo bash "$fixture/scripts/linux-systemd/install.sh" --update --expected-installed-sha "$(sudo "$node" -p 'require("/opt/command-bridge/current/install-info.json").sourceSha')" > "$health_log" 2>&1; then echo 'Expected service health failure.'; exit 1; fi
 sudo "$node" scripts/tests/rollback-fixture.mjs assert "$health_marker" "$health_sha" started
 assert_restored
 sudo cp "$config" "$config.backup"
@@ -151,7 +151,7 @@ sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestri
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 # Simulate the leftover account created by older installer-account releases.
 sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
-sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
+sudo bash "$root/scripts/linux-systemd/install.sh" --update --expected-installed-sha "$(sudo "$node" -p 'require("/opt/command-bridge/current/install-info.json").sourceSha')"
 if getent passwd command-bridge >/dev/null; then echo 'Legacy installer-mode user was not removed.'; exit 1; fi
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 preserved_settings=$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)

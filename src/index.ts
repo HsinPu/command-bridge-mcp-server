@@ -10,6 +10,11 @@ async function main(): Promise<void> {
     return;
   }
   if (args.length) {
+    if (args[0] === "update") {
+      console.error("Updates require the service-installed administration launcher. Linux: /usr/local/bin/command-bridge update; Windows: CommandBridgeMCP\\command-bridge.cmd update. npm installations are updated through npm.");
+      process.exitCode = 2;
+      return;
+    }
     console.error("Usage: command-bridge [--version|-V] (no arguments starts the MCP server)");
     process.exitCode = 2;
     return;

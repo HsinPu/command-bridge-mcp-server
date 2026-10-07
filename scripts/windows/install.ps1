@@ -1,5 +1,7 @@
 [CmdletBinding()]
 param(
+  [switch]$Update,
+  [string]$ExpectedInstalledSha,
   [switch]$PrintCodexSetup,
   [string]$CodexUrl,
   [string]$CodexName,
@@ -42,6 +44,7 @@ $ActivationSucceeded = $false
 $InstallCommitted = $false
 $EventSourceCreated = $false
 $TransferDirectoryCreated = $false
+$DeploymentLock = $null
 
 function Write-Log {
   param([string]$Message)
@@ -357,7 +360,8 @@ function Copy-ApplicationPayload {
 function Set-RestrictedAcl {
   param([string]$StagedInstallRoot)
   $icacls = Join-Path $env:SystemRoot "System32\icacls.exe"
-  Invoke-External $icacls @($StagedInstallRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")
+  # Public CLI/check assets contain no saved Token; grant read/execute, never write.
+  Invoke-External $icacls @($StagedInstallRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX", "*S-1-5-32-545:(OI)(CI)RX")
   Invoke-External $icacls @($ConfigRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")
   # The transfer validator requires protected ownership of its managed parent.
   Invoke-External $icacls @($ConfigRoot, '/setowner', '*S-1-5-32-544')
@@ -639,6 +643,14 @@ function Rollback-Installation {
 
 try {
   Assert-Administrator
+  . (Join-Path $PSScriptRoot 'deployment-lock.ps1')
+  $DeploymentLock = Enter-CommandBridgeDeploymentLock
+  if ($Update) {
+    foreach ($key in $PSBoundParameters.Keys) { if ($key -notin @('Update', 'ExpectedInstalledSha', 'PrintCodexSetup')) { throw 'Update cannot change settings.' } }
+    if ($ExpectedInstalledSha -cnotmatch '^[a-f0-9]{40}$' -or -not (Test-Path -LiteralPath $ConfigFile)) { throw 'Update requires a managed installation and expected SHA.' }
+    $currentInfo = Get-Content -LiteralPath (Join-Path $InstallRoot 'install-info.json') -Raw | ConvertFrom-Json
+    if ($currentInfo.sourceSha -cne $ExpectedInstalledSha) { throw 'Installation changed during update; retry from the current version.' }
+  } elseif ($ExpectedInstalledSha) { throw 'ExpectedInstalledSha applies only to update.' }
   if ($PSBoundParameters.ContainsKey('CodexName')) { Assert-CodexConnectionName $CodexName }
   if ($CodexUrl -and $CodexUrl -notmatch "^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?(/[A-Za-z0-9._~:@%+-]+)*/mcp/?$") {
     throw "CodexUrl must be a private HTTPS URL ending in /mcp."
@@ -646,6 +658,7 @@ try {
   New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
   $existingService = Get-ManagedService
   Assert-ManagedServicePath $existingService
+  if ($Update -and ($null -eq $existingService -or $existingService.StartName -notin @('NT AUTHORITY\LocalService', 'LocalService'))) { throw 'Update requires the managed LocalService service.' }
   if ((Test-Path -LiteralPath $InstallRoot) -and $null -eq $existingService) {
     throw "Existing CommandBridgeMCP application files were found without a managed service. Run uninstall.ps1 or inspect $InstallRoot first."
   }
@@ -661,7 +674,7 @@ try {
       Invoke-External (Join-Path $nodeRoot 'node.exe') @((Join-Path $sourceRoot 'dist\checkConfig.js'))
     }
   } finally { $env:DOTENV_CONFIG_PATH = $previousDotenv }
-  New-SecureConfiguration
+  if (-not $Update) { New-SecureConfiguration }
   $policyPath = Join-Path $ConfigRoot 'policy.json'
   if (-not (Test-Path -LiteralPath $policyPath)) { Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\policy.example.json') -Destination $policyPath }
   try {
@@ -676,9 +689,12 @@ try {
   $xmlPath = Join-Path $StagingRoot $XmlName
   [IO.File]::WriteAllText($xmlPath, [IO.File]::ReadAllText($xmlPath).Replace('%BASE%\app', "%BASE%\$ApplicationRelativePath"))
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'scripts\windows\uninstall.ps1') -Destination (Join-Path $StagingRoot 'uninstall.ps1')
+  foreach ($asset in @('update.ps1', 'deployment-lock.ps1')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "scripts\windows\$asset") -Destination (Join-Path $StagingRoot $asset) }
+  Copy-Item -LiteralPath (Join-Path $sourceRoot 'scripts\bootstrap.ps1') -Destination (Join-Path $StagingRoot 'bootstrap.ps1')
   New-Item -ItemType Directory -Path (Join-Path $StagingRoot "runtime") -Force | Out-Null
   Copy-Item -Path (Join-Path $nodeRoot "*") -Destination (Join-Path $StagingRoot "runtime") -Recurse -Force
   Copy-ApplicationPayload $sourceRoot (Join-Path $StagingRoot $ApplicationRelativePath)
+  Copy-Item -LiteralPath (Join-Path $StagingRoot "$ApplicationRelativePath\install-info.json") -Destination (Join-Path $StagingRoot 'install-info.json')
   $cliTemplate = [IO.File]::ReadAllText((Join-Path $sourceRoot 'packaging\windows\command-bridge.cmd'))
   [IO.File]::WriteAllText((Join-Path $StagingRoot 'command-bridge.cmd'), $cliTemplate.Replace('__APPLICATION_RELATIVE_PATH__', $ApplicationRelativePath), (New-Object System.Text.UTF8Encoding($false)))
   $cliVersion = (& (Join-Path $StagingRoot 'command-bridge.cmd') --version | Out-String).Trim()
@@ -726,4 +742,5 @@ try {
   if (Test-Path -LiteralPath $StagingRoot) {
     Remove-Item -LiteralPath $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
+  if ($null -ne $DeploymentLock) { $DeploymentLock.ReleaseMutex(); $DeploymentLock.Dispose() }
 }

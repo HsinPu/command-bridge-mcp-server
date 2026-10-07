@@ -52,6 +52,9 @@ function Invoke-Change {
 }
 
 Assert-Administrator
+. (Join-Path $PSScriptRoot 'deployment-lock.ps1')
+$DeploymentLock = Enter-CommandBridgeDeploymentLock
+try {
 $service = Get-ManagedService
 Assert-ManagedServicePath $service
 
@@ -98,3 +101,5 @@ if ($DryRun) {
 } else {
   Write-Log "Uninstallation complete. Configuration remains for a future reinstall."
 }
+
+} finally { $DeploymentLock.ReleaseMutex(); $DeploymentLock.Dispose() }

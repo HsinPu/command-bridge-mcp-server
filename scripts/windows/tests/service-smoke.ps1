@@ -41,6 +41,8 @@ try {
   $modeBefore = [IO.File]::ReadAllText($config)
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-ExecutionMode', 'guarded')
   $guardedConfig = [IO.File]::ReadAllText($config)
+  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-Update', '-ExpectedInstalledSha', (Get-Content -LiteralPath (Join-Path $install 'install-info.json') -Raw | ConvertFrom-Json).sourceSha)
+  if ([IO.File]::ReadAllText($config) -cne $guardedConfig) { throw 'Update changed guarded configuration.' }
   if ([regex]::Replace($guardedConfig, '(?m)^COMMAND_BRIDGE_EXECUTION_MODE=[^\r\n]*', 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist') -cne $modeBefore) { throw 'Mode switch changed other settings.' }
   & $node (Join-Path $release 'scripts\verify-install.mjs') $config 'Remove-Item C:\command-bridge-guarded-absent' 'error:DELETE_OPERATION_BLOCKED'
   if ($LASTEXITCODE -ne 0) { throw 'Guarded deletion/Audit verification failed.' }
@@ -78,7 +80,7 @@ try {
   Copy-Item -LiteralPath (Join-Path $root 'scripts\verify-install.mjs') -Destination (Join-Path $fixture 'scripts\verify-install.mjs') -Force
   & $node $helper prepare $fixture health ('2' * 40) $healthMarker
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed.' }
-  if ((Run-FailingInstaller (Join-Path $fixture 'health.log')) -eq 0) { throw 'Expected service health failure.' }
+  if ((Run-FailingInstaller (Join-Path $fixture 'health.log') @('-Update', '-ExpectedInstalledSha', (Get-Content -LiteralPath (Join-Path $install 'install-info.json') -Raw | ConvertFrom-Json).sourceSha)) -eq 0) { throw 'Expected service health failure.' }
   & $node $helper assert $healthMarker ('2' * 40) started
   if ($LASTEXITCODE -ne 0) { throw 'Startup evidence missing.' }
   Assert-Restored

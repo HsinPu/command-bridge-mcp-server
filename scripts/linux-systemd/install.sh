@@ -63,6 +63,9 @@ CODEX_SETUP_URL=""
 CODEX_SETUP_NAME=""
 REFRESH_NETWORK=0
 RUN_AS_INSTALLER=0
+UPDATE_ONLY=0
+EXPECTED_INSTALLED_SHA=""
+PRESERVED_EXECUTION_MODE=""
 ENABLE_UNRESTRICTED=0
 ENABLE_GUARDED=0
 ENABLE_UPLOAD=0
@@ -132,6 +135,10 @@ parse_arguments() {
       --run-as-installer)
         RUN_AS_INSTALLER=1
         ;;
+      --update) UPDATE_ONLY=1 ;;
+      --expected-installed-sha)
+        (( $# >= 2 )) || fail "Missing expected installed SHA."
+        EXPECTED_INSTALLED_SHA=$2; shift ;;
       --unrestricted)
         ENABLE_UNRESTRICTED=1
         ;;
@@ -174,6 +181,20 @@ parse_arguments() {
     shift
   done
   [[ "${ENABLE_GUARDED}" != 1 || "${ENABLE_UNRESTRICTED}" != 1 ]] || fail "--guarded and --unrestricted cannot be combined."
+  [[ -z "${EXPECTED_INSTALLED_SHA}" || "${UPDATE_ONLY}" == 1 ]] || fail "Expected SHA applies only to update."
+  if [[ "${UPDATE_ONLY}" == 1 ]]; then
+    [[ "${EXPECTED_INSTALLED_SHA}" =~ ^[a-f0-9]{40}$ && "${RUN_AS_INSTALLER}" == 0 && "${ENABLE_GUARDED}" == 0 && "${ENABLE_UNRESTRICTED}" == 0 && "${REFRESH_NETWORK}" == 0 && "${ENABLE_UPLOAD}" == 0 && "${ENABLE_DOWNLOAD}" == 0 && -z "${CODEX_SETUP_NAME}" && -z "${CODEX_SETUP_URL}" ]] || fail "Update requires an expected SHA and cannot change settings."
+  fi
+}
+
+prepare_update() {
+  [[ "${UPDATE_ONLY}" == 1 ]] || return 0
+  [[ -f "${CONFIG_FILE}" && ! -L "${CONFIG_FILE}" && -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || fail "Update requires an existing managed configuration and service."
+  local current_sha
+  current_sha=$("${RUNTIME_LINK}/bin/node" -e 'try {const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!/^[a-f0-9]{40}$/.test(i.sourceSha)) throw 0; console.log(i.sourceSha)} catch {process.exit(1)}' "${CURRENT_LINK}/install-info.json") || fail "Invalid installed metadata."
+  [[ "${current_sha}" == "${EXPECTED_INSTALLED_SHA}" ]] || fail "Installation changed during update; retry from the current version."
+  if grep -Eq '^User=[0-9]+$' "${UNIT_FILE}"; then RUN_AS_INSTALLER=1; fi
+  PRESERVED_EXECUTION_MODE=$("${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/dist/updateState.js" "${CONFIG_FILE}") || fail "Cannot preserve execution mode."
 }
 
 validate_codex_name() {
@@ -1083,6 +1104,7 @@ install_runtime_and_release() {
       "${release_staging}/"
     printf '%s\n' "${SOURCE_REF}" > "${release_staging}/.command-bridge-release"
     install -m 0755 "${source_dir}/scripts/linux-systemd/uninstall.sh" "${release_staging}/uninstall.sh"
+    install -m 0644 "${source_dir}/scripts/bootstrap.sh" "${release_staging}/bootstrap.sh"
     sed "s|__INSTALL_ROOT__|${INSTALL_ROOT}|g" "${source_dir}/packaging/linux/command-bridge" > "${release_staging}/command-bridge"
     chmod 0755 "${release_staging}/command-bridge"
     install -d -m 0755 "${release_staging}/scripts"
@@ -1157,6 +1179,7 @@ install_configuration() {
   execution_mode=allowlist
   if [[ "${ENABLE_UNRESTRICTED}" == 1 ]]; then execution_mode=unrestricted; fi
   if [[ "${ENABLE_GUARDED}" == 1 ]]; then execution_mode=guarded; fi
+  if [[ "${UPDATE_ONLY}" == 1 ]]; then execution_mode=${PRESERVED_EXECUTION_MODE}; fi
   local transfer_root="${STATE_DIR}/transfers"
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then transfer_root="${INSTALLER_STATE_DIR}/transfers"; fi
   if [[ "${ENABLE_UPLOAD}" == 1 || "${ENABLE_DOWNLOAD}" == 1 ]]; then
@@ -1182,6 +1205,8 @@ install_configuration() {
     # Every install selects the mode from its explicit option, even on reinstall.
     CONFIG_BACKUP="${TEMP_DIR}/previous-config.env"
     cp -p "${CONFIG_FILE}" "${CONFIG_BACKUP}"
+    # Updates preserve the complete configuration, including comments and quoting.
+    if [[ "${UPDATE_ONLY}" == 1 ]]; then return 0; fi
     if [[ "${REFRESH_NETWORK}" == 1 ]]; then host=$(detect_private_ipv4); fi
     if [[ "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ]]; then
       allowed_roots="${INSTALLER_HOME}:/"
@@ -1517,7 +1542,6 @@ main() {
 
   parse_arguments "$@"
   require_root_systemd_linux
-  select_service_identity
   for command_name in \
     awk chown chmod cp curl df env flock getent grep groupadd groupdel gzip id install \
     ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
@@ -1532,6 +1556,8 @@ main() {
   exec 9>"${LOCK_DIR}/install.lock"
   chmod 0600 "${LOCK_DIR}/install.lock"
   flock -n 9 || fail "Another CommandBridge installation is already running."
+  prepare_update
+  select_service_identity
   assert_new_installation_paths
 
   available_kb=$(df -Pk /opt | awk 'NR == 2 { print $4 }')

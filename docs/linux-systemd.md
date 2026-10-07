@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.2.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.3.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -119,8 +119,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.2.0-<source-sha>
-├── releases/v4.2.0-<source-sha>/
+├── current -> releases/v4.3.0-<source-sha>
+├── releases/v4.3.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -351,4 +351,14 @@ From 4.1.16, a confirmed finished command releases its execution slot before ter
 
 After upgrading to 4.2.0 or later, Linux provides `command-bridge --version` (or `-V`) without sudo. It uses the bundled runtime and currently selected release; it does not verify service health or fetch the latest GitHub version. If `/usr/local/bin` is not on PATH, use `/usr/local/bin/command-bridge --version`.
 
-Windows PowerShell: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" --version`. Windows does not change PATH. npm installations retain `command-bridge-mcp-server --version` and add `command-bridge --version`. The installed launchers accept only version queries; the npm/server entry still starts MCP with no arguments. Version queries do not load service configuration, Token, Audit or listeners. Earlier installations need an upgrade before these commands exist.
+Windows PowerShell: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" --version`. Windows does not change PATH. npm installations retain `command-bridge-mcp-server --version` and add `command-bridge --version`. From 4.3.0 service-installed launchers also accept update/check commands; the npm/server entry still starts MCP with no arguments. Version queries do not load service configuration, Token, Audit or listeners. Earlier installations need an upgrade before these commands exist.
+
+## Update the installed service (4.3.0+)
+
+Linux: `command-bridge update --check`, then `sudo command-bridge update`. Windows: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`, then use `update` in an elevated PowerShell terminal. No automatic elevation or unattended background updates are added. A Linux installer-account service must be updated through sudo by its original login account; another account/direct root is rejected. Dedicated-account installations retain their identity. npm installations use npm for updates.
+
+The locally saved bootstrap reads the verified CI channel once and compares full SHA. Identical SHA skips building/restarting; a different SHA at the same version can be updated. Missing/invalid metadata or channel and failed downloads stop before activation. All downloads use the selected SHA. A deployment lock serializes changes (Linux flock; Windows installation/removal mutex). Inside that lock the installer requires the previously observed installed SHA to match; otherwise retry.
+
+Update preserves the complete configuration, execution mode, Token, listener/Host, policy and work data. Account/mode/network changes are not accepted. Existing build/tests, configuration checks, SELinux/ACL handling and real readiness/MCP/Audit verification remain mandatory. The service briefly restarts; failed activation uses existing rollback. Backups are removed only after verification. Update/bootstrap temporary files are cleaned on success or failure; forced termination/power loss can still require inspection. This does not prove an actual machine reboot was tested.
+
+Token output is opt-in: use `update --print-codex-setup`, not with `--check`. Run updates from a separate administrator terminal. Recognizable direct MCP self-updates are blocked; checks are allowed by self-protection, but other execution policies still apply. Indirect scripts remain outside the guard's guarantees. Older installations need one installation upgrade before commands/saved assets exist. Fixed public bootstrap URLs remain unchanged.
