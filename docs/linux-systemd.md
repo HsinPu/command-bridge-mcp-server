@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.1.14. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.1.15. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -101,14 +101,26 @@ The installer performs these steps:
 10. Checks <code>/health</code> and authenticated <code>/ready</code>, executes hostname through a real MCP connection, and reads its matching Audit lifecycle. Failure restores the prior release, network configuration and audit-reader assets.
 11. In installer-account mode, safely removes any recognized, unused old service user after verification; when explicitly requested, prints the copy-ready Codex configuration block.
 
+## Long command timeouts
+
+From 4.1.15, new configurations allow command requests up to 300 seconds, while omitted `timeoutMs` still uses 15 seconds. Codex setup prints `tool_timeout_sec = 360.0` so termination, Audit and response delivery have extra time. For a long command, request `timeoutMs: 300000`; values above the server maximum are clamped. Existing configured limits are preserved on reinstall: edit `COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000` in the service configuration from an administrator terminal and restart the service. On the Codex client, update only this connection's existing `[mcp_servers.<name>]` section in `~/.codex/config.toml` to `tool_timeout_sec = 360`, preserving URL/token settings, then restart Codex. A client timeout alone does not establish whether the remote operation completed; inspect Audit before repeating an operation.
+
+For an existing default installation, run from the host administrator terminal (then update Codex as described above):
+
+```bash
+sudo sed -i 's/^COMMAND_BRIDGE_MAX_TIMEOUT_MS=.*/COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000/' /etc/command-bridge/command-bridge.env && sudo grep -qx 'COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000' /etc/command-bridge/command-bridge.env && sudo systemctl restart command-bridge
+```
+
+If the key is absent or the configuration path is customized, add/update it in the actual service configuration before restarting. This does not change the default timeout or execution mode.
+
 ## Installed layout
 
 Disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.1.14-<source-sha>
-├── releases/v4.1.14-<source-sha>/
+├── current -> releases/v4.1.15-<source-sha>
+├── releases/v4.1.15-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -179,7 +191,7 @@ COMMAND_BRIDGE_ALLOWED_SHELLS=bash
 COMMAND_BRIDGE_ALLOWED_COMMANDS=uname,hostname,whoami,uptime,date,df,free,ps,pwd
 COMMAND_BRIDGE_ALLOWED_ROOTS=/var/lib/command-bridge/work
 COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS=15000
-COMMAND_BRIDGE_MAX_TIMEOUT_MS=60000
+COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000
 COMMAND_BRIDGE_MAX_OUTPUT_CHARS=50000
 COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS=2
 COMMAND_BRIDGE_PASSTHROUGH_ENV=

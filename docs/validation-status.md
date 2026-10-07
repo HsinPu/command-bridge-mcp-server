@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.14, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.15, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.15 validation
+
+Raise the default configurable command maximum to 300 seconds and generated Codex tool deadline to 360 seconds; retain the 15-second ordinary default and explicit host overrides. Local Windows npm test passed 83/95 with 12 platform/elevation skips, including explicit 120/300-second executor budgets, maximum clamping, configuration override preservation and native Windows generated-setup output. WSL passed all Bash script syntax checks and the Linux setup-output regression; all PowerShell scripts and git diff --check passed. Full hosted CI/service gates have not yet run for this commit; the prior 4.1.14 full Windows/Linux service gate and channel publication succeeded. This client has no cb_twtpelplmap22tv connection in its user config and no callable remote host tool, so neither its live service configuration nor its actual Codex client settings were changed here. Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.1.14 validation
 

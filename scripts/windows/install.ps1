@@ -289,7 +289,7 @@ function New-SecureConfiguration {
     "COMMAND_BRIDGE_ALLOWED_COMMANDS=get-date,get-computerinfo,get-process,get-service,get-ciminstance,hostname,whoami,systeminfo,tasklist",
     "COMMAND_BRIDGE_ALLOWED_ROOTS=$WorkDirectory",
     "COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS=15000",
-    "COMMAND_BRIDGE_MAX_TIMEOUT_MS=60000",
+    "COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000",
     "COMMAND_BRIDGE_MAX_OUTPUT_CHARS=50000",
     "COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS=2",
     "COMMAND_BRIDGE_PASSTHROUGH_ENV="
@@ -596,7 +596,7 @@ function Print-CodexSetup {
   Write-Output ('url = "' + $CodexUrl + '"')
   Write-Output ('bearer_token_env_var = "' + $tokenEnvironment + '"')
   Write-Output "startup_timeout_sec = 20.0"
-  Write-Output "tool_timeout_sec = 60.0"
+  Write-Output "tool_timeout_sec = 360.0"
   Write-Output '4. Preserve every unrelated Codex setting and report whether a restart is needed.'
   Write-Output "5. After restart, use /mcp to verify that $connectionName is connected."
   Write-Output '6. Do not repeat the bearer token in your final response.'

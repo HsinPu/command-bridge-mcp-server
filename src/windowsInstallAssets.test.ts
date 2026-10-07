@@ -7,6 +7,13 @@ import test from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
+test("Windows generated Codex setup reserves time beyond the command limit", {
+  skip: process.platform !== "win32"
+}, () => {
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+    resolve(projectRoot, "scripts/windows/tests/setup.test.ps1")], { encoding: "utf8", windowsHide: true, timeout: 15_000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+});
 test("Windows health probe reaches the local listener with a virtual Host and unusable default proxy", {
   skip: process.platform !== "win32"
 }, async () => {

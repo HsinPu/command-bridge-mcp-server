@@ -1203,7 +1203,7 @@ install_configuration() {
     printf 'COMMAND_BRIDGE_ALLOWED_COMMANDS=uname,hostname,whoami,uptime,date,df,free,ps,pwd\n'
     printf 'COMMAND_BRIDGE_ALLOWED_ROOTS=%s\n' "${allowed_roots}"
     printf 'COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS=15000\n'
-    printf 'COMMAND_BRIDGE_MAX_TIMEOUT_MS=60000\n'
+    printf 'COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000\n'
     printf 'COMMAND_BRIDGE_MAX_OUTPUT_CHARS=50000\n'
     printf 'COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS=2\n'
     printf 'COMMAND_BRIDGE_PASSTHROUGH_ENV=\n'
@@ -1462,7 +1462,7 @@ print_codex_setup() {
     "url = \"${CODEX_SETUP_URL}\"" \
     "bearer_token_env_var = \"${token_env}\"" \
     'startup_timeout_sec = 20.0' \
-    'tool_timeout_sec = 60.0' \
+    'tool_timeout_sec = 360.0' \
     '' \
     '4. Preserve every unrelated Codex setting. Tell me exactly what changed and' \
     '   whether Codex must be restarted for the new environment variable.' \

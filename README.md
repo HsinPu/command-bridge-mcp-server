@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.1.14-blue)
+![Version](https://img.shields.io/badge/version-4.1.15-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -151,9 +151,11 @@ Service installation defaults:
 | README one-command install mode | `guarded` |
 | Shell | Linux: `bash`; Windows: `powershell` |
 | HTTP port | `8800` |
-| Command timeout | 15 seconds by default, 60-second maximum |
+| Command timeout | 15 seconds by default, 300-second maximum |
 | Output limit | 50,000 characters |
 | Concurrent commands | 2 |
+
+Long commands must explicitly request `timeoutMs: 300000` (up to five minutes). Printed Codex setup waits six minutes (`tool_timeout_sec = 360`). Existing timeout settings are preserved on upgrade; see the platform guides to update both the service and client settings.
 
 ## Audit logging
 

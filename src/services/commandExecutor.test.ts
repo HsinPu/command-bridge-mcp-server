@@ -74,6 +74,23 @@ function stubRunProcess(
   });
 }
 
+test("long command requests retain explicit budgets and clamp only above the host maximum", async () => {
+  const executor = new CommandExecutor(createConfig({ defaultTimeoutMs: 15_000, maxTimeoutMs: 300_000 }), new MemoryAuditLog());
+  const observed: number[] = [];
+  stubRunProcess(executor, async (_shell, _command, _cwd, timeoutMs) => {
+    observed.push(timeoutMs);
+    return commandResult();
+  });
+  try {
+    for (const timeoutMs of [undefined, 120_000, 300_000, 400_000]) {
+      await executor.execute({ command: "echo safe", timeoutMs });
+    }
+    assert.deepEqual(observed, [15_000, 120_000, 300_000, 300_000]);
+  } finally {
+    await executor.shutdown();
+  }
+});
+
 test("successful commands produce attempted then completed lifecycle events without output", async () => {
   const audit = new MemoryAuditLog();
   const executor = new CommandExecutor(createConfig(), audit);

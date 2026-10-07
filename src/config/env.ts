@@ -17,7 +17,7 @@ const rawEnvSchema = z.object({
   COMMAND_BRIDGE_ALLOWED_COMMANDS: z.string().optional(),
   COMMAND_BRIDGE_ALLOWED_ROOTS: z.string().optional(),
   COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(15_000),
-  COMMAND_BRIDGE_MAX_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(60_000),
+  COMMAND_BRIDGE_MAX_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(300_000),
   COMMAND_BRIDGE_MAX_OUTPUT_CHARS: z.coerce.number().int().min(1_000).default(50_000),
   COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS: z.coerce.number().int().min(1).max(32).default(2),
   COMMAND_BRIDGE_PASSTHROUGH_ENV: z.string().optional(),

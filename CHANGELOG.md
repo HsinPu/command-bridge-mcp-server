@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.15 — 2026-10-07
+
+PATCH from 4.1.14: raise the configurable default command maximum from 60 to 300 seconds and print a 360-second Codex tool deadline on both platforms, leaving the ordinary 15-second default and explicit existing timeout settings unchanged. Document existing-install migration and the required long-command timeoutMs. Add configuration and generated-setup regressions; do not change Audit, cancellation or process termination deadlines.
+
 ## 4.1.14 — 2026-10-01
 
 PATCH from 4.1.13: assign Administrators ownership to the installer-managed Windows configuration parent and recognize the fixed privileged TrustedInstaller SID only for transfer ancestors (Windows volume roots use this owner). Keep transfer-root ownership limited to SYSTEM/Administrators and retain non-administrator write/delete/ACL checks. Extend the native installer ACL regression to verify managed-parent ownership. The early real LocalService probe identified FILE_ROOT_UNSAFE:owner instead of failing late with a generic upload error.

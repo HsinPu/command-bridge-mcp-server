@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 4.1.14; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 4.1.15; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
@@ -58,6 +58,10 @@ The Event Log source registration requires administrator rights. See Microsoftâ€
 
 > [!CAUTION]
 > <code>-PrintCodexSetup</code> writes the bearer token to the terminal. Use it only in a trusted session and do not paste that block into public issues, shell history, or source control.
+
+## Long command timeouts
+
+From 4.1.15, new configurations allow command requests up to 300 seconds, while omitted `timeoutMs` still uses 15 seconds. Codex setup prints `tool_timeout_sec = 360.0` so termination, Audit and response delivery have extra time. For a long command, request `timeoutMs: 300000`; values above the server maximum are clamped. Existing configured limits are preserved on reinstall: edit `COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000` in the service configuration from an administrator terminal and restart the service. On the Codex client, update only this connection's existing `[mcp_servers.<name>]` section in `~/.codex/config.toml` to `tool_timeout_sec = 360`, preserving URL/token settings, then restart Codex. A client timeout alone does not establish whether the remote operation completed; inspect Audit before repeating an operation.
 
 ## Installed layout
 
