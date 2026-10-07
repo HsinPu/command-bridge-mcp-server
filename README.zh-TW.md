@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.6.0-blue)
+![Version](https://img.shields.io/badge/version-4.6.1-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -226,7 +226,7 @@ Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初�
 
 ## 一鍵解除安裝
 
-停止並移除服務與程式，保留設定、Token 和工作資料。Linux 解除安裝會檢查新位置與兩個舊位置，一併移除受管理的程式殘留、搬遷備份及相容連結；不能確認歸屬的內容會停止並回報。優先使用本機新版卸載器；舊卸載器完成後仍會檢查剩餘位置，必要時使用 CI channel 指定 SHA 的卸載器繼續清理。
+停止並移除服務與程式，保留設定、Token 和工作資料。Linux 解除安裝會檢查新位置與兩個舊位置，一併移除受管理的程式殘留、搬遷備份及相容連結；不能確認歸屬的內容會停止並回報。優先使用本機新版卸載器；必要的 helper 缺失或舊卸載器留下殘留時，使用 CI channel 指定 SHA 的後備卸載器。既有卸載資產的權限不安全時仍會拒絕。
 
 ### Windows
 

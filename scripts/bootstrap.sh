@@ -42,13 +42,18 @@ if [[ "$mode" == uninstall ]]; then
   for installed_root in /usr/local/lib/command-bridge /opt/command-bridge /opt/command-bridge-mcp-server; do
     if [[ -f "$installed_root/current/uninstall.sh" ]]; then
       trusted_installed_path "$installed_root/current/uninstall.sh" || { echo 'Installed uninstaller or its parent is unsafe.' >&2; exit 1; }
+      if grep -Fq 'remove_all_program_roots' "$installed_root/current/uninstall.sh"; then
+        helper="$installed_root/current/layout.sh"
+        if [[ ! -e "$helper" && ! -L "$helper" ]]; then
+          echo 'Installed layout helper is missing; using the verified channel uninstaller.' >&2
+          break
+        fi
+        [[ -f "$helper" ]] && trusted_installed_path "$helper" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
+        exec bash "$installed_root/current/uninstall.sh" "$@"
+      fi
       for option in "$@"; do
         case "$option" in --help|-h) exec bash "$installed_root/current/uninstall.sh" "$@" ;; esac
       done
-      if grep -Fq 'remove_all_program_roots' "$installed_root/current/uninstall.sh"; then
-        trusted_installed_path "$installed_root/current/layout.sh" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
-        exec bash "$installed_root/current/uninstall.sh" "$@"
-      fi
       bash "$installed_root/current/uninstall.sh" "$@"
       # An older uninstaller only knows its own layout. Inspect all known roots
       # and assets before reporting success; use the verified fallback if needed.

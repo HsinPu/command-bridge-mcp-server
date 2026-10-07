@@ -26,9 +26,7 @@ trap finish EXIT
 for path in "$new_root" "$old_root" /opt/command-bridge-mcp-server /etc/command-bridge /etc/command-bridge-mcp-server /var/lib/command-bridge /var/lib/command-bridge-installer; do
   [[ ! -e "$path" && ! -L "$path" ]] || { echo "Disposable test requires an empty path: $path"; exit 1; }
 done
-# Hosted runners have writable /usr/local parents. Prepare only this disposable host.
-sudo chown root:root /usr/local /usr/local/bin /usr/local/lib
-sudo chmod 0755 /usr/local /usr/local/bin /usr/local/lib
+bash scripts/linux-systemd/tests/prepare-disposable-host.sh
 mkdir "$work/old" "$work/new"
 curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/HsinPu/command-bridge-mcp-server/archive/$old_sha.tar.gz" -o "$work/old.tar.gz"
 tar -xzf "$work/old.tar.gz" -C "$work/old" --strip-components=1
@@ -120,10 +118,20 @@ const {fixtureBootstrap}=await import(pathToFileURL(root+'/scripts/tests/managed
 writeFileSync(out,fixtureBootstrap(readFileSync(root+'/scripts/bootstrap.sh','utf8'),'linux',sha,version,archive));
 JS
   if [[ "$mode" == installer ]]; then
-    # Missing saved uninstallers exercises the SHA-pinned fallback.
+    # Keep coverage for an absent saved uninstaller without removing the service.
+    sudo cp -p "$new_root/current/uninstall.sh" "$work/saved-uninstall.sh"
     sudo rm -- "$new_root/current/uninstall.sh"
+    sudo bash "$work/bootstrap.sh" --uninstall --dry-run --yes > "$work/uninstall-preview-$mode.log" 2>&1 || { tail -n 30 "$work/uninstall-preview-$mode.log"; exit 1; }
+    sudo systemctl is-active --quiet command-bridge
+    [[ -d "$new_root" && "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" ]]
+    sudo test -f "$data_root/layout-preserved"
+    sudo cp -p "$work/saved-uninstall.sh" "$new_root/current/uninstall.sh"
+    # A present uninstaller with its required helper missing must use the
+    # SHA-pinned fallback before stopping services or removing program roots.
+    sudo rm -- "$new_root/current/layout.sh"
   fi
   sudo bash "$work/bootstrap.sh" --uninstall --yes > "$work/uninstall-$mode.log" 2>&1 || { tail -n 30 "$work/uninstall-$mode.log"; exit 1; }
+  if [[ "$mode" == installer ]]; then grep -Fq 'Installed layout helper is missing; using the verified channel uninstaller.' "$work/uninstall-$mode.log"; fi
   for path in "$new_root" "$old_root" /opt/command-bridge-mcp-server; do [[ ! -e "$path" && ! -L "$path" ]]; done
   [[ "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" ]]
   sudo test -f "$data_root/layout-preserved"

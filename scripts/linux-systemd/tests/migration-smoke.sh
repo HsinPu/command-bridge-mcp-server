@@ -14,6 +14,7 @@ for path in /usr/local/lib/command-bridge /opt/command-bridge /opt/command-bridg
   [[ ! -e "$path" && ! -L "$path" ]] || { echo "Test requires an empty installation: $path" >&2; exit 1; }
 done
 ! getent passwd command-bridge >/dev/null
+bash scripts/linux-systemd/tests/prepare-disposable-host.sh
 mkdir "$work/old" "$work/candidate"
 curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/HsinPu/command-bridge-mcp-server/archive/${old_sha}.tar.gz" -o "$work/old.tar.gz"
 tar -xzf "$work/old.tar.gz" -C "$work/old" --strip-components=1

@@ -60,6 +60,27 @@ inspect_application_layout; [[ -z "$EXISTING_APP_ROOT" ]]
 make_app "$PREVIOUS_INSTALL_ROOT"
 ln -s "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
 inspect_application_layout; [[ "$EXISTING_APP_ROOT" == "$PREVIOUS_INSTALL_ROOT" ]]
+# Model both hosted-runner parents as writable, using only private directories.
+# The production guard must reject them until the guarded CI preparation runs.
+mkdir -p "${INSTALL_ROOT%/*}" "$work/local" "$work/bin"
+chmod 0777 "${PREVIOUS_INSTALL_ROOT%/*}" "${INSTALL_ROOT%/*}"
+expect_failure inspect_application_layout
+expect_failure assert_admin_path "${INSTALL_ROOT%/*}"
+sed -e "s|/usr/local/lib|${INSTALL_ROOT%/*}|g" \
+    -e "s|/usr/local/bin|$work/bin|g" \
+    -e "s|/usr/local|$work/local|g" \
+    -e "s|/opt|${PREVIOUS_INSTALL_ROOT%/*}|g" \
+    scripts/linux-systemd/tests/prepare-disposable-host.sh > "$work/prepare-host.sh"
+# Ownership is already modeled by stat/find above; chmod still changes real bits.
+sudo() { if [[ "$1" == chown ]]; then return 0; else "$@"; fi; }
+export -f sudo
+expect_failure env GITHUB_ACTIONS=false RUNNER_OS=Linux bash "$work/prepare-host.sh"
+expect_failure env GITHUB_ACTIONS=true RUNNER_OS=Windows bash "$work/prepare-host.sh"
+[[ "$(command stat -c %a "${PREVIOUS_INSTALL_ROOT%/*}")" == 777 && "$(command stat -c %a "${INSTALL_ROOT%/*}")" == 777 ]]
+GITHUB_ACTIONS=true RUNNER_OS=Linux bash "$work/prepare-host.sh"
+unset -f sudo
+[[ "$(command stat -c %a "${PREVIOUS_INSTALL_ROOT%/*}")" == 755 && "$(command stat -c %a "${INSTALL_ROOT%/*}")" == 755 ]]
+inspect_application_layout; assert_admin_path "${INSTALL_ROOT%/*}"
 check_deployment_space
 BAD_OWNER_PATH=$PREVIOUS_INSTALL_ROOT; expect_failure inspect_application_layout; BAD_OWNER_PATH=
 chmod 0777 "$PREVIOUS_INSTALL_ROOT/runtime/node/bin/node"; expect_failure inspect_application_layout

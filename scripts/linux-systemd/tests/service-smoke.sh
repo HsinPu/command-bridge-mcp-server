@@ -3,10 +3,7 @@
 set -Eeuo pipefail
 trap 'code=$?; printf "Service smoke failed at line %s (exit %s).\n" "$LINENO" "$code" >&2; sudo systemctl show command-bridge --property=ActiveState,SubState,Result >&2; exit "$code"' ERR
 [[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_OS:-}" == Linux ]] || { echo 'Disposable GitHub runner required.' >&2; exit 1; }
-# Hosted runners grant their login account write access here; the production
-# installer must continue rejecting that. Prepare this disposable VM explicitly.
-sudo chown root:root /usr/local/bin
-sudo chmod 0755 /usr/local/bin
+bash scripts/linux-systemd/tests/prepare-disposable-host.sh
 root=$(pwd)
 config=/etc/command-bridge/command-bridge.env
 service=command-bridge

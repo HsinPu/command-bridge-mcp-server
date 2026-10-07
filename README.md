@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.6.0-blue)
+![Version](https://img.shields.io/badge/version-4.6.1-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -226,7 +226,7 @@ From 4.1.16, finished processes release command slots even while terminal Audit 
 
 ## One-command uninstall
 
-Stops and removes the service and application, preserving configuration, token, and work data. Linux uninstall checks the new and both old roots, removing verified program leftovers, managed migration backups and compatibility links together. Unrecognized contents stop removal. A saved modern uninstaller is preferred; older uninstallers are followed by a remaining-path check and, when necessary, the uninstaller from one CI-pinned snapshot.
+Stops and removes the service and application, preserving configuration, token, and work data. Linux uninstall checks the new and both old roots, removing verified program leftovers, managed migration backups and compatibility links together. Unrecognized contents stop removal. A saved modern uninstaller is preferred; its missing required helper or leftovers from an older uninstaller trigger the fallback from one CI-pinned snapshot. Existing unsafe uninstall assets are rejected.
 
 ### Windows
 

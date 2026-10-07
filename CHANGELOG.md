@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.6.1 — 2026-10-08
+
+PATCH: close Linux migration, self-protection and uninstall reliability gaps without changing supported MCP interfaces or installation entry points.
+
+- Prepare `/opt` and the new `/usr/local` parents consistently in guarded disposable Linux service tests; keep production ownership/write-permission rejection unchanged. Cover writable old/new parents and refusal outside the disposable Linux environment.
+- Include all three fixed `.migration-backup` program roots in direct self-modification protection. Cover literal writes/deletion, read access, similarly named unrelated directories and attempted/blocked Audit lifecycles without destructive test commands.
+- Use the CI-pinned uninstall fallback when a saved modern uninstaller is present but its required `layout.sh` is absent, including help/dry-run. Reject existing unsafe helpers, dangling/escaping links and unsafe parents before download or execution; keep channel errors fail-closed.
+- Add missing-helper service-uninstall coverage and synchronize both READMEs, platform/migration guides, project rules and validation evidence.
+
 ## 4.6.0 — 2026-10-08
 
 MINOR: introduce the compatible Linux program layout and automatic migration while preserving existing operation entry points, MCP interfaces and saved configuration/data.

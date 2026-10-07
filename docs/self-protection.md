@@ -8,6 +8,7 @@ The guard rejects **recognizable direct attempts** to change CommandBridge's own
 
 - The running application directory, the configured policy file, and an explicit `DOTENV_CONFIG_PATH` other than `/dev/null`.
 - Linux: `/etc/command-bridge`, `/usr/local/lib/command-bridge`, `/opt/command-bridge`, the fixed Audit helper directory and sudoers file, and the main systemd unit. Legacy `command-bridge-mcp-server` application/configuration/unit paths remain protected.
+- From 4.6.1, Linux's fixed `/usr/local/lib/command-bridge.migration-backup`, `/opt/command-bridge.migration-backup` and `/opt/command-bridge-mcp-server.migration-backup` are also protected from recognizable direct writes/deletion. Read access remains available; similarly named unrelated directories are not matched.
 - Windows: `%ProgramFiles%\CommandBridgeMCP`, `%ProgramData%\CommandBridgeMCP\command-bridge.env`, and `policy.json`. Work and transfer directories are not made read-only by this guard.
 - Recognizable service configuration changes naming `command-bridge`, `command-bridge-mcp-server` or `CommandBridgeMCP`.
 

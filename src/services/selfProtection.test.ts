@@ -20,6 +20,18 @@ test("Linux default program root and both legacy roots remain protected", () => 
   }
 });
 
+test("Linux fixed migration backups are protected without covering similarly named directories", () => {
+  for (const root of ["/usr/local/lib/command-bridge", "/opt/command-bridge", "/opt/command-bridge-mcp-server"]) {
+    const backup = `${root}.migration-backup`;
+    for (const command of [`sudo -n rm -rf -- ${backup}`, `sudo chmod 777 ${backup}/releases`,
+      `sudo tee '${backup}/releases/install-info.json'`, `echo changed > ${backup}/new-file`]) {
+      assert.throws(() => assertNoSelfModification(command, "/tmp", { platform: "linux" }), { code: "SELF_MODIFICATION_BLOCKED" }, command);
+    }
+    assert.doesNotThrow(() => assertNoSelfModification(`cat ${backup}/releases/install-info.json`, "/tmp", { platform: "linux" }));
+    assert.doesNotThrow(() => assertNoSelfModification(`sudo rm ${backup}-unrelated/scratch`, "/tmp", { platform: "linux" }));
+  }
+});
+
 test("direct administration updates are blocked while version and update checks remain readable", () => {
   for (const platform of ["linux", "win32"] as const) {
     for (const command of ['sudo -n command-bridge update', 'command-bridge update --print-codex-setup', 'command-bridge.cmd update', 'command-bridge-mcp-server update'])
@@ -102,4 +114,30 @@ test("preflight explicitly does not inspect external scripts or variable expansi
   const cfg = { platform: "linux" as const, protectedPaths: ["/etc/command-bridge"] };
   assert.doesNotThrow(() => assertNoSelfModification("sudo bash /tmp/script.sh", "/tmp", cfg));
   assert.doesNotThrow(() => assertNoSelfModification('sudo tee "$TARGET"', "/tmp", cfg));
+});
+
+test("Linux executor blocks backup writes in guarded/unrestricted with one Audit terminal", { skip: process.platform !== "linux" }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "cb-backup-executor-"));
+  try {
+    for (const executionMode of ["guarded", "unrestricted"] as const) {
+      const events: CommandAuditEvent[] = [];
+      const audit: AuditLog = { async write(event) { events.push(event); }, async list() { return { events, hasMore: false }; } };
+      const cfg: AppConfig = { transport: "stdio", httpHost: "127.0.0.1", httpPort: 8800, allowedHosts: [], executionMode,
+        allowedShells: ["sh"], allowedCommands: new Set(), allowedRoots: [root], defaultTimeoutMs: 1000,
+        maxTimeoutMs: 1000, maxOutputChars: 1000, maxParallelCommands: 1, passthroughEnv: [] };
+      const executor = new CommandExecutor(cfg, audit);
+      try {
+        for (const backup of ["/usr/local/lib/command-bridge.migration-backup", "/opt/command-bridge.migration-backup", "/opt/command-bridge-mcp-server.migration-backup"]) {
+          const before = events.length;
+          // A nonexistent executable keeps this test harmless even if the guard regresses.
+          await assert.rejects(executor.execute({ command: `/command-bridge-test-no-such-bin/tee ${backup}/install-info.json` }), { code: "SELF_MODIFICATION_BLOCKED" });
+          const lifecycle = events.slice(before);
+          assert.deepEqual(lifecycle.map(event => event.phase), ["attempted", "blocked"]);
+          assert.equal(lifecycle[1]!.auditId, lifecycle[0]!.auditId);
+          assert.equal(lifecycle[1]!.errorCode, "SELF_MODIFICATION_BLOCKED");
+        }
+        assert.equal((await executor.execute({ command: "echo allowed" })).ok, true);
+      } finally { await executor.shutdown(); }
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

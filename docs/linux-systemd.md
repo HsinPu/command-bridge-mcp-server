@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.6.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.6.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -125,7 +125,9 @@ Successful migration replaces only existing old program roots with exact links t
 
 An interrupted `.migration-backup` is rejected by installation for administrator recovery instead of guessing which deployment is active. Uninstall validates and removes managed backups as well as every verified new/old program root, including independent leftover trees. Unknown directories, unsafe permissions, escaping links and mounted deployment paths stop cleanup before service removal. Default uninstall preserves configuration, token and work/Audit/update records; only `--purge` removes data. It never deletes the installer login account.
 
-The bootstrap prefers the installed uninstaller. After an older uninstaller completes, it checks all roots and managed assets rather than treating that one script's exit status as complete removal. If cleanup remains or the saved uninstaller is missing, it downloads the channel-pinned fallback and checks for remaining assets again. If the verified channel is still too old to remove them, it reports incomplete removal instead of claiming success; help and dry-run previews are exempt from removal assertions. No fallback to unverified main is permitted. See [validation status](validation-status.md) for local versus hosted evidence; service restart/enable checks are not host reboot or Oracle Linux Enforcing verification.
+The bootstrap prefers the installed uninstaller. After an older uninstaller completes, it checks all roots and managed assets rather than treating that one script's exit status as complete removal. If cleanup remains, the saved uninstaller is missing, or a modern saved uninstaller's required `layout.sh` is absent, it downloads the channel-pinned fallback and checks for remaining assets again. Missing-helper fallback also supports help and dry-run without invoking the incomplete saved script. When a saved modern uninstaller exists, an unsafe helper, dangling/escaping helper link or unsafe parent is rejected before downloading or executing a fallback. Downloaded uninstallers still validate the managed deployment before removal. If the verified channel is still too old to remove the assets, it reports incomplete removal instead of claiming success; help and dry-run previews are exempt from removal assertions. No fallback to unverified main is permitted. See [validation status](validation-status.md) for local versus hosted evidence; service restart/enable checks are not host reboot or Oracle Linux Enforcing verification.
+
+The fixed `.migration-backup` paths at all three program roots are included in direct self-modification checks in every execution mode; arbitrary similarly named directories are not included. Disposable Linux CI explicitly prepares `/opt` and `/usr/local` parents before fresh/old-root service tests, while production installers continue rejecting writable parents.
 
 ## Installed layout
 
@@ -133,8 +135,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v4.6.0-<source-sha>
-├── releases/v4.6.0-<source-sha>/
+├── current -> releases/v4.6.1-<source-sha>
+├── releases/v4.6.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
