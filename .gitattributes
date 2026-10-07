@@ -11,3 +11,4 @@ packaging/linux/command-bridge text eol=lf
 *.cmd text eol=crlf
 *.service text eol=lf
 *.yml text eol=lf
+packaging/linux/update-request text eol=lf

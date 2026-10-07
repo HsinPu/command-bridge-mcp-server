@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -29,6 +29,29 @@ async function serviceFetch(input, init) {
 
 import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+function diagnostics() {
+  if (process.env.GITHUB_ACTIONS !== 'true') return;
+  const root = process.platform === 'win32' ? process.env.ProgramData + '/CommandBridgeUpdate' : '/var/lib/command-bridge-update';
+  let job;
+  try {
+    job=JSON.parse(readFileSync(root+'/latest.json','utf8'));
+    if (['accepted','running','succeeded','failed','interrupted'].includes(job.state)) console.error('Worker state:',job.state);
+  } catch { console.error('No accepted worker record'); }
+  if (process.platform === 'win32') {
+    const result=spawnSync(process.env.SystemRoot+'/System32/WindowsPowerShell/v1.0/powershell.exe',['-NoProfile','-NonInteractive','-Command',"(Get-ScheduledTaskInfo -TaskName CommandBridgeUpdate).LastTaskResult"],{encoding:'utf8',timeout:5000});
+    if (/^\d+$/.test(result.stdout.trim())) console.error('OS result code:',Number(result.stdout.trim()));
+    if (existsSync(root+'/diagnostics/last-error.json')) {
+      const error=JSON.parse(readFileSync(root+'/diagnostics/last-error.json','utf8'));
+      console.error('Worker error location:', {hresult:Number(error.hresult),line:Number(error.line),accepted:error.accepted===true});
+    }
+  }
+  // Report only numeric test indices and a fixed errno vocabulary; never log text.
+  if (job && /^[a-f0-9-]{36}$/.test(job.jobId) && existsSync(root+'/diagnostics/'+job.jobId+'.log')) {
+    const log=readFileSync(root+'/diagnostics/'+job.jobId+'.log','utf8');
+    console.error('Failed test indices:', [...log.matchAll(/not ok (\d+)/g)].map(match=>Number(match[1])));
+    console.error('Known error categories:', ['EACCES','ENOENT','EEXIST','ERR_ASSERTION','ECONNREFUSED','EPERM'].filter(code=>log.includes(code)));
+  }
+}
 const targetSha = process.argv[3];
 if (!/^[a-f0-9]{40}$/.test(targetSha)) throw Error('Expected fixture SHA required');
 async function call(name, args = {}) {
@@ -62,12 +85,12 @@ const timer = setTimeout(() => { console.error('Managed update verification time
 try {
   const beforeConfig = readFileSync(process.argv[2]);
   const accepted = await call('command_bridge_update');
-  if (accepted.isError || accepted.structuredContent.state !== 'accepted') throw Error('Managed request was not accepted');
+  if (accepted.isError || accepted.structuredContent.state !== 'accepted') { diagnostics(); throw Error('Managed request was not accepted'); }
   const first = accepted.structuredContent;
   const duplicate = await call('command_bridge_update');
   if (duplicate.isError || duplicate.structuredContent.jobId !== first.jobId) throw Error('Concurrent request created another job');
   const done = await terminal(first.jobId);
-  if (done.state !== 'succeeded' || done.after.sourceSha !== targetSha || done.before.sourceSha === done.after.sourceSha) throw Error('Update did not activate the candidate SHA');
+  if (done.state !== 'succeeded' || done.after.sourceSha !== targetSha || done.before.sourceSha === done.after.sourceSha) { await idle(); diagnostics(); throw Error('Update did not activate the candidate SHA'); }
   await idle();
   const hostname = await call('command_bridge_run_command', {command:'hostname'});
   if (hostname.isError || !hostname.structuredContent.ok || hostname.structuredContent.exitCode !== 0) throw Error('Updated service failed real command execution');

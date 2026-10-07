@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.4.1 — 2026-10-07
+
+PATCH: improve bounded updater control and administrator-only failure diagnostics after the first hosted service checks rejected publication.
+
+- Bound the Linux task-start helper and retain capped private worker logs without exposing them through MCP or CI output.
+- CI reports only numeric worker error locations, OS result codes, test indices and a fixed errno vocabulary; no raw log/configuration text is exported.
+- Publication remains blocked until both real service gates pass; no execution policies or source checks are relaxed.
+
 ## 4.4.0 — 2026-10-07
 
 MINOR: adds compatible, default-enabled MCP service-update and status tools without changing existing tools or execution modes.

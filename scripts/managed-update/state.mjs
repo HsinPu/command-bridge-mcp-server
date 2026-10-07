@@ -74,7 +74,7 @@ export async function main(action) {
     try { const old = latest(); if (['accepted', 'running'].includes(old.state)) record({ ...old, state: 'interrupted', errorCode: 'UPDATE_INTERRUPTED', finishedAt: new Date().toISOString() }); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     const job = { schemaVersion: 1, jobId: randomUUID(), state: 'accepted', startedAt: new Date().toISOString(), finishedAt: null, before: installed(), after: null, errorCode: null };
     record(job);
-    const start = spawnSync('/usr/bin/systemctl', ['start', '--no-block', unit], { stdio: 'ignore' });
+    const start = spawnSync('/usr/bin/systemctl', ['start', '--no-block', unit], { stdio: 'ignore', timeout: 5000 });
     if (start.status !== 0) {
       record({ ...job, state: 'failed', finishedAt: new Date().toISOString(), errorCode: 'UPDATE_START_FAILED' });
       throw Error('Update service start failed');
@@ -104,7 +104,16 @@ export async function main(action) {
     record({ ...job, state: code === 0 ? 'succeeded' : 'failed', finishedAt: new Date().toISOString(), after: installed(), errorCode: code === 0 ? null : 'UPDATE_INSTALL_FAILED' });
     const old = fs.readdirSync(root).filter(name => /^[a-f0-9-]{36}\.json$/.test(name)).sort((a,b) => fs.statSync(join(root,b)).mtimeMs - fs.statSync(join(root,a)).mtimeMs);
     for (const name of old.slice(20)) fs.unlinkSync(join(root, name));
-  } finally { fs.closeSync(log); fs.rmSync(work, { recursive: true, force: true }); }
+  } finally {
+    fs.closeSync(log);
+    const diagnosticRoot = join(root, 'diagnostics');
+    fs.mkdirSync(diagnosticRoot, { recursive: true, mode: 0o700 });
+    const data = fs.readFileSync(join(work, 'install.log'));
+    fs.writeFileSync(join(diagnosticRoot, job.jobId + '.log'), data.subarray(Math.max(0, data.length - 1024 * 1024)), { mode: 0o600 });
+    const logs = fs.readdirSync(diagnosticRoot).filter(name => /^[a-f0-9-]{36}\.log$/.test(name)).sort((a,b) => fs.statSync(join(diagnosticRoot,b)).mtimeMs - fs.statSync(join(diagnosticRoot,a)).mtimeMs);
+    for (const name of logs.slice(20)) fs.unlinkSync(join(diagnosticRoot,name));
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv[2]).catch(() => { console.error('Managed update control failed; inspect administrator logs and task status.'); process.exitCode = 1; });

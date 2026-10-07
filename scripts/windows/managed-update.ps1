@@ -21,6 +21,11 @@ function Install-ManagedUpdater([string]$Source) {
   Assert-ManagedUpdateDirectory $state
   New-Item -ItemType Directory -Path $state -Force | Out-Null
   Set-ManagedUpdateAcl $state
+  $diagnostics = Join-Path $state 'diagnostics'
+  Assert-ManagedUpdateDirectory $diagnostics
+  New-Item -ItemType Directory -Path $diagnostics -Force | Out-Null
+  Invoke-External "$env:SystemRoot\System32\icacls.exe" @($diagnostics,'/inheritance:r','/grant:r','*S-1-5-18:(OI)(CI)F','*S-1-5-32-544:(OI)(CI)F')
+  Invoke-External "$env:SystemRoot\System32\icacls.exe" @($diagnostics,'/setowner','*S-1-5-32-544')
   $script:UpdaterOldTask = $null
   $existingTask = $null
   try { $scheduler=New-Object -ComObject Schedule.Service; $scheduler.Connect(); $existingTask=$scheduler.GetFolder('\').GetTask('CommandBridgeUpdate') } catch {}

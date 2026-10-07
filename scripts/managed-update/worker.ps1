@@ -27,6 +27,7 @@ try {
   $job.after = Read-InstalledIdentity; $job.state = 'succeeded'
 } catch {
   $failed = $true
+  [IO.File]::WriteAllText((Join-Path $UpdateRoot 'diagnostics\last-error.json'), (@{hresult=$_.Exception.HResult; line=$_.InvocationInfo.ScriptLineNumber; accepted=($null -ne $job)} | ConvertTo-Json -Compress))
   if ($job) { $job.state = 'failed'; $job.errorCode = 'UPDATE_INSTALL_FAILED'; try { $job.after = Read-InstalledIdentity } catch {} }
 } finally {
   if ($lock) { $lock.ReleaseMutex(); $lock.Dispose() }
@@ -34,8 +35,14 @@ try {
   if ($work) {
     $resolved=[IO.Path]::GetFullPath($work)
     if (-not $resolved.StartsWith([IO.Path]::GetFullPath($UpdateRoot).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe update cleanup path.' }
+    if (Test-Path -LiteralPath (Join-Path $work 'install.log')) {
+      $bytes = [IO.File]::ReadAllBytes((Join-Path $work 'install.log'))
+      if ($bytes.Length -gt 1MB) { [IO.File]::WriteAllBytes((Join-Path $work 'install.log'), $bytes[($bytes.Length-1MB)..($bytes.Length-1)]) }
+      [IO.File]::Move((Join-Path $work 'install.log'), (Join-Path $UpdateRoot ('diagnostics\' + $job.jobId + '.log')))
+    }
     Remove-Item -LiteralPath $resolved -Recurse -Force
   }
+  Get-ChildItem -LiteralPath (Join-Path $UpdateRoot 'diagnostics') -Filter '*.log' | Sort-Object LastWriteTimeUtc -Descending | Select-Object -Skip 20 | Remove-Item -Force
   Get-ChildItem -LiteralPath $UpdateRoot -Filter '*.json' | Where-Object { $_.Name -match '^[a-f0-9-]{36}\.json$' } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -Skip 20 | Remove-Item -Force
 }
 
