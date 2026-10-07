@@ -12,6 +12,14 @@ test("Linux managed version entry is protected from direct writes", () => {
 });
 import type { AuditLog, CommandAuditEvent } from "./auditLog.js";
 
+test("Linux default program root and both legacy roots remain protected", () => {
+  for (const root of ["/usr/local/lib/command-bridge", "/opt/command-bridge", "/opt/command-bridge-mcp-server"]) {
+    assert.throws(() => assertNoSelfModification(`sudo tee ${root}/current/package.json`, "/tmp", { platform: "linux" }), { code: "SELF_MODIFICATION_BLOCKED" });
+    assert.throws(() => assertNoSelfModification(`sudo rm -rf ${root}`, "/tmp", { platform: "linux" }), { code: "SELF_MODIFICATION_BLOCKED" });
+    assert.doesNotThrow(() => assertNoSelfModification(`cat ${root}/current/package.json`, "/tmp", { platform: "linux" }));
+  }
+});
+
 test("direct administration updates are blocked while version and update checks remain readable", () => {
   for (const platform of ["linux", "win32"] as const) {
     for (const command of ['sudo -n command-bridge update', 'command-bridge update --print-codex-setup', 'command-bridge.cmd update', 'command-bridge-mcp-server update'])

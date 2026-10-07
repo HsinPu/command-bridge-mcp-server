@@ -109,7 +109,7 @@ try {
   const events = await call('command_bridge_list_audit_events', { limit:100 });
   if (events.isError || !events.structuredContent.events.some(e => e.phase === 'completed' && e.command.includes(first.jobId))) throw Error('Accepted update Audit not queryable');
   if (process.env.GITHUB_ACTIONS !== 'true') throw Error('Disposable runner required for injected failure');
-  const bootstrap = process.platform === 'win32' ? process.env.ProgramFiles + '/CommandBridgeMCP/bootstrap.ps1' : '/opt/command-bridge/current/bootstrap.sh';
+  const bootstrap = process.platform === 'win32' ? process.env.ProgramFiles + '/CommandBridgeMCP/bootstrap.ps1' : '/usr/local/lib/command-bridge/current/bootstrap.sh';
   const originalBootstrap = readFileSync(bootstrap);
   try {
     writeFileSync(bootstrap, process.platform === 'win32' ? 'exit 17\r\n' : '#!/bin/bash\nexit 17\n');

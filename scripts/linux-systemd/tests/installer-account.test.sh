@@ -5,7 +5,7 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/home/alice" "$work/source/packaging" "$work/helpers" "$work/sudoers"
 cp packaging/policy.example.json "$work/source/packaging/policy.example.json"
-sed -e "s|/opt/command-bridge|${work}/opt/command-bridge|g" \
+sed -e "s|/usr/local/lib/command-bridge|${work}/app/command-bridge|g" \
     -e "s|/etc/command-bridge|${work}/etc/command-bridge|g" \
     -e "s|/var/lib/command-bridge|${work}/state/command-bridge|g" \
     -e "s|/var/empty/command-bridge|${work}/home/command-bridge|g" \
@@ -14,8 +14,10 @@ sed -e "s|/opt/command-bridge|${work}/opt/command-bridge|g" \
     -e "s|/etc/sudoers.d/|${work}/sudoers/|g" \
     -e "s|/etc/passwd|${work}/passwd|g" \
     -e "s|/etc/login.defs|${work}/login.defs|g" \
-    scripts/linux-systemd/install.sh > "$work/installer.sh"
+    -e "s|/opt/command-bridge|${work}/old/command-bridge|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
 source "$work/installer.sh"
+source scripts/linux-systemd/layout.sh
+source scripts/linux-systemd/program-migration.sh
 trap - EXIT ERR
 trap 'rm -rf -- "$work"' EXIT
 getent() {

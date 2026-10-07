@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.5.0-blue)
+![Version](https://img.shields.io/badge/version-4.6.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -82,6 +82,8 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 ~~~bash
 (script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --guarded --print-codex-setup)
 ~~~
+
+CommandBridge 4.6.0 起，Linux 預設將程式與 Runtime 安裝到 `/usr/local/lib/command-bridge`。一鍵安裝會檢查並遷移 `/opt/command-bridge` 或更早的 `/opt/command-bridge-mcp-server`，驗證成功後移除舊實體程式並保留相容連結；失敗則回復原部署。設定與工作資料仍保留在 `/etc`、`/var/lib`，不需要先解除安裝。
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
@@ -224,7 +226,7 @@ Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初�
 
 ## 一鍵解除安裝
 
-停止並移除服務與程式，保留設定、Token 和工作資料。
+停止並移除服務與程式，保留設定、Token 和工作資料。Linux 解除安裝會檢查新位置與兩個舊位置，一併移除受管理的程式殘留、搬遷備份及相容連結；不能確認歸屬的內容會停止並回報。優先使用本機新版卸載器；舊卸載器完成後仍會檢查剩餘位置，必要時使用 CI channel 指定 SHA 的卸載器繼續清理。
 
 ### Windows
 

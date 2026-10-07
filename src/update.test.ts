@@ -33,9 +33,10 @@ test("Linux update pins channel SHA, checks without deployment, cleans temporary
     execFileSync("tar", ["-czf", join(dir, "archive"), "-C", dir, "source"]);
     writeFileSync(join(bin, "curl"), '#!/bin/bash\nset -eu\nurl=; out=\nwhile (($#)); do case "$1" in https:*) url="$1";; -o) shift; out="$1";; esac; shift; done\nprintf "%s\\n" "$url" >> "$FIXTURE/requests"\nprintf "%s\\n" "$(dirname "$out")" > "$FIXTURE/temp"\nif [[ "$url" == */channel.txt ]]; then [[ "${FAIL_CHANNEL:-0}" == 0 ]] || exit 22; cp "$FIXTURE/channel" "$out"; else [[ "${FAIL_ARCHIVE:-0}" == 0 ]] || exit 22; cp "$FIXTURE/archive" "$out"; printf "%040d\\n9.0.0\\n" 3 > "$FIXTURE/channel"; fi\n');
     chmodSync(join(bin, "curl"), 0o755);
+    writeFileSync(join(bin, "stat"), '#!/bin/sh\ncase "$2" in %u) echo 0;; %a) echo 755;; *) /usr/bin/stat "$@";; esac\n'); chmodSync(join(bin, "stat"), 0o755);
     const bootstrap = join(dir, "bootstrap.sh");
     // All deployment paths point at the disposable fixture; privilege is mocked only here.
-    writeFileSync(bootstrap, readFileSync("scripts/bootstrap.sh", "utf8").replaceAll("/opt/command-bridge", app).replace('"$EUID" != 0', '0 != 0'));
+    writeFileSync(bootstrap, readFileSync("scripts/bootstrap.sh", "utf8").replaceAll("/usr/local/lib/command-bridge", app).replaceAll("/opt/command-bridge",join(dir,"old")).replace('"$EUID" != 0', '0 != 0').replace('case "$resolved" in ', `case "$resolved" in ${process.execPath}|`));
     const run = (flags: string[] = [], extra = {}) => spawnSync("bash", [bootstrap, "--update", ...flags], { encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE: dir, ...extra }, timeout: 15_000 });
     writeFileSync(join(dir, "channel"), `${oldSha}\n4.3.0\n`);
     assert.match(run().stdout, /Already up to date/);

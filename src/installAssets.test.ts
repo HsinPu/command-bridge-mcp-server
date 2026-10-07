@@ -143,7 +143,7 @@ test("systemd unit uses the versioned application and runtime symlinks", () => {
 
   assert.match(
     unitText,
-    /ExecStart=\/opt\/command-bridge\/runtime\/current\/bin\/node \/opt\/command-bridge\/current\/dist\/index\.js/
+    /ExecStart=\/usr\/local\/lib\/command-bridge\/runtime\/current\/bin\/node \/usr\/local\/lib\/command-bridge\/current\/dist\/index\.js/
   );
   assert.match(unitText, /User=command-bridge/);
   assert.match(unitText, /NoNewPrivileges=false/);

@@ -10,7 +10,7 @@ try {
  result.service.state=props.LoadState==='not-found'?'notInstalled':props.ActiveState==='active'?'running':props.ActiveState==='failed'?'failed':props.ActiveState==='inactive'?'stopped':'unknown';
  for(const [key,source] of [['restartCount','NRestarts'],['exitCode','ExecMainStatus']]) if(/^\d{1,10}$/.test(props[source]??'')) result.service[key]=Number(props[source]);
 } catch {result.reader={status:'unavailable',reason:'readerFailed'};}
-for(const [resource,path] of [['application','/opt/command-bridge'],['audit','/var/log'],['work','/var/lib/command-bridge']]) {
+for(const [resource,path] of [['application','/usr/local/lib/command-bridge'],['audit','/var/log'],['work','/var/lib/command-bridge']]) {
  let freeMb=null;
  try {if(!lstatSync(path).isSymbolicLink()){const fs=statfsSync(path);freeMb=Math.max(0,Math.floor(fs.bavail*fs.bsize/1024/1024));}} catch {}
  result.storage.push({resource,freeMb});

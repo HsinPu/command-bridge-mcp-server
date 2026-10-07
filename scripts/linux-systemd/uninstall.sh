@@ -7,7 +7,8 @@ readonly SERVICE_NAME="command-bridge"
 readonly SERVICE_USER="command-bridge"
 readonly SERVICE_GROUP="command-bridge"
 readonly SERVICE_HOME="/var/empty/command-bridge"
-readonly INSTALL_ROOT="/opt/command-bridge"
+readonly INSTALL_ROOT="/usr/local/lib/command-bridge"
+readonly PREVIOUS_INSTALL_ROOT="/opt/command-bridge"
 readonly CLI_LINK="/usr/local/bin/command-bridge"
 readonly CONFIG_DIR="/etc/command-bridge"
 readonly STATE_DIR="/var/lib/command-bridge"
@@ -139,6 +140,7 @@ print_plan() {
   printf '  Diagnostic reader and restricted sudo rule\n'
   printf '  Managed updater: command-bridge-update.service and restricted request rule\n'
   printf '  Application: %s\n' "${INSTALL_ROOT}"
+  printf '  Old application roots and managed migration backups: %s, %s\n' "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
   printf '  Managed version command: %s\n' "${CLI_LINK}"
   printf '  Audit reader: %s\n' "${AUDIT_READER_PATH}"
   printf '  Audit sudoers rule: %s\n' "${AUDIT_SUDOERS_FILE}"
@@ -197,6 +199,7 @@ assert_safe_tree_path() {
   case "$1" in
     "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-diagnostics" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update")
       ;;
+    "$PREVIOUS_INSTALL_ROOT" | "$LEGACY_INSTALL_ROOT" | "$INSTALL_ROOT.migration-backup" | "$PREVIOUS_INSTALL_ROOT.migration-backup" | "$LEGACY_INSTALL_ROOT.migration-backup" | "$LEGACY_CONFIG_DIR" | "$LEGACY_STATE_DIR") ;;
     *)
       fail "Refusing to remove an unexpected path: $1"
       ;;
@@ -236,7 +239,10 @@ remove_legacy_alias() {
 }
 
 remove_cli_entry() {
-  if [[ -L "${CLI_LINK}" && "$(stat -c %u "${CLI_LINK}")" == 0 && "$(readlink "${CLI_LINK}")" == "${INSTALL_ROOT}/current/command-bridge" ]]; then
+  local target
+  target=$(readlink "$CLI_LINK" 2>/dev/null || true)
+  if [[ -L "${CLI_LINK}" && "$(stat -c %u "${CLI_LINK}")" == 0 &&
+     ( "$target" == "$INSTALL_ROOT/current/command-bridge" || "$target" == "$PREVIOUS_INSTALL_ROOT/current/command-bridge" || "$target" == "$LEGACY_INSTALL_ROOT/current/command-bridge" ) ]]; then
     run_command rm -f -- "${CLI_LINK}"
   elif [[ -e "${CLI_LINK}" || -L "${CLI_LINK}" ]]; then
     warn "Preserving an unrelated CLI entry: ${CLI_LINK}"
@@ -255,55 +261,60 @@ assert_tree_is_not_mounted() {
 }
 
 inspect_installed_unit() {
-  local fragment_path
+  local fragment_path unit=${1:-$UNIT_FILE} service=${2:-$SERVICE_NAME} root found=0
 
-  if [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
-    [[ -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || \
-      fail "Expected a regular systemd unit at ${UNIT_FILE}; inspect it manually."
+  if [[ -e "$unit" || -L "$unit" ]]; then
+    [[ -f "$unit" && ! -L "$unit" ]] || fail "Expected a regular systemd unit at $unit."
+    assert_admin_path "$unit"
+    while IFS= read -r root; do
+      if grep -Fxq "ExecStart=$root/runtime/current/bin/node $root/current/dist/index.js" "$unit"; then found=1; fi
+    done < <(layout_roots)
+    [[ "$found" == 1 ]] || fail "Service does not belong to a known CommandBridge deployment."
   fi
 
   fragment_path=$(systemctl show \
     --property=FragmentPath \
     --value \
-    "${SERVICE_NAME}.service" 2>/dev/null || true)
-  if [[ -n "${fragment_path}" && "${fragment_path}" != "${UNIT_FILE}" ]]; then
+    "${service}.service" 2>/dev/null || true)
+  if [[ -n "${fragment_path}" && "${fragment_path}" != "$unit" ]]; then
     fail "Refusing to manage an unexpected systemd unit at ${fragment_path}."
   fi
 }
 
 stop_disable_and_remove_service() {
-  inspect_installed_unit
+  local service=${1:-$SERVICE_NAME} unit=${2:-$UNIT_FILE}
+  inspect_installed_unit "$unit" "$service"
 
-  if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
-    run_command systemctl stop "${SERVICE_NAME}.service"
+  if systemctl is-active --quiet "${service}.service"; then
+    run_command systemctl stop "${service}.service"
   else
     log "Service is already inactive."
   fi
 
-  if systemctl is-enabled --quiet "${SERVICE_NAME}.service"; then
-    run_command systemctl disable "${SERVICE_NAME}.service"
+  if systemctl is-enabled --quiet "${service}.service"; then
+    run_command systemctl disable "${service}.service"
   else
     log "Service is already disabled or absent."
   fi
 
-  if [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
-    run_command rm -f -- "${UNIT_FILE}"
+  if [[ -e "${unit}" || -L "${unit}" ]]; then
+    run_command rm -f -- "${unit}"
   else
-    log "Already absent: ${UNIT_FILE}"
+    log "Already absent: ${unit}"
   fi
 
   run_command systemctl daemon-reload
 
   if [[ "${DRY_RUN}" == "1" ]]; then
-    run_command systemctl reset-failed "${SERVICE_NAME}.service"
+    run_command systemctl reset-failed "${service}.service"
     return
   fi
 
-  systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
-  if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+  systemctl reset-failed "${service}.service" >/dev/null 2>&1 || true
+  if systemctl is-active --quiet "${service}.service"; then
     fail "The service is still active; application files were not removed."
   fi
-  if systemctl is-enabled --quiet "${SERVICE_NAME}.service"; then
+  if systemctl is-enabled --quiet "${service}.service"; then
     fail "The service is still enabled; application files were not removed."
   fi
 }
@@ -444,7 +455,60 @@ print_summary() {
   fi
 }
 
+validate_all_program_removals() {
+  local root
+  while IFS= read -r root; do
+    if [[ -L "$root" ]]; then assert_layout_alias "$root";
+    elif [[ -e "$root" ]]; then assert_managed_program_tree "$root"; fi
+    if [[ -e "$root.migration-backup" || -L "$root.migration-backup" ]]; then assert_managed_program_tree "$root.migration-backup"; fi
+  done < <(layout_roots)
+}
+
+validate_legacy_data_paths() {
+  assert_legacy_data_path "$LEGACY_CONFIG_DIR" "$CONFIG_DIR"
+  assert_legacy_data_path "$LEGACY_STATE_DIR" "$STATE_DIR"
+}
+
+assert_legacy_data_path() {
+  local old=$1 new=$2
+  if [[ -L "$old" ]]; then assert_legacy_alias "$old" "$new";
+  elif [[ -e "$old" ]]; then
+    [[ -d "$old" && -f "$LEGACY_CONFIG_DIR/command-bridge.env" ]] || fail "Unrecognized legacy data; no files were removed."
+    assert_admin_path "$LEGACY_CONFIG_DIR"
+  fi
+}
+
+remove_legacy_audit_access() {
+  local file
+  for file in "$LEGACY_AUDIT_SUDOERS_FILE" "$LEGACY_AUDIT_READER_DIR/audit-reader"; do
+    if [[ -e "$file" || -L "$file" ]]; then
+      assert_admin_path "$file"
+      [[ -f "$file" && ! -L "$file" ]] || fail "Unexpected old Audit asset."
+      run_command rm -f -- "$file"
+    fi
+  done
+  if [[ -d "$LEGACY_AUDIT_READER_DIR" && ! -L "$LEGACY_AUDIT_READER_DIR" ]]; then
+    if [[ "$DRY_RUN" == 1 ]]; then run_command rmdir -- "$LEGACY_AUDIT_READER_DIR";
+    else rmdir -- "$LEGACY_AUDIT_READER_DIR" 2>/dev/null || true; fi
+  fi
+}
+
+remove_all_program_roots() {
+  local root
+  # Alias deletion never traverses its target; all real trees were verified before stopping.
+  while IFS= read -r root; do
+    remove_tree "$root"
+    remove_tree "$root.migration-backup"
+  done < <(layout_roots)
+  if [[ "$DRY_RUN" == 0 ]]; then
+    while IFS= read -r root; do
+      [[ ! -e "$root" && ! -L "$root" && ! -e "$root.migration-backup" && ! -L "$root.migration-backup" ]] || fail "Program cleanup is incomplete at $root."
+    done < <(layout_roots)
+  fi
+}
+
 main() {
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/layout.sh"
   parse_arguments "$@"
   if [[ "${SHOW_HELP}" == "1" ]]; then
     usage
@@ -452,7 +516,7 @@ main() {
   fi
 
   require_root_systemd_linux
-  for command_name in chmod flock getent install readlink rm rmdir stat systemctl uname; do
+  for command_name in chmod flock getent install readlink rm rmdir stat systemctl uname cat find findmnt grep; do
     require_command "${command_name}"
   done
   if [[ "${PURGE}" == "1" ]]; then
@@ -468,9 +532,10 @@ main() {
   print_plan
   confirm_removal
 
-  assert_legacy_alias "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
-  assert_legacy_alias "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
-  assert_legacy_alias "${LEGACY_STATE_DIR}" "${STATE_DIR}"
+  validate_all_program_removals
+  inspect_installed_unit
+  inspect_installed_unit /etc/systemd/system/command-bridge-mcp-server.service command-bridge-mcp-server
+  validate_legacy_data_paths
 
   assert_tree_is_not_mounted "${INSTALL_ROOT}"
   if [[ "${PURGE}" == "1" ]]; then
@@ -481,7 +546,9 @@ main() {
   fi
 
   stop_disable_and_remove_service
+  stop_disable_and_remove_service command-bridge-mcp-server /etc/systemd/system/command-bridge-mcp-server.service
   remove_audit_access
+  remove_legacy_audit_access
   for updater_file in /etc/systemd/system/command-bridge-update.service /etc/sudoers.d/command-bridge-update; do
     if [[ -e "$updater_file" || -L "$updater_file" ]]; then run_command rm -f -- "$updater_file"; fi
   done
@@ -493,8 +560,7 @@ main() {
     validate_service_identity_for_purge
   fi
   remove_cli_entry
-  remove_tree "${INSTALL_ROOT}"
-  remove_legacy_alias "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
+  remove_all_program_roots
 
   if [[ "${PURGE}" == "1" ]]; then
     remove_service_identity
@@ -503,8 +569,8 @@ main() {
     remove_tree "${INSTALLER_STATE_DIR}"
     remove_tree "${SERVICE_HOME}"
     remove_tree /var/lib/command-bridge-update
-    remove_legacy_alias "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
-    remove_legacy_alias "${LEGACY_STATE_DIR}" "${STATE_DIR}"
+    remove_tree "$LEGACY_CONFIG_DIR"
+    remove_tree "$LEGACY_STATE_DIR"
   fi
 
   print_summary

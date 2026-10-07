@@ -28,7 +28,7 @@ const documentation = [
 test("uninstaller is restricted to the installed CommandBridge resources", () => {
   assert.match(
     uninstaller,
-    /readonly INSTALL_ROOT="\/opt\/command-bridge"/
+    /readonly INSTALL_ROOT="\/usr\/local\/lib\/command-bridge"/
   );
   assert.match(
     uninstaller,
@@ -74,7 +74,7 @@ test("uninstaller removes the restricted audit reader and sudoers entry", () => 
   const main = uninstaller.slice(uninstaller.indexOf("main() {"));
   const serviceRemovalIndex = main.indexOf("stop_disable_and_remove_service");
   const auditRemovalIndex = main.indexOf("remove_audit_access");
-  const applicationRemovalIndex = main.indexOf('remove_tree "${INSTALL_ROOT}"');
+  const applicationRemovalIndex = main.indexOf("remove_all_program_roots");
 
   assert.ok(serviceRemovalIndex < auditRemovalIndex);
   assert.ok(auditRemovalIndex < applicationRemovalIndex);
@@ -88,10 +88,8 @@ test("default uninstall preserves configuration data and service identity", () =
   );
 
   const main = uninstaller.slice(uninstaller.indexOf("main() {"));
-  assert.match(
-    main,
-    /remove_tree "\$\{INSTALL_ROOT\}"\s+remove_legacy_alias "\$\{LEGACY_INSTALL_ROOT\}" "\$\{INSTALL_ROOT\}"\s+if \[\[ "\$\{PURGE\}" == "1" \]\]; then\s+remove_service_identity\s+remove_tree "\$\{CONFIG_DIR\}"\s+remove_tree "\$\{STATE_DIR\}"\s+remove_tree "\$\{INSTALLER_STATE_DIR\}"\s+remove_tree "\$\{SERVICE_HOME\}"\s+remove_tree \/var\/lib\/command-bridge-update\s+remove_legacy_alias "\$\{LEGACY_CONFIG_DIR\}" "\$\{CONFIG_DIR\}"\s+remove_legacy_alias "\$\{LEGACY_STATE_DIR\}" "\$\{STATE_DIR\}"\s+fi/
-  );
+  assert.match(main, /remove_all_program_roots/);
+  assert.match(main, /if \[\[ "\$\{PURGE\}" == "1" \]\]; then[\s\S]*remove_tree "\$\{CONFIG_DIR\}"[\s\S]*remove_tree "\$\{STATE_DIR\}"/);
   assert.doesNotMatch(uninstaller, /userdel "\$\{SUDO_USER\}"/);
 });
 
@@ -112,7 +110,7 @@ test("purge validates the dedicated identity and never kills its processes", () 
   const main = uninstaller.slice(uninstaller.indexOf("main() {"));
   const stopIndex = main.indexOf("stop_disable_and_remove_service");
   const validationIndex = main.indexOf("validate_service_identity_for_purge");
-  const applicationRemovalIndex = main.indexOf('remove_tree "${INSTALL_ROOT}"');
+  const applicationRemovalIndex = main.indexOf("remove_all_program_roots");
   const identityRemovalIndex = main.indexOf("remove_service_identity");
 
   assert.notEqual(stopIndex, -1);

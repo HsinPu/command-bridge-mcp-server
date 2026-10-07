@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.6.0 — 2026-10-08
+
+MINOR: introduce the compatible Linux program layout and automatic migration while preserving existing operation entry points, MCP interfaces and saved configuration/data.
+
+- Default application/runtime deployment to `/usr/local/lib/command-bridge`; detect both historical `/opt` roots and stage cross-filesystem copies before switching. Keep originals until real service verification, restore unit/configuration/CLI/readers/updater on failure, and retain exact compatibility aliases only for existing installations.
+- Make bootstrap updates resolve known installed roots, permit the old independent MCP worker to finish relocation, and save layout metadata with the version/source SHA. Validate protected parents, ownership, managed identities, pointers, mounts and destination free space.
+- Uninstall checks every known root and managed backup, removes verified program leftovers and aliases together, and verifies absence. Continue cleanup after older saved uninstallers through one CI-pinned fallback when needed; preserve default data and installer login accounts.
+- Add physical migration/rollback/removal regressions and a separate real Linux service gate for dedicated/installer identities, activation evidence, old MCP-worker migration and uninstall fallback; retain cross-platform publication gates. Update both READMEs, operating guides and project rules.
+- Correct the diagnostic asset fixture for the installer's minimal build-account PATH and non-root restoration of read-only fixture files; retain production ownership and permission checks.
+
 ## 4.5.0 — 2026-10-07
 
 MINOR: add a compatible, default-enabled read-only MCP diagnostics tool while preserving existing command, transfer and update authorization.

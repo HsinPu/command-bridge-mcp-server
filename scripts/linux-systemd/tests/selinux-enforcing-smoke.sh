@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 [[ ${EUID} == 0 && ${COMMAND_BRIDGE_DISPOSABLE_VM:-} == 1 ]] || { echo 'Explicit disposable VM opt-in and root are required.' >&2; exit 1; }
 [[ "$(getenforce)" == Enforcing && "$(ps -p 1 -o comm=)" == systemd ]] || { echo 'SELinux Enforcing and systemd PID 1 are required.' >&2; exit 1; }
-for path in /opt/command-bridge /etc/command-bridge /var/lib/command-bridge \
+for path in /usr/local/lib/command-bridge /etc/command-bridge /var/lib/command-bridge \
     /opt/command-bridge-mcp-server /etc/command-bridge-mcp-server /var/lib/command-bridge-mcp-server \
     /etc/systemd/system/command-bridge.service /etc/systemd/system/command-bridge-mcp-server.service \
     /usr/local/libexec/command-bridge /etc/sudoers.d/command-bridge-audit-reader; do
@@ -20,21 +20,21 @@ sha=3333333333333333333333333333333333333333
 printf '%s\n' "$sha" > "$work/base/.command-bridge-source-sha"
 export COMMAND_BRIDGE_HTTP_HOST=127.0.0.1
 bash "$work/base/scripts/linux-systemd/install.sh" > "$work/fresh.log" 2>&1
-node=/opt/command-bridge/runtime/current/bin/node
+node=/usr/local/lib/command-bridge/runtime/current/bin/node
 config=/etc/command-bridge/command-bridge.env
 verify_service() {
   [[ "$(getenforce)" == Enforcing ]]
   systemctl is-active --quiet command-bridge
   systemctl is-enabled --quiet command-bridge
   "$node" "$root/scripts/tests/wait-for-listener.mjs" "$config"
-  "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+  "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
   matchpathcon -V "$(readlink -f "$node")" >/dev/null
 }
 verify_service
 printf 'preserved\n' > /var/lib/command-bridge/work/preserved
 config_hash=$(sha256sum "$config")
-old=$(readlink /opt/command-bridge/current)
-old_info=$(sha256sum /opt/command-bridge/current/install-info.json)
+old=$(readlink /usr/local/lib/command-bridge/current)
+old_info=$(sha256sum /usr/local/lib/command-bridge/current/install-info.json)
 
 # Reproduce the reported failure, then repair the SAME runtime via reinstall.
 systemctl stop command-bridge
@@ -62,8 +62,8 @@ if bash "$work/candidate/scripts/linux-systemd/install.sh" --refresh-network > "
 fi
 grep -q INJECTED_POST_ACTIVATION_FAILURE "$work/rollback.log"
 "$node" scripts/tests/rollback-fixture.mjs assert "$marker" "$fault_sha" verified
-[[ "$(readlink /opt/command-bridge/current)" == "$old" ]]
-[[ "$(sha256sum /opt/command-bridge/current/install-info.json)" == "$old_info" ]]
+[[ "$(readlink /usr/local/lib/command-bridge/current)" == "$old" ]]
+[[ "$(sha256sum /usr/local/lib/command-bridge/current/install-info.json)" == "$old_info" ]]
 [[ "$(sha256sum "$config")" == "$config_hash" ]]
 grep -Fxq preserved /var/lib/command-bridge/work/preserved
 verify_service
@@ -71,15 +71,15 @@ verify_service
 # A different verified snapshot upgrades successfully with preserved data.
 printf '%s\n' 5555555555555555555555555555555555555555 > "$work/base/.command-bridge-source-sha"
 bash "$work/base/scripts/linux-systemd/install.sh" > "$work/upgrade.log" 2>&1
-[[ "$(readlink /opt/command-bridge/current)" != "$old" ]]
+[[ "$(readlink /usr/local/lib/command-bridge/current)" != "$old" ]]
 verify_service
 [[ "$(sha256sum "$config")" == "$config_hash" ]]
-bash /opt/command-bridge/current/uninstall.sh --yes > "$work/uninstall.log" 2>&1
+bash /usr/local/lib/command-bridge/current/uninstall.sh --yes > "$work/uninstall.log" 2>&1
 test -f "$config"
 grep -Fxq preserved /var/lib/command-bridge/work/preserved
 bash "$work/base/scripts/linux-systemd/install.sh" > "$work/reinstall-after-uninstall.log" 2>&1
 verify_service
-bash /opt/command-bridge/current/uninstall.sh --purge --yes > "$work/purge.log" 2>&1
-[[ ! -e /opt/command-bridge && ! -e /etc/command-bridge && ! -e /var/lib/command-bridge ]]
+bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes > "$work/purge.log" 2>&1
+[[ ! -e /usr/local/lib/command-bridge && ! -e /etc/command-bridge && ! -e /var/lib/command-bridge ]]
 [[ "$(getenforce)" == Enforcing ]]
 echo 'Enforcing: reproduced 203/EXEC, repaired reused runtime, verified fresh install, upgrade, rollback, MCP/Audit and purge.'

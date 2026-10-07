@@ -11,13 +11,13 @@ Type=simple
 User=__INSTALLER_UID__
 Group=__INSTALLER_GID__
 SupplementaryGroups=command-bridge
-WorkingDirectory=/opt/command-bridge/current
+WorkingDirectory=/usr/local/lib/command-bridge/current
 Environment=NODE_ENV=production
 Environment=DOTENV_CONFIG_PATH=/dev/null
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=XDG_DATA_HOME=/var/lib/command-bridge-installer
 EnvironmentFile=/etc/command-bridge/command-bridge.env
-ExecStart=/opt/command-bridge/runtime/current/bin/node /opt/command-bridge/current/dist/index.js
+ExecStart=/usr/local/lib/command-bridge/runtime/current/bin/node /usr/local/lib/command-bridge/current/dist/index.js
 
 Restart=on-failure
 RestartSec=5

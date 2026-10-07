@@ -2,15 +2,17 @@
 # Behavioral tests use fake labeling tools; no host labels/services are changed.
 set -Eeuo pipefail
 work=$(mktemp -d)
-sed -e "s|/opt/command-bridge|${work}/opt/command-bridge|g" \
+sed -e "s|/usr/local/lib/command-bridge|${work}/app/command-bridge|g" \
     -e "s|/etc/command-bridge|${work}/etc/command-bridge|g" \
     -e "s|/var/lib/command-bridge|${work}/state/command-bridge|g" \
     -e "s|/var/empty/command-bridge|${work}/home/command-bridge|g" \
     -e "s|/etc/systemd/system/|${work}/units/|g" \
     -e "s|/usr/local/libexec/|${work}/helpers/|g" \
     -e "s|/etc/sudoers.d/|${work}/sudoers/|g" \
-    scripts/linux-systemd/install.sh > "$work/installer.sh"
+    -e "s|/opt/command-bridge|${work}/old/command-bridge|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
 source "$work/installer.sh"
+source scripts/linux-systemd/layout.sh
+source scripts/linux-systemd/program-migration.sh
 # main normally loads these modules; isolated function tests must do so too.
 source scripts/linux-systemd/managed-update.sh
 source scripts/linux-systemd/diagnostics.sh
@@ -110,7 +112,7 @@ mkdir -p "$TEMP_DIR/node-runtime/bin" "$TEMP_DIR/source/dist" "$TEMP_DIR/source/
   "$TEMP_DIR/source/scripts/linux-systemd" "$TEMP_DIR/source/packaging/linux"
 cp packaging/linux/command-bridge "$TEMP_DIR/source/packaging/linux/command-bridge"
 cp "$runtime/bin/node" "$TEMP_DIR/node-runtime/bin/node"
-for file in package.json package-lock.json README.md SECURITY.md scripts/verify-install.mjs scripts/verify-file-transfer.mjs scripts/linux-systemd/uninstall.sh scripts/bootstrap.sh; do
+for file in package.json package-lock.json README.md SECURITY.md scripts/verify-install.mjs scripts/verify-file-transfer.mjs scripts/linux-systemd/uninstall.sh scripts/linux-systemd/layout.sh scripts/bootstrap.sh; do
   printf 'fixture\n' > "$TEMP_DIR/source/$file"
 done
 chown() { :; }
@@ -167,7 +169,9 @@ LEGACY_MIGRATION=1; LEGACY_APP_PRESENT=1; LEGACY_CONFIG_PRESENT=1; LEGACY_STATE_
 LEGACY_WAS_ACTIVE=1; LEGACY_WAS_ENABLED=1
 LEGACY_CURRENT_TARGET="${release/$INSTALL_ROOT/$LEGACY_INSTALL_ROOT}"
 LEGACY_RUNTIME_TARGET="${runtime/$INSTALL_ROOT/$LEGACY_INSTALL_ROOT}"
-ln -s "$INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
+mkdir -p "$(dirname "$LEGACY_INSTALL_ROOT")"
+mv "$INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
+mkdir -p "$INSTALL_ROOT"
 ln -s "$CONFIG_DIR" "$LEGACY_CONFIG_DIR"
 ln -s "$STATE_DIR" "$LEGACY_STATE_DIR"
 : > "$LABEL_EVENTS"

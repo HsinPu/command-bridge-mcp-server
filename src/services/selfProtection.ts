@@ -26,7 +26,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
   if (platform === "linux") paths.push(
     "/usr/local/libexec/command-bridge-diagnostics", "/etc/sudoers.d/command-bridge-diagnostics",
     "/usr/local/libexec/command-bridge-update", "/var/lib/command-bridge-update", "/etc/sudoers.d/command-bridge-update", "/etc/systemd/system/command-bridge-update.service",
-    "/etc/command-bridge", "/opt/command-bridge", "/usr/local/libexec/command-bridge", "/usr/local/bin/command-bridge",
+    "/etc/command-bridge", "/usr/local/lib/command-bridge", "/opt/command-bridge", "/usr/local/libexec/command-bridge", "/usr/local/bin/command-bridge",
     "/etc/systemd/system/command-bridge.service", "/etc/sudoers.d/command-bridge-audit-reader",
     "/etc/command-bridge-mcp-server", "/opt/command-bridge-mcp-server",
     "/etc/systemd/system/command-bridge-mcp-server.service"

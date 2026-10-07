@@ -6,12 +6,14 @@ readonly SERVICE_NAME="command-bridge"
 readonly SERVICE_USER="command-bridge"
 readonly SERVICE_GROUP="command-bridge"
 readonly SERVICE_HOME="/var/empty/command-bridge"
-readonly INSTALL_ROOT="/opt/command-bridge"
+readonly INSTALL_ROOT="/usr/local/lib/command-bridge"
+readonly PREVIOUS_INSTALL_ROOT="/opt/command-bridge"
 readonly RELEASES_DIR="${INSTALL_ROOT}/releases"
 readonly RUNTIME_DIR="${INSTALL_ROOT}/runtime"
 readonly CURRENT_LINK="${INSTALL_ROOT}/current"
 readonly CLI_LINK="/usr/local/bin/command-bridge"
 CLI_LINK_CREATED=0
+CLI_PREVIOUS_TARGET=""
 readonly RUNTIME_LINK="${RUNTIME_DIR}/current"
 readonly CONFIG_DIR="/etc/command-bridge"
 readonly CONFIG_FILE="${CONFIG_DIR}/command-bridge.env"
@@ -34,11 +36,11 @@ readonly LEGACY_AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-aud
 SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SYSTEMD_UNIT_SHA256="ce8fb105ca99860a6627b5d9086ce731b36f0e48c323f26c80b8ae8148dc6738"
-readonly INSTALLER_UNIT_SHA256="9b1cc2cc158be63113fe5f30d832ab81de8377aceaf5d0d7ca3a2d3047f8519d"
+readonly SYSTEMD_UNIT_SHA256="91d21d93fa0fe174326ade9d91954627a3836db51b49114dfe221f14185c803f"
+readonly INSTALLER_UNIT_SHA256="4cacfd54253d38f3552c0340ed7739c197f3e05d1d07fc0d230f681b1ce22b8c"
 readonly AUDIT_READER_SHA256="7e193ae6d90ab2097ecfecdf1529ce6ec165bd3ac2dd51fe778885c1b4418e6e"
-readonly DIAGNOSTIC_READER_SHA256="3e3a0fb41e5c82738488725e218381b7d9a44704fcd9c0da0b0f66cdfc9e2b60"
-readonly DIAGNOSTIC_PROGRAM_SHA256="17a552b05926113e70f7e8adfb681723e6ca9ae5c2fcc41670ae302607d4769d"
+readonly DIAGNOSTIC_READER_SHA256="a6192101cbf82506a56f5d939bbeee09c35ef5ac1dcc0b7eb6245cf7aea86a47"
+readonly DIAGNOSTIC_PROGRAM_SHA256="cc895f97bf276e4f123752d03d5b44ff2ee3cb964e4d26f7c5a3e762df89c50a"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 
@@ -90,6 +92,14 @@ LEGACY_APP_PRESENT=0
 LEGACY_CONFIG_PRESENT=0
 LEGACY_STATE_PRESENT=0
 SELINUX_ACTIVE=0
+EXISTING_APP_ROOT=""
+APP_MIGRATION_STARTED=0
+APP_MIGRATION_PREPARED=0
+APP_MIGRATION_STAGING=""
+APP_ORIGINAL_ROOT=""
+APP_BACKUP_PATH=""
+APP_ALIAS_NAMES=()
+APP_ALIAS_TARGETS=()
 
 log() {
   printf '[CommandBridge] %s\n' "$*"
@@ -192,11 +202,11 @@ parse_arguments() {
 prepare_update() {
   [[ "${UPDATE_ONLY}" == 1 ]] || return 0
   [[ -f "${CONFIG_FILE}" && ! -L "${CONFIG_FILE}" && -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || fail "Update requires an existing managed configuration and service."
-  local current_sha
-  current_sha=$("${RUNTIME_LINK}/bin/node" -e 'try {const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!/^[a-f0-9]{40}$/.test(i.sourceSha)) throw 0; console.log(i.sourceSha)} catch {process.exit(1)}' "${CURRENT_LINK}/install-info.json") || fail "Invalid installed metadata."
+  local current_sha app_root=${EXISTING_APP_ROOT:-$INSTALL_ROOT}
+  current_sha=$("${app_root}/runtime/current/bin/node" -e 'try {const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!/^[a-f0-9]{40}$/.test(i.sourceSha)) throw 0; console.log(i.sourceSha)} catch {process.exit(1)}' "${app_root}/current/install-info.json") || fail "Invalid installed metadata."
   [[ "${current_sha}" == "${EXPECTED_INSTALLED_SHA}" ]] || fail "Installation changed during update; retry from the current version."
   if grep -Eq '^User=[0-9]+$' "${UNIT_FILE}"; then RUN_AS_INSTALLER=1; fi
-  PRESERVED_EXECUTION_MODE=$("${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/dist/updateState.js" "${CONFIG_FILE}") || fail "Cannot preserve execution mode."
+  PRESERVED_EXECUTION_MODE=$("${app_root}/runtime/current/bin/node" "${app_root}/current/dist/updateState.js" "${CONFIG_FILE}") || fail "Cannot preserve execution mode."
 }
 
 validate_codex_name() {
@@ -319,6 +329,10 @@ cleanup_staging() {
 }
 
 cleanup() {
+  if [[ "${INSTALL_SUCCEEDED}" == 0 && "${APP_MIGRATION_STARTED}" == 1 && "${ACTIVATION_STARTED}" == 0 ]]; then
+    rollback_application_layout || log "WARNING: Program migration cleanup needs administrator recovery."
+  fi
+  if declare -F cleanup_application_staging >/dev/null; then cleanup_application_staging || true; fi
   cleanup_staging
   if [[ "${INSTALL_SUCCEEDED}" == 0 && "${LEGACY_ROLLBACK_DONE}" == 0 ]]; then
     if [[ "${LEGACY_MIGRATION}" == 1 && -n "${LEGACY_CONFIG_BACKUP}" && -f "${LEGACY_CONFIG_BACKUP}" ]]; then
@@ -479,7 +493,9 @@ assert_cli_entry() {
     (( (8#${mode} & 022) == 0 )) || fail "CLI parent is writable by non-administrators."
   fi
   if [[ -e "${CLI_LINK}" || -L "${CLI_LINK}" ]]; then
-    [[ -L "${CLI_LINK}" && "$(stat -c %u "${CLI_LINK}")" == 0 && "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]] ||
+    [[ -L "${CLI_LINK}" && "$(stat -c %u "${CLI_LINK}")" == 0 &&
+       ( "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ||
+         ( -n "${EXISTING_APP_ROOT}" && "$(readlink "${CLI_LINK}")" == "${EXISTING_APP_ROOT}/current/command-bridge" ) ) ]] ||
       fail "CLI name already belongs to another application: ${CLI_LINK}"
   fi
 }
@@ -492,11 +508,18 @@ install_cli_entry() {
   if [[ ! -L "${CLI_LINK}" ]]; then
     ln -sT "${CURRENT_LINK}/command-bridge" "${CLI_LINK}"
     CLI_LINK_CREATED=1
+  elif [[ "$(readlink "${CLI_LINK}")" != "${CURRENT_LINK}/command-bridge" ]]; then
+    CLI_PREVIOUS_TARGET=$(readlink "${CLI_LINK}")
+    ln -sfnT "${CURRENT_LINK}/command-bridge" "${CLI_LINK}"
   fi
   restore_selinux_path "${CLI_LINK}" || fail "Could not label CLI entry."
 }
 
 rollback_cli_entry() {
+  if [[ -n "${CLI_PREVIOUS_TARGET}" && -L "${CLI_LINK}" && "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]]; then
+    ln -sfnT "${CLI_PREVIOUS_TARGET}" "${CLI_LINK}"
+  fi
+  CLI_PREVIOUS_TARGET=""
   if [[ "${CLI_LINK_CREATED}" == 1 && -L "${CLI_LINK}" &&
         "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]]; then
     unlink "${CLI_LINK}"
@@ -536,6 +559,7 @@ require_root_systemd_linux() {
 }
 
 assert_new_installation_paths() {
+  assert_admin_path "$(dirname "$INSTALL_ROOT")"
   assert_cli_entry
   local path
   for path in "${INSTALL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" "${AUDIT_READER_DIR}"; do
@@ -548,7 +572,8 @@ assert_new_installation_paths() {
   fi
   if [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
     [[ -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || fail "Service unit is not a regular file."
-    grep -Fxq "ExecStart=${RUNTIME_LINK}/bin/node ${CURRENT_LINK}/dist/index.js" "${UNIT_FILE}" ||
+    assert_admin_path "$UNIT_FILE"
+    grep -Fxq "ExecStart=${EXISTING_APP_ROOT:-$INSTALL_ROOT}/runtime/current/bin/node ${EXISTING_APP_ROOT:-$INSTALL_ROOT}/current/dist/index.js" "${UNIT_FILE}" ||
       fail "An unrelated ${SERVICE_NAME}.service already exists; it was not replaced."
     if grep -Fxq "User=${SERVICE_USER}" "${UNIT_FILE}"; then
       : # A dedicated-account installation may switch to the opt-in account.
@@ -905,10 +930,8 @@ restore_legacy_tree() {
 migrate_legacy_layout() {
   local old new
   if [[ ! -e "${LEGACY_UNIT_FILE}" && ! -L "${LEGACY_UNIT_FILE}" && \
-        ( ! -e "${LEGACY_INSTALL_ROOT}" || -L "${LEGACY_INSTALL_ROOT}" ) && \
         ( ! -e "${LEGACY_CONFIG_DIR}" || -L "${LEGACY_CONFIG_DIR}" ) && \
         ( ! -e "${LEGACY_STATE_DIR}" || -L "${LEGACY_STATE_DIR}" ) ]]; then
-    check_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
     check_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
     check_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
     return
@@ -917,7 +940,7 @@ migrate_legacy_layout() {
   [[ ! -L "${LEGACY_UNIT_FILE}" ]] || fail "Legacy service unit must be a regular file."
   if [[ -e "${LEGACY_UNIT_FILE}" ]]; then
     [[ -f "${LEGACY_UNIT_FILE}" ]] || fail "Legacy service unit is not a regular file."
-    [[ -d "${LEGACY_INSTALL_ROOT}" && -f "${LEGACY_CONFIG_DIR}/command-bridge.env" && \
+    [[ "${EXISTING_APP_ROOT}" == "${LEGACY_INSTALL_ROOT}" && -f "${LEGACY_CONFIG_DIR}/command-bridge.env" && \
        -d "${LEGACY_STATE_DIR}/work" ]] || fail "Legacy service files are incomplete; the existing service was not changed."
     [[ ! -e "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || \
       fail "Both old and new service units exist; inspect them before upgrading."
@@ -935,11 +958,9 @@ migrate_legacy_layout() {
        "${LEGACY_RUNTIME_TARGET}" == "${LEGACY_INSTALL_ROOT}/runtime/"* ]] ||
       fail "Legacy release links are unexpected; the existing service was not changed."
   fi
-  check_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
   check_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
   check_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
 
-  if [[ -e "${LEGACY_INSTALL_ROOT}" || -L "${LEGACY_INSTALL_ROOT}" ]]; then LEGACY_APP_PRESENT=1; fi
   if [[ -e "${LEGACY_CONFIG_DIR}" || -L "${LEGACY_CONFIG_DIR}" ]]; then LEGACY_CONFIG_PRESENT=1; fi
   if [[ -e "${LEGACY_STATE_DIR}" || -L "${LEGACY_STATE_DIR}" ]]; then LEGACY_STATE_PRESENT=1; fi
 
@@ -955,7 +976,6 @@ migrate_legacy_layout() {
     fi
   fi
   log "Migrating the Linux service and paths to ${SERVICE_NAME}; preserving legacy path aliases."
-  move_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
   move_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
   move_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
 
@@ -1117,13 +1137,14 @@ install_runtime_and_release() {
       "${release_staging}/"
     printf '%s\n' "${SOURCE_REF}" > "${release_staging}/.command-bridge-release"
     install -m 0755 "${source_dir}/scripts/linux-systemd/uninstall.sh" "${release_staging}/uninstall.sh"
+    install -m 0644 "${source_dir}/scripts/linux-systemd/layout.sh" "${release_staging}/layout.sh"
     install -m 0644 "${source_dir}/scripts/bootstrap.sh" "${release_staging}/bootstrap.sh"
     sed "s|__INSTALL_ROOT__|${INSTALL_ROOT}|g" "${source_dir}/packaging/linux/command-bridge" > "${release_staging}/command-bridge"
     chmod 0755 "${release_staging}/command-bridge"
     install -d -m 0755 "${release_staging}/scripts"
     install -m 0644 "${source_dir}/scripts/verify-install.mjs" "${release_staging}/scripts/verify-install.mjs"
     install -m 0644 "${source_dir}/scripts/verify-file-transfer.mjs" "${release_staging}/scripts/verify-file-transfer.mjs"
-    printf '{"version":"%s","sourceSha":"%s","runtimeVersion":"%s"}\n' "${package_version}" "${SOURCE_REF}" "${NODE_VERSION}" > "${release_staging}/install-info.json"
+    printf '{"version":"%s","sourceSha":"%s","runtimeVersion":"%s","installRoot":"%s","layoutVersion":2}\n' "${package_version}" "${SOURCE_REF}" "${NODE_VERSION}" "${INSTALL_ROOT}" > "${release_staging}/install-info.json"
     chown -R root:root "${release_staging}"
     normalize_program_permissions "${release_staging}"
     mv "${release_staging}" "${release_final}"
@@ -1338,6 +1359,7 @@ rollback_activation() {
 
   rollback_audit_access
   restore_diagnostic_assets || labels_ok=0
+  restore_managed_update_assets || labels_ok=0
   if [[ "${LEGACY_MIGRATION}" == "0" && -z "${PREVIOUS_RELEASE}" ]]; then
     systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
   fi
@@ -1360,11 +1382,11 @@ rollback_activation() {
         -f "${LEGACY_UNIT_BACKUP}" && ! -f "${LEGACY_UNIT_FILE}" ]]; then
     install -m 0644 "${LEGACY_UNIT_BACKUP}" "${LEGACY_UNIT_FILE}" || true
   fi
+  rollback_application_layout || labels_ok=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
-    if [[ "${LEGACY_APP_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}" || true; fi
     if [[ "${LEGACY_CONFIG_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}" || true; fi
     if [[ "${LEGACY_STATE_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}" || true; fi
-    if [[ -n "${LEGACY_CURRENT_TARGET}" && -d "${LEGACY_INSTALL_ROOT}" ]]; then
+    if [[ "${APP_MIGRATION_STARTED}" == 0 && -n "${LEGACY_CURRENT_TARGET}" && -d "${LEGACY_INSTALL_ROOT}" ]]; then
       ln -sfnT "${LEGACY_CURRENT_TARGET}" "${LEGACY_INSTALL_ROOT}/current" || true
     fi
     if [[ -n "${LEGACY_RUNTIME_TARGET}" && -d "${LEGACY_INSTALL_ROOT}/runtime" ]]; then
@@ -1381,9 +1403,13 @@ rollback_activation() {
       systemctl restart "${LEGACY_SERVICE_NAME}.service" || log "WARNING: Legacy service could not be restarted."
     fi
   else
-    restore_current_selinux_layout || labels_ok=0
+    if [[ -n "${APP_ORIGINAL_ROOT}" ]]; then
+      restore_selinux_layout "${APP_ORIGINAL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" "${UNIT_FILE}" "${AUDIT_READER_DIR}" "${AUDIT_SUDOERS_FILE}" || labels_ok=0
+    else
+      restore_current_selinux_layout || labels_ok=0
+    fi
     systemctl daemon-reload >/dev/null 2>&1 || true
-    if [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" && "${labels_ok}" == 1 ]]; then
+    if [[ -n "${PREVIOUS_RELEASE}" && ( -d "${PREVIOUS_RELEASE}" || -n "${APP_ORIGINAL_ROOT}" ) && "${labels_ok}" == 1 ]]; then
       # Failed candidate starts can exhaust StartLimitBurst. Clear that candidate's
       # failure counter before restarting the restored, previously verified release.
       systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
@@ -1393,7 +1419,6 @@ rollback_activation() {
   [[ "${labels_ok}" == 1 ]] || log "WARNING: Rollback could not complete helper restoration or SELinux label repair; restored service was not restarted."
   ACTIVATION_STARTED=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then LEGACY_ROLLBACK_DONE=1; fi
-  restore_managed_update_assets
   ROLLBACK_IN_PROGRESS=0
 }
 
@@ -1556,6 +1581,8 @@ print_codex_setup() {
 }
 
 main() {
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/layout.sh"
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/program-migration.sh"
   source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/managed-update.sh"
   source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/diagnostics.sh"
   local node_arch available_kb
@@ -1565,7 +1592,7 @@ main() {
   for command_name in \
     awk chown chmod cp curl df env find flock getent grep groupadd groupdel gzip id install \
     ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
-    tr uname unlink useradd userdel sed touch; do
+    tr uname unlink useradd userdel sed touch cat du findmnt; do
     require_command "${command_name}"
   done
 
@@ -1576,14 +1603,12 @@ main() {
   exec 9>"${LOCK_DIR}/install.lock"
   chmod 0600 "${LOCK_DIR}/install.lock"
   flock -n 9 || fail "Another CommandBridge installation is already running."
+  inspect_application_layout
   prepare_update
   select_service_identity
   assert_new_installation_paths
 
-  available_kb=$(df -Pk /opt | awk 'NR == 2 { print $4 }')
-  if [[ "${available_kb}" =~ ^[0-9]+$ ]] && (( available_kb < 400000 )); then
-    fail "At least 400 MB of free space under /opt is required."
-  fi
+  check_deployment_space
 
   TEMP_DIR=$(mktemp -d /tmp/command-bridge-install.XXXXXX)
   chmod 0755 "${TEMP_DIR}"
@@ -1597,6 +1622,7 @@ main() {
   elif [[ -f "${LEGACY_CONFIG_DIR}/command-bridge.env" ]]; then
     DOTENV_CONFIG_PATH="${LEGACY_CONFIG_DIR}/command-bridge.env" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   fi
+  prepare_application_migration
   migrate_legacy_layout
   ensure_service_account
   ensure_installer_state
@@ -1612,9 +1638,11 @@ main() {
   [[ "$("${CLI_LINK}" --version)" == "${BUILT_PACKAGE_VERSION}" ]] || fail "Installed CLI version verification failed."
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then remove_audit_access_for_installer; fi
   install_managed_update
+  commit_application_layout
   finish_legacy_migration
   ACTIVATION_STARTED=0
   INSTALL_SUCCEEDED=1
+  finish_application_migration
   # Account deletion is the final step after verification/rollback commitment.
   remove_unused_service_account
   print_summary

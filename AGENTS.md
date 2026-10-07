@@ -128,7 +128,7 @@ npm start
 
 ## Linux 服務與安裝路徑命名（2.0.0 起）
 
-- Linux 的正式 systemd 單元為 `command-bridge.service`；主要部署、設定與工作資料目錄分別為 `/opt/command-bridge`、`/etc/command-bridge`、`/var/lib/command-bridge`。預設服務帳號為 `command-bridge`；明確使用 `--run-as-installer` 時，服務改以原始 sudo 登入者帳號執行，檔案 Audit／狀態使用 `/var/lib/command-bridge-installer`。後續文件、測試與操作指令應以這些名稱為準。
+- Linux 的正式 systemd 單元為 `command-bridge.service`；主要部署、設定與工作資料目錄4.6.0 起分別為 `/usr/local/lib/command-bridge`、`/etc/command-bridge`、`/var/lib/command-bridge`。預設服務帳號為 `command-bridge`；明確使用 `--run-as-installer` 時，服務改以原始 sudo 登入者帳號執行，檔案 Audit／狀態使用 `/var/lib/command-bridge-installer`。後續文件、測試與操作指令應以這些名稱為準。
 - 安裝者帳號模式不應自動新增一般 sudo 授權；只有 `--unrestricted` 明確啟用時才允許自由 Shell 指令，需用 `sudo -n` 依主機既有免密政策執行。預設 allowlist、Bearer Token 驗證與 Audit 先寫入後執行的規則保持不變。模式切換失敗須回復舊設定、服務及 Audit reader；卸載與 purge 不得刪除登入者帳號或其 home。
 - 2.2.1 起，`--run-as-installer` 不建立專用 `command-bridge` 使用者，只保留政策讀取群組。新服務通過真實 MCP／Audit 並完成切換後，偵測舊版本留下的本機系統帳號，驗證 UID、home、nologin Shell、群組與無活動程序後才移除。不得強制殺程序、刪除同名一般登入帳號、使用 `userdel -r` 或遞迴變更工作資料所有權。保留群組原 GID；清理失敗須回報且保留已驗證的新服務，切換驗證失敗則保留舊帳號供回復。預設專用帳號模式仍建立所需使用者；測試須涵蓋兩種模式。
 - 縮短名稱只涵蓋 Linux 服務與主機上的安裝配置；GitHub 倉庫及固定 bootstrap 網址、npm 套件名稱、Windows 的 `CommandBridgeMCP` 服務與路徑，以及三個 MCP 工具名稱維持原樣，不應為了統一字面名稱而連帶改動。
@@ -168,3 +168,10 @@ npm start
 - Linux 使用獨立 root oneshot command-bridge-update.service 與只允許目前服務 UID 執行無參數 request 的 sudoers；Windows 使用 SYSTEM 手動排程工作 CommandBridgeUpdate，LocalService 僅讀取／執行。這是既有無一般 sudo 授權規則的固定更新例外。
 - 不接受使用者來源、Shell、版本或安裝參數；只走 CI channel 與既有驗證回復。後端獨立讀取保存的停用設定；npm／stdio 不建立特權更新程序。
 - 更新狀態與 root Audit 保存在部署外；一般卸載移除工作與授權但保留紀錄，purge 才移除。測試必須包含真實服務更新、重連、失敗、設定保留及停用。
+
+## Linux 程式位置遷移（4.6.0 起）
+
+- 新安裝預設使用 `/usr/local/lib/command-bridge`；固定 bootstrap 與一行指令維持不變。安裝須辨識 `/opt/command-bridge`、`/opt/command-bridge-mcp-server` 的實體部署與相容連結，先檢查所有權、寫入權限、完整來源身分、活動指標與掛載。多份獨立部署不能猜測合併。
+- 遷移採目的檔案系統暫存複製，舊程式保留到新服務通過 readiness、真實 MCP／Audit、診斷與 CLI 驗證。失敗回復原程式、設定、單元、CLI 與更新／診斷資產後才重啟。成功只將原先存在的舊程式根目錄轉為新位置的連結；新裝不得建立 `/opt` 別名。設定、Token、工作資料與帳號模式沿用既有規則。
+- 卸載須在停止服務前檢查全部三個固定根目錄及受管理 `.migration-backup`，清除所有可驗證的程式殘留與相容連結；未知、可由非管理員修改或越界的內容不得刪除。舊本機卸載器執行完後仍須檢查殘留，必要時使用同一 CI SHA 的後備卸載器。一般卸載保留資料，purge 不得刪除登入帳號。
+- 固定更新與診斷讀取器必須跟隨新部署；不得增加可由 MCP 選擇的任意程式路徑。更新驗證須涵蓋舊獨立 worker 遷移後的最終 SHA／狀態，以及兩種服務帳號模式。發布須另通過 Linux layout service gate，不以單元測試、WSL Disabled 或服務重啟代替 Oracle Enforcing／實際重開機驗證。

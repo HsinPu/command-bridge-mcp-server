@@ -3,9 +3,11 @@ set -Eeuo pipefail
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 # Redirect every launcher mutation to this disposable tree.
-sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/opt/command-bridge|$work/app|g" scripts/linux-systemd/install.sh > "$work/install.sh"
-sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/opt/command-bridge|$work/app|g" -e '/^main "\$@"$/d' scripts/linux-systemd/uninstall.sh > "$work/uninstall.sh"
+sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/usr/local/lib/command-bridge|$work/app|g" scripts/linux-systemd/install.sh > "$work/install.sh"
+sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/usr/local/lib/command-bridge|$work/app|g" -e '/^main "\$@"$/d' scripts/linux-systemd/uninstall.sh > "$work/uninstall.sh"
 source "$work/install.sh"
+source scripts/linux-systemd/layout.sh
+source scripts/linux-systemd/program-migration.sh
 trap - EXIT ERR
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/bin" "$work/app/v1" "$work/app/v2"

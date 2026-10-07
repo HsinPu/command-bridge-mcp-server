@@ -20,7 +20,7 @@ wait_for_listener() {
   # Type=simple reports restart completion before Node starts listening.
   # Wait only for the socket; the mandatory verifier below still checks
   # authenticated readiness, real MCP execution and matching Audit events.
-  sudo /opt/command-bridge/runtime/current/bin/node --input-type=module - "$config" <<'NODE'
+  sudo /usr/local/lib/command-bridge/runtime/current/bin/node --input-type=module - "$config" <<'NODE'
 import { readFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
@@ -57,18 +57,18 @@ sudo bash scripts/linux-systemd/install.sh
 sudo bash scripts/linux-systemd/install.sh --refresh-network >/dev/null
 sudo systemctl restart "$service"
 wait_for_listener
-sudo /opt/command-bridge/runtime/current/bin/node /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+sudo /usr/local/lib/command-bridge/runtime/current/bin/node /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
 # Exercise the independent worker against an immutable disposable source archive.
 update_archive="$fixture/managed-source.tar.gz"
 tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=.env -czf "$update_archive" --transform='s,^,command-bridge-fixture/,' .
 version=$(node -p 'JSON.parse(require("fs").readFileSync("package.json")).version')
-sudo env GITHUB_ACTIONS=true /opt/command-bridge/runtime/current/bin/node scripts/tests/managed-update-fixture.mjs linux "$update_archive" "$version"
-sudo env GITHUB_ACTIONS=true /opt/command-bridge/runtime/current/bin/node scripts/tests/verify-managed-update.mjs "$config" "$(printf '4%.0s' {1..40})"
-old=$(readlink /opt/command-bridge/current)
-node=/opt/command-bridge/runtime/current/bin/node
+sudo env GITHUB_ACTIONS=true /usr/local/lib/command-bridge/runtime/current/bin/node scripts/tests/managed-update-fixture.mjs linux "$update_archive" "$version"
+sudo env GITHUB_ACTIONS=true /usr/local/lib/command-bridge/runtime/current/bin/node scripts/tests/verify-managed-update.mjs "$config" "$(printf '4%.0s' {1..40})"
+old=$(readlink /usr/local/lib/command-bridge/current)
+node=/usr/local/lib/command-bridge/runtime/current/bin/node
 work=/var/lib/command-bridge/work
 before_refresh=$(sudo sha256sum "$config")
-old_info=$(sudo sha256sum /opt/command-bridge/current/install-info.json)
+old_info=$(sudo sha256sum /usr/local/lib/command-bridge/current/install-info.json)
 host=$(sudo awk -F= '$1 == "COMMAND_BRIDGE_HTTP_HOST" { print $2 }' "$config")
 new_host=127.0.0.1
 [[ "$host" != "$new_host" ]] || new_host=127.0.0.2
@@ -77,13 +77,13 @@ health_sha=$(printf '%040d' 2)
 verify_marker="$work/rollback-verify-$RANDOM.json"
 health_marker="$work/rollback-health-$RANDOM.json"
 assert_restored() {
-  [[ "$(readlink /opt/command-bridge/current)" == "$old" ]]
-  [[ "$(sudo sha256sum /opt/command-bridge/current/install-info.json)" == "$old_info" ]]
+  [[ "$(readlink /usr/local/lib/command-bridge/current)" == "$old" ]]
+  [[ "$(sudo sha256sum /usr/local/lib/command-bridge/current/install-info.json)" == "$old_info" ]]
   [[ "$(sudo sha256sum "$config")" == "$before_refresh" ]]
   sudo test -f "$work/preserved"
   sudo systemctl is-active --quiet "$service"
   wait_for_listener
-  sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+  sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
 }
 tar --exclude=.git --exclude=node_modules --exclude=dist -cf - . | tar -C "$fixture" -xf -
 sudo "$node" scripts/tests/rollback-fixture.mjs prepare "$fixture" verify "$verify_sha" "$verify_marker" "$new_host"
@@ -93,15 +93,15 @@ sudo "$node" scripts/tests/rollback-fixture.mjs assert "$verify_marker" "$verify
 assert_restored
 cp "$root/scripts/verify-install.mjs" "$fixture/scripts/verify-install.mjs"
 sudo "$node" scripts/tests/rollback-fixture.mjs prepare "$fixture" health "$health_sha" "$health_marker"
-if sudo bash "$fixture/scripts/linux-systemd/install.sh" --update --expected-installed-sha "$(sudo "$node" -p 'require("/opt/command-bridge/current/install-info.json").sourceSha')" > "$health_log" 2>&1; then echo 'Expected service health failure.'; exit 1; fi
+if sudo bash "$fixture/scripts/linux-systemd/install.sh" --update --expected-installed-sha "$(sudo "$node" -p 'require("/usr/local/lib/command-bridge/current/install-info.json").sourceSha')" > "$health_log" 2>&1; then echo 'Expected service health failure.'; exit 1; fi
 sudo "$node" scripts/tests/rollback-fixture.mjs assert "$health_marker" "$health_sha" started
 assert_restored
 sudo cp "$config" "$config.backup"
 sudo sed -i 's/^COMMAND_BRIDGE_ALLOWED_COMMANDS=.*/COMMAND_BRIDGE_ALLOWED_COMMANDS=unknown-custom-command/' "$config"
 if sudo bash "$root/scripts/linux-systemd/install.sh"; then echo 'Expected migration rejection.'; exit 1; fi
-[[ "$(readlink /opt/command-bridge/current)" == "$old" ]]
+[[ "$(readlink /usr/local/lib/command-bridge/current)" == "$old" ]]
 sudo mv "$config.backup" "$config"
-sudo bash /opt/command-bridge/current/uninstall.sh --yes
+sudo bash /usr/local/lib/command-bridge/current/uninstall.sh --yes
 sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
 sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test ! -e /etc/systemd/system/command-bridge-update.service
@@ -112,8 +112,8 @@ sudo test -f "$config"
 sudo test -f /var/lib/command-bridge/work/preserved
 sudo bash "$root/scripts/linux-systemd/install.sh"
 # The intentional reinstall selected the repository SHA; snapshot that baseline.
-old=$(readlink /opt/command-bridge/current)
-old_info=$(sudo sha256sum /opt/command-bridge/current/install-info.json)
+old=$(readlink /usr/local/lib/command-bridge/current)
+old_info=$(sudo sha256sum /usr/local/lib/command-bridge/current/install-info.json)
 before_refresh=$(sudo sha256sum "$config")
 
 # A failed switch must have started the login-account candidate before the
@@ -135,11 +135,11 @@ sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer
 if getent passwd command-bridge >/dev/null; then echo 'Unused dedicated user survived the switch.'; exit 1; fi
 getent group command-bridge >/dev/null
 sudo test -f "$work/preserved"
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
 
-sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
+sudo bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes
 sudo test ! -e /var/lib/command-bridge-update
-[[ ! -e /opt/command-bridge ]]
+[[ ! -e /usr/local/lib/command-bridge ]]
 sudo test ! -e "$config"
 
 # Opt-in installer identity: file Audit, unrestricted commands, and only the
@@ -155,14 +155,14 @@ sudo grep -Fxq "User=$login_uid" /etc/systemd/system/command-bridge.service
 sudo grep -Fxq 'COMMAND_BRIDGE_AUDIT_BACKEND=file' "$config"
 sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted' "$config"
 sudo test ! -e /etc/sudoers.d/command-bridge-audit-reader
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
 # Verify the fixed numeric-UID request grant and update as the login identity.
 sudo env GITHUB_ACTIONS=true "$node" scripts/tests/managed-update-fixture.mjs linux "$update_archive" "$version" "$(printf '5%.0s' {1..40})"
 sudo env GITHUB_ACTIONS=true "$node" scripts/tests/verify-managed-update.mjs "$config" "$(printf '5%.0s' {1..40})"
 # A harmless new sentinel under the protected configuration root must never be created.
 probe="/etc/command-bridge/.self-protection-probe-$$"
 sudo test ! -e "$probe"
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" "sudo -n touch -- $probe" error:SELF_MODIFICATION_BLOCKED
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" "sudo -n touch -- $probe" error:SELF_MODIFICATION_BLOCKED
 sudo test ! -e "$probe"
 user_mode_config=$(sudo sha256sum "$config")
 # Exercise a real guarded service, preserving all non-mode settings and sudo.
@@ -170,26 +170,26 @@ guarded_preserved=$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sh
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --guarded
 sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=guarded' "$config"
 [[ "$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)" == "$guarded_preserved" ]]
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'rm -- /tmp/command-bridge-guarded-absent' error:DELETE_OPERATION_BLOCKED
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo systemctl restart example.service' error:SYSTEM_MODIFICATION_BLOCKED
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'rm -- /tmp/command-bridge-guarded-absent' error:DELETE_OPERATION_BLOCKED
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo systemctl restart example.service' error:SYSTEM_MODIFICATION_BLOCKED
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 # Simulate the leftover account created by older installer-account releases.
 sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
-sudo bash "$root/scripts/linux-systemd/install.sh" --update --expected-installed-sha "$(sudo "$node" -p 'require("/opt/command-bridge/current/install-info.json").sourceSha')"
+sudo bash "$root/scripts/linux-systemd/install.sh" --update --expected-installed-sha "$(sudo "$node" -p 'require("/usr/local/lib/command-bridge/current/install-info.json").sourceSha')"
 if getent passwd command-bridge >/dev/null; then echo 'Legacy installer-mode user was not removed.'; exit 1; fi
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 preserved_settings=$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer
 sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist' "$config"
 [[ "$(sudo sed '/^COMMAND_BRIDGE_EXECUTION_MODE=/d' "$config" | sha256sum)" == "$preserved_settings" ]]
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
 # Explicit opt-in on the following reinstall restores unrestricted execution.
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
-sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
-sudo bash /opt/command-bridge/current/uninstall.sh --yes
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+sudo bash /usr/local/lib/command-bridge/current/uninstall.sh --yes
 sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
 sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
@@ -197,8 +197,8 @@ sudo test -d /var/lib/command-bridge-installer/CommandBridgeMCP/audit
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted
 [[ "$(sudo sha256sum "$config")" == "$user_mode_config" ]]
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer --unrestricted --enable-file-transfer
-sudo "$node" /opt/command-bridge/current/scripts/verify-file-transfer.mjs "$config"
-sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-file-transfer.mjs "$config"
+sudo bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes
 sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
 sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test ! -e /var/lib/command-bridge-installer

@@ -16,7 +16,7 @@ export class DiagnosticsService {
   private readonly sources:Record<string,Source>;
   constructor(private readonly config:AppConfig,private readonly audit:BoundedAuditLog,private readonly runtime:()=>{accepting:boolean;mode:string;activeCommands:number;maxParallelCommands:number;recentRequests:RecentDiagnosticRequest[]},providers?:{host:DiagnosticProvider;storage?:DiagnosticProvider},private readonly deadlineMs=5000) {
     const modulePath=fileURLToPath(import.meta.url);
-    const managedRoot=process.platform==="win32"?resolve(process.env.ProgramFiles??"C:\\Program Files","CommandBridgeMCP")+sep:"/opt/command-bridge/";
+    const managedRoot=process.platform==="win32"?resolve(process.env.ProgramFiles??"C:\\Program Files","CommandBridgeMCP")+sep:"/usr/local/lib/command-bridge/";
     const managed=process.platform==="win32"?modulePath.toLowerCase().startsWith(managedRoot.toLowerCase()):modulePath.startsWith(managedRoot);
     const runtimeOnly:DiagnosticProvider={start:()=>({cancel(){},result:Promise.resolve({schemaVersion:1,service:{state:"notInstalled",restartCount:null,exitCode:null},reader:{status:"notInstalled",reason:null},storage:[],errors:[]})})};
     this.sources={host:{provider:providers?.host??(managed?nativeDiagnosticProvider():runtimeOnly),schema:hostDiagnosticSchema,at:0,reason:null}};

@@ -20,6 +20,6 @@ export function fixtureBootstrap(original, platform, sha, version, archive) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.env.GITHUB_ACTIONS !== 'true') throw Error('Disposable GitHub runner required');
   const [platform, archive, version, sha = '4'.repeat(40)] = process.argv.slice(2);
-  const bootstrap = platform === 'win32' ? join(process.env.ProgramFiles, 'CommandBridgeMCP', 'bootstrap.ps1') : '/opt/command-bridge/current/bootstrap.sh';
+  const bootstrap = platform === 'win32' ? join(process.env.ProgramFiles, 'CommandBridgeMCP', 'bootstrap.ps1') : '/usr/local/lib/command-bridge/current/bootstrap.sh';
   fs.writeFileSync(bootstrap, fixtureBootstrap(fs.readFileSync(bootstrap, 'utf8'), platform, sha, version, archive));
 }

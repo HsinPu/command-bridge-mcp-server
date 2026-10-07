@@ -8,4 +8,4 @@ case "$(/usr/bin/systemctl show command-bridge-update.service --property=ActiveS
   *) exec 10</run/command-bridge-mcp-server/install.lock; /usr/bin/flock -n 10 || exit 1 ;;
 esac
 # Preserve only sudo's authenticated UID, never NODE_OPTIONS or loader variables.
-exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin SUDO_UID="${SUDO_UID:-}" /opt/command-bridge/runtime/current/bin/node /usr/local/libexec/command-bridge-update/state.mjs request
+exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin SUDO_UID="${SUDO_UID:-}" /usr/local/lib/command-bridge/runtime/current/bin/node /usr/local/libexec/command-bridge-update/state.mjs request

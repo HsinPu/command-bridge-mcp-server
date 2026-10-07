@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 const root = '/var/lib/command-bridge-update';
 const unit = 'command-bridge-update.service';
-const app = '/opt/command-bridge/current';
+const app = '/usr/local/lib/command-bridge/current';
 export function updateEnabled(text) {
   const lines = text.split(/\r?\n/).filter(line => /^\s*COMMAND_BRIDGE_MCP_UPDATE_ENABLED\s*=/.test(line));
   if (!lines.length) return true;

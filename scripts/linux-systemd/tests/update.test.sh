@@ -2,10 +2,13 @@
 set -Eeuo pipefail
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
-sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/var/lib/command-bridge|$work/state|g" -e "s|/opt/command-bridge|$work/app|g" -e "s|/etc/command-bridge|$work/config|g" \
+sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/var/lib/command-bridge|$work/state|g" -e "s|/usr/local/lib/command-bridge|$work/app|g" -e "s|/opt/command-bridge|$work/old|g" -e "s|/etc/command-bridge|$work/config|g" \
   -e "s|/etc/systemd/system/|$work/units/|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
 source "$work/installer.sh"
+source scripts/linux-systemd/layout.sh
+source scripts/linux-systemd/program-migration.sh
 trap - EXIT ERR
+assert_admin_path() { [[ ! -L "$1" ]]; }
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$CURRENT_LINK/dist" "$RUNTIME_LINK/bin" "$CONFIG_DIR" "$work/units" "$work/home" "$work/temp"
 ln -s "$TEST_NODE" "$RUNTIME_LINK/bin/node"

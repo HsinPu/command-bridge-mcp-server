@@ -76,13 +76,13 @@ jobs:
           sudo groupadd --system command-bridge
           sudo useradd --system --gid command-bridge --home-dir /var/empty/command-bridge --shell /usr/sbin/nologin --no-create-home command-bridge
           sudo install -d -m 0555 /var/empty/command-bridge
-          sudo install -d -m 0755 /opt/command-bridge/runtime/current/bin
-          sudo install -d -m 0755 /opt/command-bridge/current/dist
+          sudo install -d -m 0755 /usr/local/lib/command-bridge/runtime/current/bin
+          sudo install -d -m 0755 /usr/local/lib/command-bridge/current/dist
           sudo install -d -m 0700 /etc/command-bridge
           sudo install -d -m 0750 -o command-bridge -g command-bridge /var/lib/command-bridge/work
-          sudo ln -s "$(command -v node)" /opt/command-bridge/runtime/current/bin/node
+          sudo ln -s "$(command -v node)" /usr/local/lib/command-bridge/runtime/current/bin/node
           sudo install -m 0600 /dev/null /etc/command-bridge/command-bridge.env
-          sudo install -m 0644 /dev/null /opt/command-bridge/current/dist/index.js
+          sudo install -m 0644 /dev/null /usr/local/lib/command-bridge/current/dist/index.js
 
       - name: Verify systemd unit
         if: runner.os == 'Linux'
@@ -94,7 +94,7 @@ jobs:
           rm -f "$installer_unit"
 
   publish-channel:
-    needs: [test, service-smoke]
+    needs: [test, service-smoke, linux-layout-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
@@ -139,3 +139,21 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: .\scripts\windows\tests\service-smoke.ps1
+
+  linux-layout-smoke:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Cross-filesystem program migration
+        run: sudo unshare -m -- bash -c 'mount --make-rprivate /; LAYOUT_CROSS_DEVICE=1 bash scripts/linux-systemd/tests/layout.test.sh'
+      - name: Old program roots, rollback, managed update and complete uninstall
+        run: bash scripts/linux-systemd/tests/layout-service-smoke.sh

@@ -57,6 +57,9 @@ test("Linux diagnostic activation restores prior assets and numeric UID grants o
   const script=join(root,"fixture.sh");
   writeFileSync(script,`#!/bin/bash
 set -euo pipefail
+# This is also executed by the installer's build account with a minimal PATH.
+# Validation tools have fixed system locations; no host privilege is granted.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 source '${modulePath}'
 fail() { echo "$*" >&2; exit 1; }
 require_command() { command -v "$1" >/dev/null; }
@@ -65,6 +68,9 @@ restore_selinux_path() { return 0; }
 # Model root ownership in a disposable non-root directory; never touch host assets.
 stat() { if [[ "$1" == -c && "$2" == %u ]]; then echo 0; else command stat "$@"; fi; }
 install() { local -a args=(); while (($#)); do if [[ "$1" == -o || "$1" == -g ]]; then shift 2; else args+=("$1"); shift; fi; done; command install "\${args[@]}"; }
+# Recreate fixture-owned read-only destinations to model root's overwrite.
+# Preserve the copied mode; the production helper still uses ordinary cp -p.
+cp() { command cp --remove-destination "$@"; }
 TEMP_DIR='${join(root,"first")}'
 mkdir -p "$TEMP_DIR/source/packaging/linux" "$TEMP_DIR/source/scripts/diagnostics"
 echo first > "$TEMP_DIR/source/packaging/linux/diagnostic-reader"
@@ -93,6 +99,6 @@ grep -F '#777 ALL=(root) NOPASSWD: NOSETENV:' '${join(sudoers,"command-bridge-di
 chmod 0777 '${join(asset,"reader")}'
 if (install_diagnostic_assets) >/dev/null 2>&1; then exit 1; fi
 `);
-  execFileSync("/bin/bash",[script],{encoding:"utf8",timeout:15000});
+  execFileSync("/bin/bash",[script],{encoding:"utf8",timeout:15000,env:{...process.env,PATH:"/usr/bin:/bin"}});
  }finally{rmSync(root,{recursive:true,force:true});}
 });

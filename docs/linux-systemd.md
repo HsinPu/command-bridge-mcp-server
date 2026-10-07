@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.5.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.6.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -10,7 +10,7 @@ The Linux installer is intended for a regular glibc-based server where systemd i
 - Linux kernel 4.18 or newer, glibc 2.28 or newer, and libstdc++ 6.0.25 or newer, matching the [official Node.js 24 platform baseline](https://github.com/nodejs/node/blob/main/BUILDING.md#platform-list)
 - Alpine and other musl systems are not supported
 - systemd running as PID 1
-- At least 400 MB free under `/opt`
+- At least 400 MB free on the filesystem containing `/usr/local/lib/command-bridge`, plus space for a full copy of any old program deployment during migration; `/tmp` also needs room for downloads and the isolated build
 - Outbound HTTPS access to `nodejs.org`, `github.com`, and the npm registry
 - Standard administration tools including `curl`, `tar`, `gzip`, `sha256sum`, `flock`, `useradd`, `userdel`, `groupdel`, `pgrep`, and `runuser`
 - <code>sudo</code>, <code>stat</code>, and <code>rmdir</code> at their normal system paths; both account modes also need <code>visudo</code> and <code>/usr/bin/journalctl</code> for the fixed diagnostic reader; dedicated-account mode additionally provisions its Audit reader
@@ -48,7 +48,7 @@ With the default policies, `rm` and `sudo -n rm` are rejected, and sudo operatio
 
 ## Temporary files and failed installations
 
-The copy-ready commands use a subshell EXIT trap to remove the downloaded bootstrap script even when curl or installation fails; they do not replace traps in your interactive shell. Bootstrap source archives, build files and the isolated npm cache are removed on normal exit. Runtime/release `.new.<pid>` directories are tracked before creation and removed on exit only when their parent is a managed deployment directory and their suffix matches this invocation; symlinks and unrelated paths are rejected. Promoted runtimes/releases, previous versions, tokens and work data are retained. Configuration restoration failures are reported without preventing temporary-file cleanup. Cleanup errors are reported; SIGKILL, power loss and filesystem failures can leave files, and old remnants are not swept automatically.
+The copy-ready commands use a subshell EXIT trap to remove the downloaded bootstrap script even when curl or installation fails; they do not replace traps in your interactive shell. Bootstrap source archives, build files and the isolated npm cache are removed on normal exit. Runtime/release `.new.<pid>` directories are tracked before creation and removed on exit only when their parent is a managed deployment directory and their suffix matches this invocation; symlinks and unrelated paths are rejected. Program relocation also tracks and removes its own `.command-bridge-migrate.*` staging directory on failure. Promoted runtimes/releases, previous versions, tokens and work data are retained. Configuration restoration failures are reported without preventing temporary-file cleanup. Cleanup errors are reported; SIGKILL, power loss and filesystem failures can leave temporary files. Uninstall checks managed program roots and migration backups, but never sweeps arbitrary temporary remnants.
 
 ## Installer-account mode
 
@@ -94,7 +94,7 @@ The installer performs these steps:
 3. Downloads pinned Node.js 24.18.0 and verifies its official SHA-256 checksum.
 4. Uses the source archive fixed to the CI-verified commit SHA.
 5. Creates a unique temporary build account, runs `npm ci --ignore-scripts`, TypeScript compilation, and tests with a clean environment and distinct empty user/global npm configuration files, then freezes ownership and removes that account.
-6. Installs immutable runtime and application release directories under `/opt`.
+6. Stages any old program migration and installs immutable runtime and application release directories under `/usr/local/lib/command-bridge`, preserving originals until activation is verified.
 7. Creates the low-privilege <code>command-bridge</code> account in default mode and a root-only environment file. In installer-account mode, it creates only the policy-reader group and uses the original sudo login account with separate private file-Audit state.
 8. In default mode, verifies the pinned root-owned audit reader, installs it at <code>/usr/local/libexec/command-bridge/audit-reader</code>, validates the exact no-argument sudoers rule with <code>visudo</code>, and confirms the service account can read only this service's Audit JSON messages.
 9. Enables and starts <code>command-bridge.service</code>.
@@ -113,14 +113,28 @@ sudo sed -i 's/^COMMAND_BRIDGE_MAX_TIMEOUT_MS=.*/COMMAND_BRIDGE_MAX_TIMEOUT_MS=3
 
 If the key is absent or the configuration path is customized, add/update it in the actual service configuration before restarting. This does not change the default timeout or execution mode.
 
+## Program relocation from /opt (4.6.0)
+
+The fixed default application/runtime root is `/usr/local/lib/command-bridge`. Use the same bootstrap install and uninstall commands; no directory option or prior uninstall is required. Configuration, policy, work data, installer-account Audit and update records keep their existing locations. The service remains `command-bridge.service`; Windows paths are unchanged.
+
+Before modifying services, the installer inspects the new root and both `/opt/command-bridge` and `/opt/command-bridge-mcp-server`. It validates administrator ownership, non-administrator write permissions, managed release identity, active pointers, mounted subtrees and any compatibility aliases. Two independent real deployments are rejected; no contents are merged. Destination free space is checked on the actual filesystem with room for the copied deployment and the new build. A directory change on the same filesystem does not increase free disk space.
+
+The old program is copied into staging on the destination filesystem, so crossing filesystems is supported without destroying the original. Only managed active release/runtime pointers are rewritten; installed release contents are preserved. After service switching, authenticated readiness, real MCP `hostname`, matching Audit lifecycle, fixed diagnostics and CLI version must succeed. Updater/diagnostic assets, the unit, configuration and CLI pointer are restored on failure before restarting the original program. SELinux labels are restored and verified under the host policy without disabling SELinux or adding broad rules.
+
+Successful migration replaces only existing old program roots with exact links to the new root, then removes the old physical program backup. Fresh installations create no `/opt` aliases. CLI and MCP updates preserve the existing service account, mode, network, token and policy; ordinary reinstall still selects mode from its arguments (the README explicitly selects guarded). The old independent update worker can finish its migration through the compatibility alias and record the resulting SHA.
+
+An interrupted `.migration-backup` is rejected by installation for administrator recovery instead of guessing which deployment is active. Uninstall validates and removes managed backups as well as every verified new/old program root, including independent leftover trees. Unknown directories, unsafe permissions, escaping links and mounted deployment paths stop cleanup before service removal. Default uninstall preserves configuration, token and work/Audit/update records; only `--purge` removes data. It never deletes the installer login account.
+
+The bootstrap prefers the installed uninstaller. After an older uninstaller completes, it checks all roots and managed assets rather than treating that one script's exit status as complete removal. If cleanup remains or the saved uninstaller is missing, it downloads the channel-pinned fallback and checks for remaining assets again. If the verified channel is still too old to remove them, it reports incomplete removal instead of claiming success; help and dry-run previews are exempt from removal assertions. No fallback to unverified main is permitted. See [validation status](validation-status.md) for local versus hosted evidence; service restart/enable checks are not host reboot or Oracle Linux Enforcing verification.
+
 ## Installed layout
 
 Disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
 
 ```text
-/opt/command-bridge/
-├── current -> releases/v4.5.0-<source-sha>
-├── releases/v4.5.0-<source-sha>/
+/usr/local/lib/command-bridge/
+├── current -> releases/v4.6.0-<source-sha>
+├── releases/v4.6.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -257,7 +271,7 @@ Journald retention is a host policy. This installer does not change global journ
 
 ## Uninstall
 
-The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes <code>/opt/command-bridge</code>:
+The default one-command uninstall stops and disables the service, removes <code>/etc/systemd/system/command-bridge.service</code>, removes the audit reader and its restricted sudoers file, reloads systemd, and deletes all verified program roots at <code>/usr/local/lib/command-bridge</code>, <code>/opt/command-bridge</code> and <code>/opt/command-bridge-mcp-server</code>, their managed migration backups and exact compatibility aliases:
 
 ```bash
 (uninstaller="$(mktemp)" && trap 'rm -f -- "${uninstaller}"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "${uninstaller}" && sudo bash "${uninstaller}" --uninstall --yes)
