@@ -100,9 +100,17 @@ if sudo bash "$root/scripts/linux-systemd/install.sh"; then echo 'Expected migra
 [[ "$(readlink /opt/command-bridge/current)" == "$old" ]]
 sudo mv "$config.backup" "$config"
 sudo bash /opt/command-bridge/current/uninstall.sh --yes
+sudo test ! -e /etc/systemd/system/command-bridge-update.service
+sudo test ! -e /etc/sudoers.d/command-bridge-update
+sudo test ! -e /usr/local/libexec/command-bridge-update
+sudo test -f /var/lib/command-bridge-update/latest.json
 sudo test -f "$config"
 sudo test -f /var/lib/command-bridge/work/preserved
 sudo bash "$root/scripts/linux-systemd/install.sh"
+# The intentional reinstall selected the repository SHA; snapshot that baseline.
+old=$(readlink /opt/command-bridge/current)
+old_info=$(sudo sha256sum /opt/command-bridge/current/install-info.json)
+before_refresh=$(sudo sha256sum "$config")
 
 # A failed switch must have started the login-account candidate before the
 # dedicated service, journal reader and saved token are considered restored.
@@ -126,11 +134,12 @@ sudo test -f "$work/preserved"
 sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config"
 
 sudo bash /opt/command-bridge/current/uninstall.sh --purge --yes
+sudo test ! -e /var/lib/command-bridge-update
 [[ ! -e /opt/command-bridge ]]
 sudo test ! -e "$config"
 
 # Opt-in installer identity: file Audit, unrestricted commands, and only the
-# login account's existing non-interactive sudo rights. No sudoers grant is added.
+# login account's existing non-interactive sudo rights plus the fixed updater grant.
 login_uid=$(id -u)
 [[ "$login_uid" != 0 ]]
 [[ "$(sudo -n /usr/bin/id -u)" == 0 ]]
@@ -143,6 +152,9 @@ sudo grep -Fxq 'COMMAND_BRIDGE_AUDIT_BACKEND=file' "$config"
 sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted' "$config"
 sudo test ! -e /etc/sudoers.d/command-bridge-audit-reader
 sudo "$node" /opt/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+# Verify the fixed numeric-UID request grant and update as the login identity.
+sudo env GITHUB_ACTIONS=true "$node" scripts/tests/managed-update-fixture.mjs linux "$update_archive" "$version" "$(printf '5%.0s' {1..40})"
+sudo env GITHUB_ACTIONS=true "$node" scripts/tests/verify-managed-update.mjs "$config" "$(printf '5%.0s' {1..40})"
 # A harmless new sentinel under the protected configuration root must never be created.
 probe="/etc/command-bridge/.self-protection-probe-$$"
 sudo test ! -e "$probe"

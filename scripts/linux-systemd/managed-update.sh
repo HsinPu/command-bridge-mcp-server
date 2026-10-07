@@ -52,7 +52,7 @@ install_managed_update() {
   visudo -cf "$TEMP_DIR/update-sudoers" >/dev/null || fail "Invalid managed update sudo rule."
   install -m 0440 -o root -g root "$TEMP_DIR/update-sudoers" /etc/sudoers.d/command-bridge-update
   for target in "$asset_root" /etc/systemd/system/command-bridge-update.service /etc/sudoers.d/command-bridge-update; do
-    restore_selinux_path "$target" || fail "Cannot label managed update assets."
+    if [[ "$target" == "$asset_root" ]]; then restore_selinux_path "$target" 1; else restore_selinux_path "$target"; fi || fail "Cannot label managed update assets."
   done
   systemctl daemon-reload
   systemctl show command-bridge-update.service --property=LoadState --value | grep -Fxq loaded || fail "Managed update unit did not load."

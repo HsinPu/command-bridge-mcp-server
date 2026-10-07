@@ -64,7 +64,7 @@ test("control invocation bounds output/time and does not inherit Node injection 
 test("recognizable direct worker changes/triggers remain blocked by command self-protection", () => {
   for (const command of ["sudo /usr/local/libexec/command-bridge-update/request", "sudo systemctl start command-bridge-update.service", "sudo rm /var/lib/command-bridge-update/latest.json"])
     assert.throws(() => assertNoSelfModification(command, "/tmp", { platform: "linux" }), { code: "SELF_MODIFICATION_BLOCKED" });
-  for (const command of ['powershell -File "C:\\Program Files\\CommandBridgeUpdate\\request.ps1"', 'schtasks /run /tn CommandBridgeUpdate', 'del C:\\ProgramData\\CommandBridgeUpdate\\latest.json'])
+  for (const command of ['powershell -File "C:\\Program Files\\CommandBridgeUpdate\\request.ps1"', 'schtasks /run /tn CommandBridgeUpdate', 'schtasks /run /tn:CommandBridgeUpdate', 'Start-ScheduledTask -TaskName:CommandBridgeUpdate', 'del C:\\ProgramData\\CommandBridgeUpdate\\latest.json'])
     assert.throws(() => assertNoSelfModification(command, "C:\\work", { platform: "win32" }), { code: "SELF_MODIFICATION_BLOCKED" });
 });
 test("root controller accepts only a unique, literal boolean setting and complete SHA metadata", async () => {
@@ -144,4 +144,37 @@ test("real Windows request script retains numeric diagnostics with restricted en
   const ps=path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe");
   await assert.rejects(runUpdateControl(ps,["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",path.join(fixture,"request.ps1")]),/control-stage=2/);
  } finally {await fs.rm(fixture,{recursive:true,force:true});}
+});
+
+
+test("Windows task records atomically replace state and refuse publication after Audit failure", {skip:process.platform!=="win32"}, async()=>{
+ const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path");
+ const fixture=await fs.mkdtemp(path.join(os.tmpdir(),"cb-state-regression-"));
+ try {
+  await fs.copyFile("scripts/managed-update/common.ps1",path.join(fixture,"common.ps1"));
+  await fs.writeFile(path.join(fixture,"probe.ps1"),`param([string]$Fixture)
+. ([IO.Path]::Combine($PSScriptRoot,'common.ps1'))
+$UpdateRoot=$Fixture
+$job=@{jobId=[guid]::NewGuid().ToString();state='accepted'}
+Write-UpdateRecord $job
+$job.state='running'; Write-UpdateRecord $job
+$job.state='failed'; Write-UpdateRecord $job
+$latest=Read-UpdateRecord ''
+if ($latest.state -ne 'failed' -or $latest.jobId -ne $job.jobId) { throw 'Atomic state mismatch' }
+if (@([IO.File]::ReadAllLines((Join-Path $Fixture 'audit.jsonl'))).Count -ne 3) { throw 'Audit lifecycle mismatch' }
+Remove-Item -LiteralPath (Join-Path $Fixture 'audit.jsonl')
+$null=[IO.Directory]::CreateDirectory((Join-Path $Fixture 'audit.jsonl'))
+$new=@{jobId=[guid]::NewGuid().ToString();state='accepted'}
+$rejected=$false
+try { Write-UpdateRecord $new } catch { $rejected=$true }
+if (-not $rejected -or (Test-Path -LiteralPath (Join-Path $Fixture ($new.jobId+'.json')))) { throw 'Audit failure published state' }
+if ((Read-UpdateRecord '').jobId -ne $job.jobId) { throw 'Audit failure replaced latest record' }
+Write-Output 'atomic-state-and-audit-ok'
+`);
+  const ps=path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe");
+  assert.equal((await runUpdateControl(ps,["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",path.join(fixture,"probe.ps1"),"-Fixture",fixture])).trim(),"atomic-state-and-audit-ok");
+ } finally {
+  if (!path.resolve(fixture).startsWith(path.resolve(os.tmpdir())+path.sep+"cb-state-regression-")) throw Error("Unsafe temporary cleanup");
+  await fs.rm(fixture,{recursive:true,force:true});
+ }
 });

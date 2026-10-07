@@ -28,7 +28,7 @@ function Write-UpdateRecord($Job) {
     $temp = Join-Path $UpdateRoot ('.' + [guid]::NewGuid())
     [IO.File]::WriteAllText($temp, $json, (New-Object Text.UTF8Encoding($false)))
     $dest = Join-Path $UpdateRoot $name
-    if (Test-Path -LiteralPath $dest) { [IO.File]::Replace($temp, $dest, $null) } else { [IO.File]::Move($temp, $dest) }
+    if (Test-Path -LiteralPath $dest) { [IO.File]::Replace($temp, $dest, [NullString]::Value) } else { [IO.File]::Move($temp, $dest) }
   }
 }
 function Read-InstalledIdentity {

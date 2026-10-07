@@ -7,7 +7,7 @@ CommandBridge MCP 是跨平台的 MCP Server，讓 MCP 用戶端透過本機 std
 - 技術：TypeScript、Node.js、ES modules、MCP SDK、Express、Zod。
 - 2026-09-22 初次檢視時版本為 0.3.0（pre-1.0）；目前版本以 package.json 為準。
 - Node.js 需求為 >=20；目前 CI 使用 24.18.0，涵蓋 Ubuntu 與 Windows。
-- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events，以及 3.1.0 新增的 command_bridge_upload_file、command_bridge_download_file。
+- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events，以及 3.1.0 新增的 command_bridge_upload_file、command_bridge_download_file，以及 4.4.0 新增的 command_bridge_update、command_bridge_get_update_status。
 - 預設使用 stdio 與 allowlist 執行模式；HTTP 模式需要至少 32 字元的 Bearer Token。
 
 ## 程式結構

@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.4.5 — 2026-10-07
+
+PATCH: correct Windows PowerShell atomic record replacement and update integration-test baselines.
+
+- Pass an explicit null string to File.Replace; native lifecycle tests cover repeated replacement and Audit failure preventing state publication.
+- Refresh Linux rollback expectations after an intentional different-SHA reinstall; require a second real MCP update under the installer-account identity.
+- Block recognizable direct PowerShell/Schtasks updater triggers while retaining readonly task queries.
+- Verify uninstall/purge updater retention and recursively restore labels only on protected updater program assets.
+
 ## 4.4.4 — 2026-10-07
 
 PATCH: avoid slow/user-controlled PowerShell module discovery in updater scripts.

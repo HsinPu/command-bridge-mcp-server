@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.4, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.5, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.5 validation
+
+4.4.4 general jobs passed. Linux proved a genuine different-SHA MCP update, restart/reconnect, configuration/Audit preservation and saved disable enforcement, then exposed a stale rollback baseline after intentional reinstall. Windows proved SYSTEM-task acceptance and exposed File.Replace receiving an empty backup path; the error was reproduced locally with Windows PowerShell. Correct explicit null-string binding and refresh the baseline; add atomic/Audit-failure and installer-account service coverage. Local Windows npm test passed 108/125 with 17 platform/elevation skips, including real atomic replacement, fail-closed Audit publication and direct scheduled-task protection. PowerShell/Bash syntax, strict-umask fixture and git diff --check passed. WSL full tests were not rerun for this patch; the last full WSL result was 4.4.3 (110/124, 14 skips). Hosted checks are pending at local validation time; channel remains 4.3.3.
 
 ## 4.4.4 validation
 

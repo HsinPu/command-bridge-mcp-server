@@ -93,7 +93,8 @@ export function assertNoSelfModification(command: string, cwd: string, options: 
       if (name.toLowerCase() === "request" && overlaps(segment[head] ?? "")) reject();
       if (/^(?:powershell|pwsh|bash|sh)$/i.test(name) && args.some(arg => /(?:^|[/\\])(?:request\.ps1|worker\.ps1|update-request)$/i.test(arg) && overlaps(arg))) reject();
       if (/^systemctl$/i.test(name) && args.some(arg => /^command-bridge-update(?:\.service)?$/i.test(arg)) && args.some(arg => /^(?:start|restart|stop|edit|disable|enable|mask|unmask)$/i.test(arg))) reject();
-      if (/^schtasks$/i.test(name) && args.some(arg => /^\\?CommandBridgeUpdate$/i.test(arg)) && args.some(arg => /^\/(?:run|end|change|delete|create)$/i.test(arg))) reject();
+      if (/^schtasks$/i.test(name) && args.some(arg => /^(?:\/tn:)?\\?CommandBridgeUpdate$/i.test(arg)) && args.some(arg => /^\/(?:run|end|change|delete|create)$/i.test(arg))) reject();
+      if (/^(?:start|stop|set|register|unregister|enable|disable)-scheduledtask$/i.test(name) && args.some(arg => /^(?:-taskname:)?\\?CommandBridgeUpdate$/i.test(arg))) reject();
       if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/i.test(name) && args[0]?.toLowerCase() === "update" &&
           !(args.length === 2 && args[1]?.toLowerCase() === "--check")) reject();
       if (/^(?:bash|sh|powershell|pwsh)$/i.test(name) && args.some(arg =>
