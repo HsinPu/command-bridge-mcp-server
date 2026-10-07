@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AUDIT_EVENT_NAME,
+  MAX_AUDIT_EVENT_LIMIT,
+  buildWindowsAuditEnvironment,
   LinuxJournalAuditLog,
   WindowsEventLogAuditLog,
   createAuditEvent,
@@ -216,4 +218,88 @@ test("audit sink write failures are surfaced without embedding raw command data"
       return true;
     }
   );
+});
+
+
+function recentAuditEvents(count: number) {
+  return Array.from({length:count}, (_,index)=>createAuditEvent({
+    auditId:`audit-${index}`, timestamp:new Date(Date.UTC(2026,9,7)+index*1000).toISOString(),
+    phase:"completed", command:"echo --password secret-value", executionMode:"allowlist", source:"stdio"
+  }));
+}
+
+test("native Audit backends return 1,000 newest events and keep exact hasMore boundaries", async()=>{
+  assert.equal(MAX_AUDIT_EVENT_LIMIT,1000);
+  for (const count of [100,1000,1001]) {
+    const output=recentAuditEvents(count).map(serializeAuditEvent).join("\n");
+    for (const audit of [new LinuxJournalAuditLog({runReader:async()=>output}),new WindowsEventLogAuditLog({runScript:async()=>output})]) {
+      const result=await audit.list(1000);
+      assert.equal(result.events.length,Math.min(count,1000));
+      assert.equal(result.events[0].auditId,`audit-${count-1}`);
+      assert.equal(result.events.at(-1)?.auditId,`audit-${Math.max(0,count-1000)}`);
+      assert.equal(result.hasMore,count>1000);
+      assert.doesNotMatch(JSON.stringify(result),/secret-value/);
+    }
+  }
+});
+
+test("all Audit backends reject out-of-range counts before reading storage", async()=>{
+ const {FileAuditLog}=await import("./fileAuditLog.js");
+ let reads=0;
+ const file=new FileAuditLog("unused-invalid-audit-directory");
+ for(const audit of [new LinuxJournalAuditLog({runReader:async()=>{reads++;return ""}}),new WindowsEventLogAuditLog({runScript:async()=>{reads++;return ""}}),file]) {
+  for (const limit of [0,-1,1.5,1001,NaN,Infinity]) await assert.rejects(audit.list(limit),{code:"AUDIT_LIMIT_INVALID"});
+ }
+ assert.equal(reads,0);
+ const {existsSync}=await import("node:fs");
+ assert.equal(existsSync("unused-invalid-audit-directory"),false);
+});
+
+test("file Audit returns 1,000 across rotated files and distinguishes an exact boundary", async()=>{
+ const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path");
+ const {FileAuditLog}=await import("./fileAuditLog.js");
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),"cb-audit-cap-"));
+ try {
+  const events=recentAuditEvents(1001);
+  const older=path.join(directory,"events.jsonl.1");
+  await fs.writeFile(older,events.slice(0,601).map(serializeAuditEvent).join("\n")+"\n",{mode:0o600});
+  await fs.writeFile(path.join(directory,"events.jsonl"),events.slice(601).map(serializeAuditEvent).join("\n")+"\n",{mode:0o600});
+  const audit=new FileAuditLog(directory);
+  const result=await audit.list(1000);
+  assert.equal(result.events.length,1000);
+  assert.equal(result.events[0].auditId,"audit-1000");
+  assert.equal(result.events.at(-1)?.auditId,"audit-1");
+  assert.equal(result.hasMore,true);
+  assert.doesNotMatch(JSON.stringify(result),/secret-value/);
+  await fs.writeFile(older,events.slice(1,601).map(serializeAuditEvent).join("\n")+"\n");
+  assert.equal((await audit.list(1000)).hasMore,false);
+ } finally {
+  if (!path.resolve(directory).startsWith(path.resolve(os.tmpdir())+path.sep+"cb-audit-cap-")) throw Error("Unsafe audit fixture cleanup");
+  await fs.rm(directory,{recursive:true,force:true});
+ }
+});
+
+test("fixed Windows reader requests 1,001 provider records and emits only Audit messages",{skip:process.platform!=="win32"},async()=>{
+ const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path"),child=await import("node:child_process");
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),"cb-reader-cap-"));
+ try {
+  await fs.writeFile(path.join(directory,"records.json"),JSON.stringify(recentAuditEvents(1001).map(serializeAuditEvent)));
+  await fs.copyFile("scripts/windows/audit/read-audit-events.ps1",path.join(directory,"reader.ps1"));
+  await fs.writeFile(path.join(directory,"probe.ps1"),`function Get-WinEvent {
+ param($FilterHashtable, [int]$MaxEvents, $ErrorAction)
+ if ($FilterHashtable.LogName -ne 'Application' -or $FilterHashtable.ProviderName -ne 'CommandBridgeMCP') {throw 'Unexpected reader scope'}
+ if ($MaxEvents -ne 1001) {throw 'Reader window is too small'}
+ $messages=[IO.File]::ReadAllText([IO.Path]::Combine($PSScriptRoot,'records.json')) | ConvertFrom-Json
+ foreach ($message in $messages) { [pscustomobject]@{Properties=@([pscustomobject]@{Value=$message});Message='unused'} }
+}
+. ([IO.Path]::Combine($PSScriptRoot,'reader.ps1'))
+`);
+  const systemRoot=process.env.SystemRoot!;
+  const result=child.spawnSync(path.join(systemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",path.join(directory,"probe.ps1")],{encoding:"utf8",windowsHide:true,timeout:15000,maxBuffer:4*1024*1024,env:buildWindowsAuditEnvironment(systemRoot)});
+  assert.equal(result.status,0,result.stderr);
+  assert.equal(parseWindowsEventLogLines(result.stdout).length,1001);
+ } finally {
+  if (!path.resolve(directory).startsWith(path.resolve(os.tmpdir())+path.sep+"cb-reader-cap-")) throw Error("Unsafe reader fixture cleanup");
+  await fs.rm(directory,{recursive:true,force:true});
+ }
 });

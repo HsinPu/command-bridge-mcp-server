@@ -77,3 +77,26 @@ test("audit query tool is read-only and returns the executor audit list", async 
   assert.equal(requestedLimit, 1);
   assert.deepEqual(result.structuredContent, { events: [event], hasMore: false });
 });
+
+
+test("MCP Audit schema accepts 1,000, preserves default 50 and rejects 1,001 before backend access",async()=>{
+ const {Client}=await import("@modelcontextprotocol/sdk/client/index.js");
+ const {McpServer}=await import("@modelcontextprotocol/sdk/server/mcp.js");
+ const {InMemoryTransport}=await import("@modelcontextprotocol/sdk/inMemory.js");
+ const seen:number[]=[];
+ const audit:AuditLog={async write(){},async list(limit){seen.push(limit);return {events:[],hasMore:false}}};
+ const cfg=createConfig(), executor=new CommandExecutor(cfg,audit);
+ const server=new McpServer({name:"audit-cap",version:"test"}),client=new Client({name:"audit-client",version:"test"});
+ registerCommandBridgeTools(server,cfg,executor);
+ const [a,b]=InMemoryTransport.createLinkedPair();
+ try {
+  await server.connect(b);await client.connect(a);
+  for (const args of [{},{limit:1000}]) {
+   const result=await client.callTool({name:"command_bridge_list_audit_events",arguments:args});
+   assert.equal(result.isError,false);
+  }
+  const invalid=await client.callTool({name:"command_bridge_list_audit_events",arguments:{limit:1001}});
+  assert.equal(invalid.isError,true);
+  assert.deepEqual(seen,[50,1000]);
+ } finally {await client.close();await server.close();await executor.shutdown();}
+});

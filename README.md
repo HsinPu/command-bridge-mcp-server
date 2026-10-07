@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.4.6-blue)
+![Version](https://img.shields.io/badge/version-4.4.7-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -150,7 +150,7 @@ Windows: run `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update -
 | --- | --- |
 | `command_bridge_get_system_info` | Read host information and effective shell, command, working-directory, and concurrency policies. |
 | `command_bridge_run_command` | Execute one command and return stdout, stderr, exit code, duration, and timeout/truncation status. |
-| `command_bridge_list_audit_events` | Read recent audit events: 50 by default, up to 100 per request. |
+| `command_bridge_list_audit_events` | Read recent audit events: 50 by default, up to 1,000 per request. |
 | `command_bridge_upload_file` | Opt-in upload of a SHA-256 verified file to the private transfer directory; no overwrite. |
 | `command_bridge_download_file` | Opt-in download of a regular file with size and SHA-256 metadata. |
 | `command_bridge_update` | Request a fixed CI-channel service update; returns an independent job ID. |

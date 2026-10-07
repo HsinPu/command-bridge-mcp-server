@@ -129,7 +129,7 @@ test("Windows audit scripts use only the Application CommandBridgeMCP source", (
   assert.match(reader, /Get-WinEvent -FilterHashtable @\{/);
   assert.match(reader, /LogName = "Application"/);
   assert.match(reader, /ProviderName = "CommandBridgeMCP"/);
-  assert.match(reader, /-MaxEvents 101/);
+  assert.match(reader, /-MaxEvents 1001/);
   assert.match(reader, /\$record\.Properties\[0\]\.Value/);
   assert.doesNotMatch(reader, /Get-EventLog|wevtutil/);
 });

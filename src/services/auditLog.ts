@@ -10,10 +10,10 @@ import type { ExecutionMode, ShellKind } from "./commandPolicy.js";
 export const AUDIT_EVENT_NAME = "command_bridge.audit";
 export const AUDIT_SCHEMA_VERSION = 1;
 export const DEFAULT_AUDIT_EVENT_LIMIT = 50;
-export const MAX_AUDIT_EVENT_LIMIT = 100;
+export const MAX_AUDIT_EVENT_LIMIT = 1_000;
 
 const LINUX_AUDIT_READER = "/usr/local/libexec/command-bridge/audit-reader";
-const LINUX_JOURNAL_LINE_LIMIT = 1_000;
+const LINUX_JOURNAL_LINE_LIMIT = MAX_AUDIT_EVENT_LIMIT + 1;
 const WINDOWS_EVENT_LINE_LIMIT = MAX_AUDIT_EVENT_LIMIT + 1;
 const MAX_AUDIT_READER_OUTPUT_BYTES = 4 * 1024 * 1024;
 const shellKinds = new Set<ShellKind>(["bash", "sh", "powershell", "cmd"]);
@@ -244,7 +244,7 @@ export class LinuxJournalAuditLog implements AuditLog {
   }
 
   async list(limit: number): Promise<AuditEventList> {
-    const normalizedLimit = normalizeLimit(limit);
+    const normalizedLimit = normalizeAuditEventLimit(limit);
     let output: string;
 
     try {
@@ -278,7 +278,7 @@ export class WindowsEventLogAuditLog implements AuditLog {
   }
 
   async list(limit: number): Promise<AuditEventList> {
-    const normalizedLimit = normalizeLimit(limit);
+    const normalizedLimit = normalizeAuditEventLimit(limit);
     let output: string;
 
     try {
@@ -311,12 +311,12 @@ function limitEvents(
   };
 }
 
-function normalizeLimit(limit: number): number {
+export function normalizeAuditEventLimit(limit: number): number {
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_AUDIT_EVENT_LIMIT) {
     throw new AppError(
       "AUDIT_LIMIT_INVALID",
-      "Audit event limit must be an integer between 1 and 100.",
-      "Choose a limit from 1 through 100."
+      `Audit event limit must be an integer between 1 and ${MAX_AUDIT_EVENT_LIMIT}.`,
+      `Choose a limit from 1 through ${MAX_AUDIT_EVENT_LIMIT}.`
     );
   }
   return limit;

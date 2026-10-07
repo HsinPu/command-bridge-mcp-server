@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.6, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.7, supporting up to 1,000 events per Audit query, default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.7 validation
+
+Increase the existing Audit query cap to 1,000 while preserving the default of 50. Native readers retain bounded windows/deadlines/bytes; file results no longer silently clamp at 100. Local Windows npm test passed 114/131 with 17 platform/elevation skips; WSL Ubuntu using checksum-verified Node.js 24.18.0 also passed 114/131 with 17 platform skips. Coverage includes actual MCP schema validation/defaults, all backend count boundaries, ordering/secret masking, rotated file reads, native Windows script execution with a controlled event provider, the fixed Linux helper and deployment digest consistency. All PowerShell/Bash syntax and git diff --check passed. Hosted CI and real service lifecycle validation have not run for this version, which has not been pushed or published; the last fully verified channel is 4.4.6 (`484e3ea5fc9ab528f67dca91c4d018ea0da59fef`, CI run 37587803406). Oracle Linux SELinux Enforcing and actual reboot are not claimed.
 
 ## 4.4.6 validation
 

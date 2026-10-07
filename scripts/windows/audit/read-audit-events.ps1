@@ -11,7 +11,7 @@ Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Diagnos
 $records = Get-WinEvent -FilterHashtable @{
   LogName = "Application"
   ProviderName = "CommandBridgeMCP"
-} -MaxEvents 101 -ErrorAction Stop
+} -MaxEvents 1001 -ErrorAction Stop
 
 foreach ($record in $records) {
   # Write-EventLog stores its supplied string as an insertion value. Prefer it

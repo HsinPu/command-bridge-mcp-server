@@ -12,5 +12,5 @@ set -euo pipefail
   --no-pager \
   --unit command-bridge.service \
   --output=cat \
-  --lines=1000 |
+  --lines=1001 |
   /usr/bin/awk '/^{"schemaVersion":1,"event":"command_bridge\.audit",/'

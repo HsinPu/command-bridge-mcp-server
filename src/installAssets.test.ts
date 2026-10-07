@@ -84,7 +84,7 @@ test("installer pins and deploys the fixed Linux audit reader", () => {
   assert.match(auditReader.toString("utf8"), /set -euo pipefail/);
   assert.match(auditReader.toString("utf8"), /--unit command-bridge\.service/);
   assert.match(auditReader.toString("utf8"), /--output=cat/);
-  assert.match(auditReader.toString("utf8"), /--lines=1000/);
+  assert.match(auditReader.toString("utf8"), /--lines=1001/);
   assert.match(auditReader.toString("utf8"), /\/usr\/bin\/awk/);
 });
 
@@ -100,7 +100,8 @@ test("Linux audit reader accepts empty journals, filters logs, and propagates re
     for (const scenario of [
       { body: "exit 0", status: 0, output: "" },
       { body: `printf '%s\\n' 'ordinary log' '${event}' 'other log'`, status: 0, output: event + "\n" },
-      { body: "echo 'journal unavailable' >&2; exit 7", status: 7, output: "" }
+      { body: "echo 'journal unavailable' >&2; exit 7", status: 7, output: "" },
+      { body: `case " $* " in *" --lines=1001 "*) ;; *) exit 9;; esac; i=0; while [ "$i" -lt 1001 ]; do printf '%s\\n' '${event}'; i=$((i+1)); done`, status: 0, output: (event + "\n").repeat(1001) }
     ]) {
       writeFileSync(journal, "#!/bin/sh\n" + scenario.body + "\n", { mode: 0o700 });
       const result = spawnSync("bash", [helper], { encoding: "utf8", timeout: 5000 });

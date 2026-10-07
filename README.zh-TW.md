@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.4.6-blue)
+![Version](https://img.shields.io/badge/version-4.4.7-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -150,7 +150,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 | --- | --- |
 | `command_bridge_get_system_info` | 取得主機資訊及目前的 Shell、指令白名單、工作目錄與並行限制。 |
 | `command_bridge_run_command` | 執行一個指令，回傳 stdout、stderr、exit code、耗時與逾時／截斷狀態。 |
-| `command_bridge_list_audit_events` | 查詢最近的 Audit 事件，預設 50 筆，最多 100 筆。 |
+| `command_bridge_list_audit_events` | 查詢最近的 Audit 事件，預設 50 筆，最多 1,000 筆。 |
 | `command_bridge_upload_file` | 明確啟用後，上傳 SHA-256 驗證的檔案至私有傳輸目錄；不覆寫。 |
 | `command_bridge_download_file` | 明確啟用後，下載一般檔案並回傳大小與 SHA-256。 |
 | `command_bridge_update` | 請求固定 CI channel 的服務更新，回傳獨立任務 ID。 |

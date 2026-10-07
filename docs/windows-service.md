@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 4.4.6; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 4.4.7; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
@@ -127,7 +127,7 @@ The MCP-side equivalent is the read-only <code>command_bridge_list_audit_events<
 { "limit": 50 }
 ~~~
 
-The reader is fixed to the <code>CommandBridgeMCP</code> Application provider and returns at most 100 events per call. It does not accept Event Log query text, an Event Log name, or a provider name from the MCP client. See Microsoft’s [Get-WinEvent reference](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent?view=powershell-7.5).
+The reader is fixed to the <code>CommandBridgeMCP</code> Application provider and returns at most 1,000 events per MCP call (50 by default); the fixed reader fetches up to 1,001 records to detect more available events. Use `{"limit":1000}` for the increased count or `{}` for the default. The existing five-second Audit deadline and 4 MiB native-reader output limit remain in force; long records or an unavailable backend may still make a query fail. This does not add pagination or complete historical export. It does not accept Event Log query text, an Event Log name, or a provider name from the MCP client. See Microsoft’s [Get-WinEvent reference](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent?view=powershell-7.5).
 
 Windows Application Event Log retention is controlled by the host’s Event Log policy. The installer does not modify global retention settings. These events are operational audit evidence, not a signed or tamper-evident receipt chain.
 

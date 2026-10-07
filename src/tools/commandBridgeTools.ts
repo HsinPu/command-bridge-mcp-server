@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { toErrorPayload } from "../errors/AppError.js";
-import { DEFAULT_AUDIT_EVENT_LIMIT } from "../services/auditLog.js";
+import { DEFAULT_AUDIT_EVENT_LIMIT, MAX_AUDIT_EVENT_LIMIT } from "../services/auditLog.js";
 import { CommandExecutor } from "../services/commandExecutor.js";
 import { getSystemInfo } from "../services/systemInfoService.js";
 
@@ -141,9 +141,9 @@ export function registerCommandBridgeTools(
           .number()
           .int()
           .min(1)
-          .max(100)
+          .max(MAX_AUDIT_EVENT_LIMIT)
           .optional()
-          .describe("Maximum number of newest events to return. Defaults to 50.")
+          .describe(`Maximum number of newest events to return (1–${MAX_AUDIT_EVENT_LIMIT}). Defaults to ${DEFAULT_AUDIT_EVENT_LIMIT}.`)
       },
       outputSchema: {
         events: z.array(auditEventSchema),

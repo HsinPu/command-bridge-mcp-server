@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent, type AuditEventList } from "./auditLog.js";
+import { normalizeAuditEventLimit, serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent, type AuditEventList } from "./auditLog.js";
 
 const exec = promisify(execFile);
 export class FileAuditLog implements AuditLog {
@@ -66,6 +66,7 @@ export class FileAuditLog implements AuditLog {
 
   list(limit: number): Promise<AuditEventList> {
     return this.serialize(async () => {
+      const count = normalizeAuditEventLimit(limit);
       await this.prepare();
       const events: CommandAuditEvent[] = [];
       for (let i = 0; i < 5; i++) {
@@ -77,9 +78,8 @@ export class FileAuditLog implements AuditLog {
           try { events.push(...parseWindowsEventLogLines(await handle.readFile("utf8")).reverse()); }
           finally { await handle.close(); }
         } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-        if (events.length > limit) break;
+        if (events.length > count) break;
       }
-      const count = Math.max(1, Math.min(100, Math.trunc(limit)));
       return { events: events.slice(0, count), hasMore: events.length > count };
     });
   }

@@ -36,7 +36,7 @@ readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
 readonly SYSTEMD_UNIT_SHA256="ce8fb105ca99860a6627b5d9086ce731b36f0e48c323f26c80b8ae8148dc6738"
 readonly INSTALLER_UNIT_SHA256="9b1cc2cc158be63113fe5f30d832ab81de8377aceaf5d0d7ca3a2d3047f8519d"
-readonly AUDIT_READER_SHA256="58b2381e2a5ff3284f81c6916fca9d8bac80eaaa836fa2b4b7c851519acc7e49"
+readonly AUDIT_READER_SHA256="7e193ae6d90ab2097ecfecdf1529ce6ec165bd3ac2dd51fe778885c1b4418e6e"
 readonly BUILD_USER="command-bridge-build-$$"
 readonly BUILD_GROUP="${BUILD_USER}"
 

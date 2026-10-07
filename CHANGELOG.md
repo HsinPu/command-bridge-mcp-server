@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.4.7 — 2026-10-07
+
+PATCH: increase the existing Audit query capacity without changing tool inputs, defaults or result shape.
+
+- Raise the maximum `limit` from 100 to 1,000, retaining the default of 50 and rejecting invalid/out-of-range values consistently across backends.
+- Update Windows/journal reader windows to 1,001 records and remove the file backend's former 100-event clamp; retain helper authorization, deadlines, byte limits and secret masking.
+- Cover MCP validation, ordering, boundary/hasMore behavior, rotated files and fixed native readers; synchronize both READMEs and platform guidance.
+
 ## 4.4.6 — 2026-10-07
 
 PATCH: capture Windows native installer streams without treating stderr as a PowerShell exception.

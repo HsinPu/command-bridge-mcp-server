@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.4.6. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.4.7. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -119,8 +119,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.4.6-<source-sha>
-├── releases/v4.4.6-<source-sha>/
+├── current -> releases/v4.4.7-<source-sha>
+├── releases/v4.4.7-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -151,7 +151,7 @@ The earlier service's journal entries remain under `journalctl -u command-bridge
 
 The installer also creates these root-owned audit access assets:
 
-- <code>/usr/local/libexec/command-bridge/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that reads the latest 1,000 service journal entries and uses a fixed filter to emit only CommandBridge Audit JSON. Empty journals succeed; journal read failures propagate through Bash pipefail. Unrelated service logs are not returned.
+- <code>/usr/local/libexec/command-bridge/audit-reader</code> (<code>root:root 0755</code>), a no-argument helper that reads the latest 1,001 service journal entries and uses a fixed filter to emit only CommandBridge Audit JSON. Empty journals succeed; journal read failures propagate through Bash pipefail. Unrelated service logs are not returned.
 - <code>/etc/sudoers.d/command-bridge-audit-reader</code> (<code>root:root 0440</code>), which permits <code>command-bridge ALL=(root) NOPASSWD: /usr/local/libexec/command-bridge/audit-reader ""</code> and nothing else
 
 The service account is not added to <code>sudo</code> or <code>systemd-journal</code> groups.
@@ -247,7 +247,7 @@ sudo journalctl --unit command-bridge.service --output=json --no-pager --lines 1
 sudo journalctl --unit command-bridge.service --no-pager --lines 100
 ~~~
 
-Codex can call the read-only <code>command_bridge_list_audit_events</code> MCP tool with a <code>limit</code> from 1 through 100. The server invokes only the installed fixed reader through non-interactive sudo; it cannot pass journal units, query strings, paths, or other arguments from the MCP client.
+Codex can call the read-only <code>command_bridge_list_audit_events</code> MCP tool with a <code>limit</code> from 1 through 1,000 (50 by default). For example, `{"limit":1000}` requests up to 1,000 recent events; `{}` keeps the default of 50. The fixed reader inspects a bounded recent journal window, so unrelated service entries can reduce the available Audit results. This is not pagination or a complete historical export. The existing five-second deadline and 4 MiB native-reader output limit remain in force; increasing the count does not repair an unavailable Audit backend. The server invokes only the installed fixed reader through non-interactive sudo; it cannot pass journal units, query strings, paths, or other arguments from the MCP client.
 
 In installer-account mode, both writing and reading Audit events use the private file backend and require no Audit reader or sudoers rule. The service account owns the JSONL files, so it can modify or remove them; treat them as operational records, not tamper-proof evidence.
 
