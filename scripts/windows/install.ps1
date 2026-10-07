@@ -679,6 +679,10 @@ try {
   New-Item -ItemType Directory -Path (Join-Path $StagingRoot "runtime") -Force | Out-Null
   Copy-Item -Path (Join-Path $nodeRoot "*") -Destination (Join-Path $StagingRoot "runtime") -Recurse -Force
   Copy-ApplicationPayload $sourceRoot (Join-Path $StagingRoot $ApplicationRelativePath)
+  $cliTemplate = [IO.File]::ReadAllText((Join-Path $sourceRoot 'packaging\windows\command-bridge.cmd'))
+  [IO.File]::WriteAllText((Join-Path $StagingRoot 'command-bridge.cmd'), $cliTemplate.Replace('__APPLICATION_RELATIVE_PATH__', $ApplicationRelativePath), (New-Object System.Text.UTF8Encoding($false)))
+  $cliVersion = (& (Join-Path $StagingRoot 'command-bridge.cmd') --version | Out-String).Trim()
+  if ($LASTEXITCODE -ne 0 -or $cliVersion -ne $PackageVersion) { throw 'Staged CLI version verification failed.' }
   Set-RestrictedAcl $StagingRoot
 
   if ($existingService) {

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# CommandBridge managed version-query launcher.
+set -euo pipefail
+if [[ $# != 1 || ( "$1" != --version && "$1" != -V ) ]]; then
+  printf 'Usage: command-bridge --version | -V\n' >&2
+  exit 2
+fi
+exec "__INSTALL_ROOT__/runtime/current/bin/node" "__INSTALL_ROOT__/current/dist/index.js" "$1"

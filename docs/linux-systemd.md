@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.1.16. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.2.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -119,8 +119,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.1.16-<source-sha>
-├── releases/v4.1.16-<source-sha>/
+├── current -> releases/v4.2.0-<source-sha>
+├── releases/v4.2.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -346,3 +346,9 @@ Use `--guarded` (optionally with `--run-as-installer`) to permit general command
 ### Audit stalls and execution slots
 
 From 4.1.16, a confirmed finished command releases its execution slot before terminal Audit completes; output is still withheld until Audit succeeds. All runtime Audit reads/writes share a serialized guard with a five-second total wait (including queue time) and at most 64 outstanding operations. A deadline, backend failure or capacity failure makes Audit unavailable until service restart; new commands/transfers fail promptly and `/ready` is not ready. `/health` remains a liveness check. Readiness waits at most five seconds and coalesces an unfinished probe. A timed-out filesystem operation may still complete: it remains tracked, expired queued operations are not started, and shutdown waits for actual I/O within its existing 15-second budget. Resolve host storage problems before restarting and inspect the matching Audit lifecycle before retrying; absence of a reply does not prove the command did not run. Do not increase command parallelism to work around a stalled sink. No Docker daemon/container restart or additional process killing is performed.
+
+## Check the installed version
+
+After upgrading to 4.2.0 or later, Linux provides `command-bridge --version` (or `-V`) without sudo. It uses the bundled runtime and currently selected release; it does not verify service health or fetch the latest GitHub version. If `/usr/local/bin` is not on PATH, use `/usr/local/bin/command-bridge --version`.
+
+Windows PowerShell: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" --version`. Windows does not change PATH. npm installations retain `command-bridge-mcp-server --version` and add `command-bridge --version`. The installed launchers accept only version queries; the npm/server entry still starts MCP with no arguments. Version queries do not load service configuration, Token, Audit or listeners. Earlier installations need an upgrade before these commands exist.

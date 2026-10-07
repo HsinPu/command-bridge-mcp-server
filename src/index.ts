@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./config/env.js";
-import { createCommandBridgeServer } from "./server.js";
-import { CommandExecutor } from "./services/commandExecutor.js";
-import { startHttpTransport } from "./transport/httpTransport.js";
+import type { CommandExecutor } from "./services/commandExecutor.js";
+import { version } from "./version.js";
 
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (args.length === 1 && ["--version", "-V"].includes(args[0]!)) {
+    console.log(version);
+    return;
+  }
+  if (args.length) {
+    console.error("Usage: command-bridge [--version|-V] (no arguments starts the MCP server)");
+    process.exitCode = 2;
+    return;
+  }
+  const [{ StdioServerTransport }, { loadConfig }, { createCommandBridgeServer }, { CommandExecutor }, { startHttpTransport }] = await Promise.all([
+    import("@modelcontextprotocol/sdk/server/stdio.js"), import("./config/env.js"), import("./server.js"),
+    import("./services/commandExecutor.js"), import("./transport/httpTransport.js")
+  ]);
   const config = loadConfig();
   const executor = new CommandExecutor(config);
   const readiness = await executor.readiness();

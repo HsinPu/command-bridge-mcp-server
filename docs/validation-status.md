@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.16, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.2.0, adding installed-version queries while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.2.0 validation
+
+Added --version/-V without service/configuration/Audit/SDK startup and the compatible short npm bin alias. Linux adds a guarded root-owned CLI symlink following the selected release, includes label repair and activation version verification, removes new links on rollback and preserves foreign entries on uninstall. Windows stages a root-level bundled-runtime launcher tied to the selected release, verified before activation, with no PATH modification. Final local Windows full npm test passed 91/105 with 14 platform/elevation skips. WSL with checksum-verified Node.js 24.18.0 passed 93/105 with 12 skips, including real bundled-runtime launchers and disposable launcher collision/switch/rollback/uninstall checks. Linux label tests use fake tools, not actual SELinux Enforcing. All Bash/PowerShell syntax and git diff --check passed. Native Windows launcher tests passed both --version and -V. Hosted full service/migration/rollback, real Oracle Linux Enforcing and actual reboot remain unverified for this commit; public availability depends on the release channel, not the package version.
 
 ## 4.1.16 validation
 

@@ -74,7 +74,7 @@ MOCK_MODE=Enforcing
 expect_failure bash -c 'source "$1"; trap - EXIT ERR; command() { if [[ "$1 $2" == "-v restorecon" ]]; then return 1; fi; builtin command "$@"; }; detect_selinux' _ "$work/installer.sh"
 detect_selinux
 
-BUILT_PACKAGE_VERSION=4.1.16
+BUILT_PACKAGE_VERSION=4.2.0
 SOURCE_REF=1111111111111111111111111111111111111111
 runtime="$RUNTIME_DIR/node-v${NODE_VERSION}-linux-x64"
 release="$RELEASES_DIR/v${BUILT_PACKAGE_VERSION}-${SOURCE_REF}"
@@ -104,7 +104,8 @@ expect_failure restore_selinux_path "$CURRENT_LINK" 1
 # Fresh deployment exercises real copy operations, not only existing releases.
 TEMP_DIR="$work/staging"
 mkdir -p "$TEMP_DIR/node-runtime/bin" "$TEMP_DIR/source/dist" "$TEMP_DIR/source/node_modules" \
-  "$TEMP_DIR/source/scripts/linux-systemd"
+  "$TEMP_DIR/source/scripts/linux-systemd" "$TEMP_DIR/source/packaging/linux"
+cp packaging/linux/command-bridge "$TEMP_DIR/source/packaging/linux/command-bridge"
 cp "$runtime/bin/node" "$TEMP_DIR/node-runtime/bin/node"
 for file in package.json package-lock.json README.md SECURITY.md scripts/verify-install.mjs scripts/verify-file-transfer.mjs scripts/linux-systemd/uninstall.sh; do
   printf 'fixture\n' > "$TEMP_DIR/source/$file"

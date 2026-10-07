@@ -10,6 +10,8 @@ readonly INSTALL_ROOT="/opt/command-bridge"
 readonly RELEASES_DIR="${INSTALL_ROOT}/releases"
 readonly RUNTIME_DIR="${INSTALL_ROOT}/runtime"
 readonly CURRENT_LINK="${INSTALL_ROOT}/current"
+readonly CLI_LINK="/usr/local/bin/command-bridge"
+CLI_LINK_CREATED=0
 readonly RUNTIME_LINK="${RUNTIME_DIR}/current"
 readonly CONFIG_DIR="/etc/command-bridge"
 readonly CONFIG_FILE="${CONFIG_DIR}/command-bridge.env"
@@ -442,6 +444,41 @@ restore_current_selinux_layout() {
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then
     restore_selinux_path "${INSTALLER_STATE_DIR}" || return 1
   fi
+  restore_selinux_path "${CLI_LINK}" || return 1
+}
+
+assert_cli_entry() {
+  local parent mode
+  parent=$(dirname "${CLI_LINK}")
+  if [[ -e "${parent}" || -L "${parent}" ]]; then
+    [[ -d "${parent}" && ! -L "${parent}" && "$(stat -c %u "${parent}")" == 0 ]] || fail "Unsafe CLI parent directory."
+    mode=$(stat -c %a "${parent}")
+    (( (8#${mode} & 022) == 0 )) || fail "CLI parent is writable by non-administrators."
+  fi
+  if [[ -e "${CLI_LINK}" || -L "${CLI_LINK}" ]]; then
+    [[ -L "${CLI_LINK}" && "$(stat -c %u "${CLI_LINK}")" == 0 && "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]] ||
+      fail "CLI name already belongs to another application: ${CLI_LINK}"
+  fi
+}
+
+install_cli_entry() {
+  assert_cli_entry
+  if [[ ! -e "$(dirname "${CLI_LINK}")" ]]; then install -d -m 0755 -o root -g root "$(dirname "${CLI_LINK}")"; fi
+  [[ -d "$(dirname "${CLI_LINK}")" && ! -L "$(dirname "${CLI_LINK}")" ]] ||
+    fail "CLI parent must be a regular directory."
+  if [[ ! -L "${CLI_LINK}" ]]; then
+    ln -sT "${CURRENT_LINK}/command-bridge" "${CLI_LINK}"
+    CLI_LINK_CREATED=1
+  fi
+  restore_selinux_path "${CLI_LINK}" || fail "Could not label CLI entry."
+}
+
+rollback_cli_entry() {
+  if [[ "${CLI_LINK_CREATED}" == 1 && -L "${CLI_LINK}" &&
+        "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]]; then
+    unlink "${CLI_LINK}"
+  fi
+  CLI_LINK_CREATED=0
 }
 
 report_execution_context() {
@@ -476,6 +513,7 @@ require_root_systemd_linux() {
 }
 
 assert_new_installation_paths() {
+  assert_cli_entry
   local path
   for path in "${INSTALL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" "${AUDIT_READER_DIR}"; do
     if [[ -e "${path}" || -L "${path}" ]]; then
@@ -1045,6 +1083,8 @@ install_runtime_and_release() {
       "${release_staging}/"
     printf '%s\n' "${SOURCE_REF}" > "${release_staging}/.command-bridge-release"
     install -m 0755 "${source_dir}/scripts/linux-systemd/uninstall.sh" "${release_staging}/uninstall.sh"
+    sed "s|__INSTALL_ROOT__|${INSTALL_ROOT}|g" "${source_dir}/packaging/linux/command-bridge" > "${release_staging}/command-bridge"
+    chmod 0755 "${release_staging}/command-bridge"
     install -d -m 0755 "${release_staging}/scripts"
     install -m 0644 "${source_dir}/scripts/verify-install.mjs" "${release_staging}/scripts/verify-install.mjs"
     install -m 0644 "${source_dir}/scripts/verify-file-transfer.mjs" "${release_staging}/scripts/verify-file-transfer.mjs"
@@ -1238,6 +1278,7 @@ health_url() {
 }
 
 rollback_activation() {
+  rollback_cli_entry
   local labels_ok=1
   ROLLBACK_IN_PROGRESS=1
   log "Rolling back the activated release..."
@@ -1519,6 +1560,8 @@ main() {
   if [[ "${RUN_AS_INSTALLER}" == 0 ]]; then install_audit_access; fi
   install_and_start_service
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
+  install_cli_entry
+  [[ "$("${CLI_LINK}" --version)" == "${BUILT_PACKAGE_VERSION}" ]] || fail "Installed CLI version verification failed."
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then remove_audit_access_for_installer; fi
   finish_legacy_migration
   ACTIVATION_STARTED=0

@@ -24,7 +24,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
   const dotenv = process.env.DOTENV_CONFIG_PATH;
   if (dotenv && dotenv !== "/dev/null") paths.push(resolve(dotenv));
   if (platform === "linux") paths.push(
-    "/etc/command-bridge", "/opt/command-bridge", "/usr/local/libexec/command-bridge",
+    "/etc/command-bridge", "/opt/command-bridge", "/usr/local/libexec/command-bridge", "/usr/local/bin/command-bridge",
     "/etc/systemd/system/command-bridge.service", "/etc/sudoers.d/command-bridge-audit-reader",
     "/etc/command-bridge-mcp-server", "/opt/command-bridge-mcp-server",
     "/etc/systemd/system/command-bridge-mcp-server.service"

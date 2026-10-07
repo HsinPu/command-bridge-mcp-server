@@ -7,5 +7,7 @@
 *.example text eol=lf
 *.sh text eol=lf
 packaging/linux/audit-reader text eol=lf
+packaging/linux/command-bridge text eol=lf
+*.cmd text eol=crlf
 *.service text eol=lf
 *.yml text eol=lf

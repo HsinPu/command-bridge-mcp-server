@@ -8,6 +8,7 @@ readonly SERVICE_USER="command-bridge"
 readonly SERVICE_GROUP="command-bridge"
 readonly SERVICE_HOME="/var/empty/command-bridge"
 readonly INSTALL_ROOT="/opt/command-bridge"
+readonly CLI_LINK="/usr/local/bin/command-bridge"
 readonly CONFIG_DIR="/etc/command-bridge"
 readonly STATE_DIR="/var/lib/command-bridge"
 readonly INSTALLER_STATE_DIR="/var/lib/command-bridge-installer"
@@ -136,6 +137,7 @@ print_plan() {
   log "Planned removal:"
   printf '  Service and unit: %s.service\n' "${SERVICE_NAME}"
   printf '  Application: %s\n' "${INSTALL_ROOT}"
+  printf '  Managed version command: %s\n' "${CLI_LINK}"
   printf '  Audit reader: %s\n' "${AUDIT_READER_PATH}"
   printf '  Audit sudoers rule: %s\n' "${AUDIT_SUDOERS_FILE}"
 
@@ -229,6 +231,14 @@ remove_legacy_alias() {
   local old=$1 new=$2
   assert_legacy_alias "${old}" "${new}"
   if [[ -L "${old}" ]]; then run_command rm -f -- "${old}"; fi
+}
+
+remove_cli_entry() {
+  if [[ -L "${CLI_LINK}" && "$(stat -c %u "${CLI_LINK}")" == 0 && "$(readlink "${CLI_LINK}")" == "${INSTALL_ROOT}/current/command-bridge" ]]; then
+    run_command rm -f -- "${CLI_LINK}"
+  elif [[ -e "${CLI_LINK}" || -L "${CLI_LINK}" ]]; then
+    warn "Preserving an unrelated CLI entry: ${CLI_LINK}"
+  fi
 }
 
 assert_tree_is_not_mounted() {
@@ -440,7 +450,7 @@ main() {
   fi
 
   require_root_systemd_linux
-  for command_name in chmod flock getent install readlink rm rmdir systemctl uname; do
+  for command_name in chmod flock getent install readlink rm rmdir stat systemctl uname; do
     require_command "${command_name}"
   done
   if [[ "${PURGE}" == "1" ]]; then
@@ -470,6 +480,7 @@ main() {
   if [[ "${PURGE}" == "1" ]]; then
     validate_service_identity_for_purge
   fi
+  remove_cli_entry
   remove_tree "${INSTALL_ROOT}"
   remove_legacy_alias "${LEGACY_INSTALL_ROOT}" "${INSTALL_ROOT}"
 

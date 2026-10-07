@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 4.1.16; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 4.2.0; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
@@ -178,3 +178,9 @@ Use `-ExecutionMode guarded` to permit general commands while rejecting recogniz
 ### Audit stalls and execution slots
 
 From 4.1.16, a confirmed finished command releases its execution slot before terminal Audit completes; output is still withheld until Audit succeeds. All runtime Audit reads/writes share a serialized guard with a five-second total wait (including queue time) and at most 64 outstanding operations. A deadline, backend failure or capacity failure makes Audit unavailable until service restart; new commands/transfers fail promptly and `/ready` is not ready. `/health` remains a liveness check. Readiness waits at most five seconds and coalesces an unfinished probe. A timed-out filesystem operation may still complete: it remains tracked, expired queued operations are not started, and shutdown waits for actual I/O within its existing 15-second budget. Resolve host storage problems before restarting and inspect the matching Audit lifecycle before retrying; absence of a reply does not prove the command did not run. Do not increase command parallelism to work around a stalled sink. No Docker daemon/container restart or additional process killing is performed.
+
+## Check the installed version
+
+After upgrading to 4.2.0 or later, Linux provides `command-bridge --version` (or `-V`) without sudo. It uses the bundled runtime and currently selected release; it does not verify service health or fetch the latest GitHub version. If `/usr/local/bin` is not on PATH, use `/usr/local/bin/command-bridge --version`.
+
+Windows PowerShell: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" --version`. Windows does not change PATH. npm installations retain `command-bridge-mcp-server --version` and add `command-bridge --version`. The installed launchers accept only version queries; the npm/server entry still starts MCP with no arguments. Version queries do not load service configuration, Token, Audit or listeners. Earlier installations need an upgrade before these commands exist.

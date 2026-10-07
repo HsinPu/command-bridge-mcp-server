@@ -43,6 +43,7 @@ jobs:
         run: |
           while IFS= read -r -d '' script; do bash -n "$script"; done < <(find scripts -name '*.sh' -print0)
           bash -n packaging/linux/audit-reader
+          bash -n packaging/linux/command-bridge
 
       - name: Check Windows installer assets
         if: runner.os == 'Windows'

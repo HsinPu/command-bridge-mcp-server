@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.2.0 — 2026-10-07
+
+MINOR from 4.1.16: add --version/-V before configuration, Audit or transport initialization, and a compatible command-bridge npm bin alias. Linux installs a root-managed /usr/local/bin/command-bridge symlink following the active release, validates collisions/parent permissions, restores labels, verifies output before committing activation and rolls back new entries; uninstall preserves unrelated entries. Windows installs a bundled-runtime command-bridge.cmd without modifying PATH. Protect the Linux entry from direct MCP self-modification. Document installed-version semantics and migration; retain existing server startup with no arguments and the long npm name.
+
 ## 4.1.16 — 2026-10-07
 
 PATCH from 4.1.15: release each command execution slot when its process settles, independently of terminal Audit completion. Bound shared Audit write/read waits (including queue time) to five seconds and cap outstanding Audit operations at 64. Fail closed after an Audit failure: do not start new commands/transfers, expose output or silently resume after late I/O; queued expired operations never start. Track actual unfinished Audit I/O during the existing 15-second shutdown budget, and bound/coalesce readiness probes. Add controlled-stall, admission, slot-release, output-withholding and real HTTP/MCP readiness regressions. Docker and process-tree termination policies remain unchanged.

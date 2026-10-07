@@ -6,6 +6,10 @@ import { join } from "node:path";
 import { assertNoSelfModification } from "./selfProtection.js";
 import { CommandExecutor } from "./commandExecutor.js";
 import type { AppConfig } from "../config/env.js";
+test("Linux managed version entry is protected from direct writes", () => {
+  assert.throws(() => assertNoSelfModification("sudo rm /usr/local/bin/command-bridge", "/tmp", { platform: "linux" }), { code: "SELF_MODIFICATION_BLOCKED" });
+  assert.doesNotThrow(() => assertNoSelfModification("command-bridge --version", "/tmp", { platform: "linux" }));
+});
 import type { AuditLog, CommandAuditEvent } from "./auditLog.js";
 
 test("preflight blocks direct Linux self writes without blocking other sudo or reads", () => {
