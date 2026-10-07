@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.3.1 — 2026-10-07
+
+PATCH from 4.3.0: preserve source manifests while pruning development dependencies with --no-save, so repeated managed installation does not fail the clean-source guard. Reproduce and verify source preservation with an offline disposable npm fixture. Prepare the disposable Linux service runner CLI parent as root-owned/non-writable without relaxing production checks. Give Windows mutex tests unique names so installer-held production locks do not block their own build tests. Verified 4.2.0 CI failed at the Linux unsafe parent check and Windows clean-source check; channel publication was correctly skipped.
+
 ## 4.3.0 — 2026-10-07
 
 MINOR from 4.2.0: add service-installed `command-bridge update` and `update --check`, comparing full source SHA against the verified CI channel. Use locally saved bootstrap assets, pin one snapshot, preserve complete configuration and service identity, require administrator privileges for changes and retain existing service/MCP/Audit verification and rollback. Detect installation changes under the deployment lock; serialize Windows installation/removal with a shared mutex. Keep checks read-only and Token output opt-in, clean temporary files after failures, and block recognizable direct MCP self-updates. npm installs continue to use npm. Add disposable update/channel/account/cleanup/lock tests and hosted service update/rollback cases.

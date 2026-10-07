@@ -751,7 +751,7 @@ build_source() {
       npm_config_userconfig="${build_home}/user.npmrc" \
       npm_config_globalconfig="${build_home}/global.npmrc" \
       PATH="${node_root}/bin:/usr/bin:/bin" \
-      "${node_root}/bin/npm" prune --omit=dev --ignore-scripts --no-audit --no-fund
+      "${node_root}/bin/npm" prune --omit=dev --ignore-scripts --no-audit --no-fund --no-save
   )
 
   terminate_build_processes || fail "Temporary build account still has running processes."

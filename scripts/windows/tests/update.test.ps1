@@ -72,11 +72,16 @@ if ($env:CB_UPDATE_FAIL -eq '1') { throw 'Fixture deployment failed' }
   $wrapperWork = [IO.File]::ReadAllText((Join-Path $work 'wrapper-location'))
   if (-not $failed -or $wrapperWork -eq $app -or (Test-Path -LiteralPath $wrapperWork)) { throw 'Wrapper failure/cleanup incorrect.' }
   # Real Windows named mutex contention across separate processes.
-  . (Join-Path $PSScriptRoot '..\deployment-lock.ps1')
+  # Installer builds run these tests while holding the production mutex.
+  # Use production acquisition logic with a unique disposable mutex name.
+  $lockHelper = Join-Path $work 'deployment-lock.ps1'
+  $lockSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot '..\deployment-lock.ps1'))
+  [IO.File]::WriteAllText($lockHelper, $lockSource.Replace('Global\CommandBridgeMCP.Install', ('Local\CommandBridgeMCP.Test.' + [guid]::NewGuid())))
+  . $lockHelper
   $mutex = Enter-CommandBridgeDeploymentLock
   try {
     $probe = Join-Path $work 'lock.ps1'
-    [IO.File]::WriteAllText($probe, ". '$PSScriptRoot\..\deployment-lock.ps1'`ntry { `$m=Enter-CommandBridgeDeploymentLock; `$m.ReleaseMutex(); `$m.Dispose(); exit 1 } catch { exit 0 }")
+    [IO.File]::WriteAllText($probe, ". '$lockHelper'`ntry { `$m=Enter-CommandBridgeDeploymentLock; `$m.ReleaseMutex(); `$m.Dispose(); exit 1 } catch { exit 0 }")
     & powershell.exe -NoProfile -NonInteractive -File $probe
     if ($LASTEXITCODE -ne 0) { throw 'Concurrent deployment was not blocked.' }
   } finally { $mutex.ReleaseMutex(); $mutex.Dispose() }

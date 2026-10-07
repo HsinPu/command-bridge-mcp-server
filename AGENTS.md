@@ -151,3 +151,5 @@ npm start
 - 服務安裝的 `command-bridge update`／`update --check` 使用本機保存的 bootstrap，固定已通過 CI 的完整 SHA。check 不變更部署；同 SHA 不重建或重啟，不以版本號相同取代 SHA 核對。npm 安裝仍透過 npm 更新。
 - update 與一鍵重裝區分：完整保留設定、模式及服務帳號，禁止附帶模式、網路與帳號變更參數；Linux 安裝者帳號必須經原登入者 sudo 更新。變更需要管理員終端，不自動提權；可辨識的 MCP 自我更新要阻擋，Token 只在明確要求設定輸出時顯示。
 - 沿用安裝鎖、實際服務／MCP／Audit 驗證與回復，鎖內核對先前讀到的來源 SHA。Windows 安裝、更新及卸載共用 mutex。更新資產需位於受保護部署，暫存清理及失敗回復都必須測試。
+
+- 4.3.1 起，建置後 npm prune 必須使用 --no-save 保留来源 manifests；不要為重裝放寬 clean-source 驗證。拋棄式 CI 可明確準備安全 CLI 父目錄，但正式安裝仍拒絕可由非管理員寫入的目錄。鎖回歸測試用獨立名稱，需驗證持有正式部署鎖時仍可建置測試。

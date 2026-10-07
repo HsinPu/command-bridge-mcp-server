@@ -185,7 +185,7 @@ function Build-Source {
     Invoke-External $npm @("ci", "--ignore-scripts", "--no-audit", "--no-fund") $SourceRoot
     Invoke-External $npm @("run", "build") $SourceRoot
     Invoke-External $npm @("test") $SourceRoot
-    Invoke-External $npm @("prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund") $SourceRoot
+    Invoke-External $npm @("prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--no-save") $SourceRoot
   } finally {
     $env:PATH = $previousPath
   }
