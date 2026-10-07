@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param()
-. (Join-Path $PSScriptRoot 'common.ps1')
+. ([IO.Path]::Combine($PSScriptRoot, 'common.ps1'))
 $job = $null; $work = $null; $lock = $null; $failed = $false
 try {
   . (Join-Path $PSScriptRoot "deployment-lock.ps1")

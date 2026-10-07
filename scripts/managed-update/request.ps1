@@ -6,7 +6,7 @@ trap {
   exit 1
 }
 $requestStage = 1
-. (Join-Path $PSScriptRoot 'common.ps1')
+. ([IO.Path]::Combine($PSScriptRoot, 'common.ps1'))
 $previous = $null
 try { $previous = Read-UpdateRecord '' } catch {}
 $requestStage = 2

@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.3, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.4, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.4 validation
+
+4.4.3 hosted Ubuntu tests passed; the new real Windows request-script regression hit the fixed 15-second bound before reporting its controlled error. Replace automatic module discovery with the same explicit system-module imports as the proven Audit scripts. Local Windows npm test passed 107/124 (17 platform/elevation skips); the real request-script regression initialized in about 0.7 seconds and returned the expected numerical stage. PowerShell syntax and git diff --check passed. Linux code is unchanged from the 4.4.3 WSL pass (110/124, 14 skips); WSL was not rerun for this PowerShell-only patch. Hosted service gates and channel publication remain pending and mandatory.
 
 ## 4.4.3 validation
 

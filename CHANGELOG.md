@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.4.4 — 2026-10-07
+
+PATCH: avoid slow/user-controlled PowerShell module discovery in updater scripts.
+
+- Load only the fixed system Utility/Management modules before using their cmdlets, retaining the existing 15-second control deadline.
+- The native regression runs the actual common-module initialization while isolating OS task access; no timeout or service/publication check is weakened.
+
 ## 4.4.3 — 2026-10-07
 
 PATCH: make managed program assets readable after builds with restrictive updater umask; retain private configuration/data permissions.

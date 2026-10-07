@@ -1,5 +1,9 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$PSModuleAutoLoadingPreference = 'None'
+$env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
+Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')) -ErrorAction Stop
+Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Management\Microsoft.PowerShell.Management.psd1')) -ErrorAction Stop
 $UpdateRoot = Join-Path $env:ProgramData 'CommandBridgeUpdate'
 function Read-UpdateRecord([string]$Id) {
   if ($Id -and $Id -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$') { throw 'Invalid job ID.' }
