@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.3.1, adding service update/check commands while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.3.2, adding service update/check commands while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.3.2 validation
+
+4.3.1 hosted general jobs passed; Linux service installation/reinstallation and post-activation rollback reached real MCP/Audit verification, then the health case lacked activation evidence. The old health fixture replaced the complete entry point, breaking early version queries during source build tests. Preserve the actual entry and inject after argument handling only for the deployed SHA. Local Windows npm test passed 95/111 with 16 platform/elevation skips; WSL with checksum-verified Node.js 24.18.0 passed 98/111 with 13 skips. A full build/test of the disposable health-failure source also passed 98/111 and produced no premature activation marker. Tests cover source/no metadata, other SHA, both version flags with matching SHA and no evidence, and actual startup producing the required fault/evidence. Script syntax and git diff --check passed. At local validation time, hosted service/migration/rollback and channel verification for this commit are pending; Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.3.1 validation
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.3.2 — 2026-10-07
+
+PATCH from 4.3.1: preserve the real entry point and its early version arguments in disposable health-failure snapshots. Inject failure only during server startup for the exact deployed SHA, leaving source/other-SHA runs and version queries unaffected. Version queries cannot produce activation evidence. This fixes the hosted rollback case failing before service activation; no production validation bypass is introduced.
+
 ## 4.3.1 — 2026-10-07
 
 PATCH from 4.3.0: preserve source manifests while pruning development dependencies with --no-save, so repeated managed installation does not fail the clean-source guard. Reproduce and verify source preservation with an offline disposable npm fixture. Prepare the disposable Linux service runner CLI parent as root-owned/non-writable without relaxing production checks. Give Windows mutex tests unique names so installer-held production locks do not block their own build tests. Verified 4.2.0 CI failed at the Linux unsafe parent check and Windows clean-source check; channel publication was correctly skipped.

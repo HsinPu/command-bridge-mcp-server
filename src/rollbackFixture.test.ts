@@ -46,15 +46,25 @@ test("health fixture records startup only for its deployed identity", () => {
   const run = (args: string[]) => spawnSync(process.execPath, args, { encoding: "utf8", windowsHide: true });
   try {
     mkdirSync(join(root, "src")); mkdirSync(join(root, "dist"));
+    writeFileSync(join(root, "src/index.ts"), `async function main() {
+  if (process.argv.includes('--version') || process.argv.includes('-V')) { console.log('fixture-version'); return; }
+  const [{ StdioServerTransport }] = await Promise.all([Promise.resolve({})]);
+}
+main();
+`);
     assert.equal(run([helper, "prepare", root, "health", sha, marker]).status, 0);
     const executable = join(root, "dist/index.mjs");
     writeFileSync(executable, readFileSync(join(root, "src/index.ts")));
-    assert.notEqual(run([executable]).status, 0);
+    assert.equal(run([executable]).status, 0, "Source startup must not trigger injection");
     assert.notEqual(run([helper, "assert", marker, sha, "started"]).status, 0);
     writeFileSync(join(root, "install-info.json"), JSON.stringify({ sourceSha: "1".repeat(40) }));
-    assert.match(run([executable]).stderr, /Wrong test deployment/);
+    assert.equal(run([executable]).status, 0, "Other SHA must not trigger injection");
     assert.notEqual(run([helper, "assert", marker, sha, "started"]).status, 0);
     writeFileSync(join(root, "install-info.json"), JSON.stringify({ sourceSha: sha }));
+    for (const flag of ['--version', '-V']) {
+      assert.equal(run([executable, flag]).status, 0, "Version queries must survive the startup fixture");
+      assert.notEqual(run([helper, "assert", marker, sha, "started"]).status, 0, "Version query is not activation evidence");
+    }
     const started = run([executable]);
     assert.equal(started.status, 1);
     assert.match(started.stderr, /INJECTED_STARTUP_FAILURE/);

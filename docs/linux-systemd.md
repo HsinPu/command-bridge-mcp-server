@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.3.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.3.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -119,8 +119,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /opt/command-bridge/
-├── current -> releases/v4.3.1-<source-sha>
-├── releases/v4.3.1-<source-sha>/
+├── current -> releases/v4.3.2-<source-sha>
+├── releases/v4.3.2-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -364,3 +364,5 @@ Update preserves the complete configuration, execution mode, Token, listener/Hos
 Token output is opt-in: use `update --print-codex-setup`, not with `--check`. Run updates from a separate administrator terminal. Recognizable direct MCP self-updates are blocked; checks are allowed by self-protection, but other execution policies still apply. Indirect scripts remain outside the guard's guarantees. Older installations need one installation upgrade before commands/saved assets exist. Fixed public bootstrap URLs remain unchanged.
 
 From 4.3.1, dependency pruning uses `--no-save` to preserve the source manifests; repeated source installation still requires a clean checkout. Hosted Linux service fixtures explicitly secure their disposable CLI parent instead of weakening production directory validation. Windows lock fixtures use unique mutex names so installation builds do not contend with their own production lock.
+
+From 4.3.2, disposable health-failure fixtures preserve CLI version queries and inject only into server startup for the deployed SHA. Source build/version checks cannot create startup evidence; rollback gates still require the real new-service marker and restored MCP/Audit verification.

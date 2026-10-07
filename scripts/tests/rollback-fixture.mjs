@@ -34,13 +34,22 @@ export function prepare(root, mode, sha, marker, host) {
       fs.writeFileSync(path, text.replace(anchor, replacement));
     }
   } else {
-    fs.writeFileSync(join(root, 'src/index.ts'), `import { writeFileSync, readFileSync } from 'node:fs';
-const info = JSON.parse(readFileSync(new URL('../install-info.json', import.meta.url), 'utf8'));
-if (info.sourceSha !== ${JSON.stringify(sha)}) throw new Error('Wrong test deployment');
-writeFileSync(${JSON.stringify(marker)}, JSON.stringify({stage:'started', sha:${JSON.stringify(sha)}, fault:'INJECTED_STARTUP_FAILURE'}));
-console.error('INJECTED_STARTUP_FAILURE');
-process.exit(1);
-`);
+    // Keep CLI queries intact: installer builds test --version before activation.
+    // Inject only into actual no-argument server startup, after argument handling.
+    const path = join(root, 'src/index.ts');
+    const text = fs.readFileSync(path, 'utf8');
+    const anchor = '  const [{ StdioServerTransport }';
+    if (!text.includes(anchor)) throw new Error('Startup fixture anchor missing');
+    const fault = `  const faultFs = await import('node:fs');
+  const faultInfo = new URL('../install-info.json', import.meta.url);
+  if (faultFs.existsSync(faultInfo) && JSON.parse(faultFs.readFileSync(faultInfo, 'utf8')).sourceSha === ${JSON.stringify(sha)}) {
+    faultFs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({stage:'started', sha:${JSON.stringify(sha)}, fault:'INJECTED_STARTUP_FAILURE'}), {flag:'wx'});
+    console.error('INJECTED_STARTUP_FAILURE');
+    process.exitCode = 1;
+    return;
+  }
+`;
+    fs.writeFileSync(path, text.replace(anchor, fault + anchor));
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
