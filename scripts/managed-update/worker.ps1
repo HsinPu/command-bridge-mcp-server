@@ -22,8 +22,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Private work ACL failed.' }
   $bootstrap = Join-Path $work 'bootstrap.ps1'
   Copy-Item -LiteralPath (Join-Path $env:ProgramFiles 'CommandBridgeMCP\bootstrap.ps1') -Destination $bootstrap
-  & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $bootstrap -Update *> (Join-Path $work 'install.log')
-  if ($LASTEXITCODE -ne 0) { throw 'Managed installation failed.' }
+  $installerExitCode = Invoke-UpdateBootstrap $bootstrap $work
+  if ($installerExitCode -ne 0) { throw 'Managed installation failed.' }
   $job.after = Read-InstalledIdentity; $job.state = 'succeeded'
 } catch {
   $failed = $true

@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.4.5, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.4.6, adding default-enabled MCP service updates and persistent job status while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.4.6 validation
+
+4.4.5 general jobs passed on both platforms. Windows SYSTEM acceptance and atomic records passed, then native bootstrap invocation raised at the PowerShell redirection boundary. Replace native invocation with explicit asynchronous stream capture and actual exit-code checks. Local Windows npm test passed 109/126 with 17 platform/elevation skips, including real child stdout/stderr capture and exit codes 0/17. PowerShell syntax and git diff --check passed. WSL was not rerun for this Windows-only patch. Hosted service validation remains pending at local validation time; publication retains the prior verified source.
 
 ## 4.4.5 validation
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.4.6 — 2026-10-07
+
+PATCH: capture Windows native installer streams without treating stderr as a PowerShell exception.
+
+- Run the fixed bootstrap through a hidden .NET process, drain stdout/stderr concurrently and determine success from the actual exit code.
+- Retain private diagnostic capture and unchanged service/rollback/publication verification.
+- Add native regressions for benign stderr and nonzero exit status.
+
 ## 4.4.5 — 2026-10-07
 
 PATCH: correct Windows PowerShell atomic record replacement and update integration-test baselines.

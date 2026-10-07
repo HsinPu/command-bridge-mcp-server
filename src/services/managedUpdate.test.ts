@@ -178,3 +178,29 @@ Write-Output 'atomic-state-and-audit-ok'
   await fs.rm(fixture,{recursive:true,force:true});
  }
 });
+
+
+test("Windows update bootstrap drains native stderr and honors real exit status", {skip:process.platform!=="win32"}, async()=>{
+ const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path");
+ const fixture=await fs.mkdtemp(path.join(os.tmpdir(),"cb-child-regression-"));
+ try {
+  await fs.copyFile("scripts/managed-update/common.ps1",path.join(fixture,"common.ps1"));
+  await fs.writeFile(path.join(fixture,"probe.ps1"),`param([string]$Fixture)
+. ([IO.Path]::Combine($PSScriptRoot,'common.ps1'))
+$bootstrap=Join-Path $Fixture 'bootstrap.ps1'
+foreach ($code in @(0,17)) {
+ [IO.File]::WriteAllText($bootstrap, 'param([switch]$Update); if (-not $Update) {exit 99}; [Console]::Out.WriteLine("stdout-marker"); [Console]::Error.WriteLine("stderr-marker"); exit '+$code)
+ $actual=Invoke-UpdateBootstrap $bootstrap $Fixture
+ if ($actual -ne $code) {throw 'Incorrect native exit status'}
+ $log=[IO.File]::ReadAllText((Join-Path $Fixture 'install.log'))
+ if (-not $log.Contains('stdout-marker') -or -not $log.Contains('stderr-marker')) {throw 'Native streams not drained'}
+}
+Write-Output 'native-streams-and-exit-ok'
+`);
+  const ps=path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe");
+  assert.equal((await runUpdateControl(ps,["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",path.join(fixture,"probe.ps1"),"-Fixture",fixture])).trim(),"native-streams-and-exit-ok");
+ } finally {
+  if (!path.resolve(fixture).startsWith(path.resolve(os.tmpdir())+path.sep+"cb-child-regression-")) throw Error("Unsafe temporary cleanup");
+  await fs.rm(fixture,{recursive:true,force:true});
+ }
+});

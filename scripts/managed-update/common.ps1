@@ -48,3 +48,33 @@ function Assert-UpdateEnabled {
     if ($value -cne 'true') { throw 'Managed update disabled or invalid.' }
   }
 }
+
+function Invoke-UpdateBootstrap([string]$Bootstrap, [string]$Work) {
+  # Native stderr is diagnostic output, not a PowerShell terminating error.
+  $info = New-Object Diagnostics.ProcessStartInfo
+  $info.FileName = [IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\powershell.exe')
+  $info.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $Bootstrap + '" -Update'
+  $info.UseShellExecute = $false; $info.CreateNoWindow = $true
+  $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
+  $process = New-Object Diagnostics.Process
+  $process.StartInfo = $info
+  $output = $null; $errors = $null
+  $log = Join-Path $Work 'install.log'; $errorLog = Join-Path $Work 'stderr.log'
+  try {
+    $output = [IO.File]::Create($log); $errors = [IO.File]::Create($errorLog)
+    if (-not $process.Start()) { throw 'Unable to start update installer.' }
+    $stdout = $process.StandardOutput.BaseStream.CopyToAsync($output)
+    $stderr = $process.StandardError.BaseStream.CopyToAsync($errors)
+    $process.WaitForExit()
+    $null = $stdout.GetAwaiter().GetResult(); $null = $stderr.GetAwaiter().GetResult()
+    return $process.ExitCode
+  } finally {
+    if ($output) { $output.Dispose() }; if ($errors) { $errors.Dispose() }
+    $process.Dispose()
+    if ([IO.File]::Exists($errorLog)) {
+      $source = [IO.File]::OpenRead($errorLog); $destination = [IO.File]::Open($log, [IO.FileMode]::Append)
+      try { $source.CopyTo($destination) } finally { $source.Dispose(); $destination.Dispose() }
+      [IO.File]::Delete($errorLog)
+    }
+  }
+}

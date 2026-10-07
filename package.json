@@ -1,6 +1,6 @@
 {
   "name": "command-bridge-mcp-server",
-  "version": "4.4.5",
+  "version": "4.4.6",
   "description": "Cross-platform MCP server for policy-controlled Linux and Windows command execution.",
   "type": "module",
   "bin": {
