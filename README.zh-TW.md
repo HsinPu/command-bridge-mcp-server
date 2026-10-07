@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.1.15-blue)
+![Version](https://img.shields.io/badge/version-4.1.16-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -174,6 +174,8 @@ Bearer token (secret): <安裝時產生或保留的 Token>
 Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初始寫入失敗時不執行指令；終結事件寫入失敗時不回傳擷取的輸出。保存期限由主機設定決定，日誌不具不可竄改保證。
 
 本機 stdio 預設使用使用者資料目錄內的私有 JSONL 檔案，每檔 10 MiB、保留五份；服務依模式選用 journal、Event Log 或 Linux 安裝者帳號的檔案後端。需驗證 Token 的 `/ready` 會檢查服務依賴；安裝器還會透過真實 MCP 執行指令並核對 Audit lifecycle，通過後才移除升級備份。
+
+4.1.16 起，程序結束就釋放指令名額；終結 Audit 成功前仍不回傳輸出。Audit 等待最多五秒，失敗後停止接受新指令與檔案傳輸，`/ready` 回報未就緒。逾時不代表底層磁碟操作已取消；應先排除儲存問題，再重啟服務並確認紀錄。
 
 ## 一鍵解除安裝
 

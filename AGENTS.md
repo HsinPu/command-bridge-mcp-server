@@ -101,6 +101,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 4.1.16 起，程序執行結束即釋放指令名額；終結 Audit 成功前不得回傳輸出。共用 Audit 讀寫的排隊及 I/O 回應等待最多 5 秒，未完成操作上限 64；失敗後停止新作業，排除儲存故障並重啟才恢復。逾時不代表底層 I/O 已取消，必須追蹤實際操作，禁止啟動過期排隊寫入或重複終結事件；停機仍在 15 秒上限內等待。Readiness 需限時並共用尚未結束的檢查。不能宣稱此修正已確認現場 Docker 卡住的原因。
+
 - 4.1.1 起，guarded 需辨識 curl／wget 黏合輸出參數及 PowerShell Path／LiteralPath／Destination／FilePath 命名與冒號形式，不依參數順序猜測目的地。無法確定的參數明確拒絕；系統來源複製到一般工作目錄應可通過 guarded 路徑檢查。回歸測試使用無破壞性程式／不存在的程式路徑，不能以實際寫入系統位置驗證拒絕。
 
 - 4.1.0 新增可選 guarded 模式，allowlist 預設與 unrestricted 原有行為保持不變。guarded 攔截可辨識的刪除、系統位置寫入及常見系統管理修改；保留其他一般指令與既有 sudo。不能宣稱會解譯任意程式／外部腳本，或保證不刪檔／不改系統。語法不支援須明確拒絕；guarded 錯誤附規則及 Audit ID。Linux --guarded 與 --unrestricted 互斥；Windows -ExecutionMode 明確選擇才切換既有模式，保存完整回復備份。詳見 docs/guarded-mode.md。

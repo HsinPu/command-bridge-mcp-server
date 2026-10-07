@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import { FileTransferService } from "./fileTransferService.js";
+import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { assertNoSelfModification } from "./selfProtection.js";
 import { assertGuardedCommand } from "./guardedPolicy.js";
 import {
@@ -71,11 +72,16 @@ export class CommandExecutor {
   private stopping = false;
   private readonly running = new Set<() => void>();
   private readonly pending = new Set<Promise<CommandResult>>();
+  private readonly auditLog: BoundedAuditLog;
+  private pendingReadiness?: Promise<{ ready: boolean; checks: Record<string, boolean> }>;
 
   constructor(
     private readonly config: AppConfig,
-    private readonly auditLog: AuditLog = createAuditLog(config)
-  ) { this.files = new FileTransferService(config, auditLog); }
+    auditLog: AuditLog = createAuditLog(config)
+  ) {
+    this.auditLog = auditLog instanceof BoundedAuditLog ? auditLog : new BoundedAuditLog(auditLog);
+    this.files = new FileTransferService(config, this.auditLog);
+  }
 
   execute(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
     const operation = this.executeInternal(request, signal);
@@ -91,13 +97,29 @@ export class CommandExecutor {
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        Promise.allSettled([...this.pending, fileShutdown]),
+        Promise.allSettled([...this.pending, fileShutdown, ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
     } finally { if (timer) clearTimeout(timer); }
   }
 
   async readiness(): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
+    if (this.stopping || !this.auditLog.available) return { ready: false, checks: { accepting: false, audit: this.auditLog.available } };
+    // Repeated probes share the actual operation if a filesystem call remains stuck.
+    if (!this.pendingReadiness) {
+      const operation = this.readinessInternal();
+      this.pendingReadiness = operation;
+      void operation.finally(() => { if (this.pendingReadiness === operation) this.pendingReadiness = undefined; }).catch(() => undefined);
+    }
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([this.pendingReadiness, new Promise<{ ready: boolean; checks: Record<string, boolean> }>(resolve => {
+        timer = setTimeout(() => resolve({ ready: false, checks: { accepting: !this.stopping, audit: false, verification: false } }), 5_000);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
+  }
+
+  private async readinessInternal(): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
     const checks: Record<string, boolean> = { accepting: !this.stopping, workingDirectory: true, shells: true, audit: true };
     try { for (const root of this.config.allowedRoots) await access(root, constants.R_OK | constants.X_OK); }
     catch { checks.workingDirectory = false; }
@@ -127,6 +149,7 @@ export class CommandExecutor {
         console.error("CommandBridge readiness audit failure: " + error.code + (timeout ? " (helper timeout)" : ""));
       }
     }
+    checks.accepting = !this.stopping && this.auditLog.available;
     return { ready: Object.values(checks).every(Boolean), checks };
   }
 
@@ -190,7 +213,9 @@ export class CommandExecutor {
 
     this.activeCommands += 1;
     try {
-      const result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal);
+      let result: CommandResult;
+      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal); }
+      finally { this.activeCommands -= 1; }
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "completed", {
           shell,
@@ -219,8 +244,6 @@ export class CommandExecutor {
         })
       );
       throw error;
-    } finally {
-      this.activeCommands -= 1;
     }
   }
 

@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.1.15, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.1.16, adding optional guarded execution with direct deletion/system modification checks while retaining existing sudo permissions, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.1.16 validation
+
+Command execution slots now release when process execution settles, while successful terminal Audit is still required before output delivery. Shared runtime Audit operations have a five-second total queue/I/O response deadline, a bounded admission count, fail-closed state and tracked actual I/O; late completion does not resume service or start expired queued writes. Shutdown retains its 15-second budget and waits for underlying Audit I/O; readiness probes are bounded/coalesced. Local Windows npm test passed 88/100 with 12 platform/elevation skips, including real HTTP readiness/MCP fail-closed behavior, withheld output, no spawn after initial Audit timeout, slot recovery and outstanding-I/O drain tests. All PowerShell scripts and git diff --check passed. WSL with checksum-verified Node.js 24.18.0 passed 89/100 with 11 platform skips; all Bash scripts passed syntax checks. Hosted service/rollback gates, actual production Docker behavior, Oracle Linux Enforcing and actual reboot have not been verified for this version.
 
 ## 4.1.15 validation
 

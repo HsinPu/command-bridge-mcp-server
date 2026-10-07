@@ -5,6 +5,7 @@ import { AppError } from "../errors/AppError.js";
 import type { AuditEventList, AuditLog, CommandAuditEvent } from "./auditLog.js";
 import { CommandExecutor, type CommandResult } from "./commandExecutor.js";
 import type { ShellKind } from "./commandPolicy.js";
+import { BoundedAuditLog } from "./boundedAuditLog.js";
 
 class MemoryAuditLog implements AuditLog {
   readonly events: CommandAuditEvent[] = [];
@@ -73,6 +74,47 @@ function stubRunProcess(
     value: implementation
   });
 }
+
+test("completed processes release slots before terminal Audit, whose timeout withholds output", async () => {
+  let entered!: () => void, release!: () => void;
+  const terminal = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const events: CommandAuditEvent[] = [];
+  const audit = new BoundedAuditLog({ async write(e) { events.push(e); if (e.phase === "completed") { entered(); await gate; } }, async list() { return { events, hasMore: false }; } }, 80);
+  const executor = new CommandExecutor(createConfig(), audit);
+  let started = 0;
+  stubRunProcess(executor, async () => { started++; return commandResult({ stdout: "withheld-secret-output" }); });
+  try {
+    const request = executor.execute({ command: "echo safe" });
+    const rejected = assert.rejects(request, (e: any) => e.code === "AUDIT_LOG_WRITE_FAILED" && !e.message.includes("withheld-secret-output"));
+    await terminal;
+    assert.equal((executor as any).activeCommands, 0);
+    await rejected;
+    await assert.rejects(executor.execute({ command: "echo second" }), (e: any) => e.code === "AUDIT_LOG_WRITE_FAILED");
+    assert.equal(started, 1);
+    assert.equal((await executor.readiness()).ready, false);
+    let stopped = false;
+    const stopping = executor.shutdown().then(() => { stopped = true; });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(stopped, false);
+    release(); await stopping;
+    assert.deepEqual(events.map(e => e.phase), ["attempted", "completed"]);
+  } finally { release(); await executor.shutdown(); }
+});
+
+test("stalled initial Audit never starts commands and later requests fail promptly", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let writes = 0, started = 0;
+  const audit = new BoundedAuditLog({ async write() { writes++; await gate; }, async list() { return { events: [], hasMore: false }; } }, 30);
+  const executor = new CommandExecutor(createConfig(), audit);
+  stubRunProcess(executor, async () => { started++; return commandResult(); });
+  try {
+    await assert.rejects(executor.execute({ command: "echo safe" }), (e: any) => e.code === "AUDIT_LOG_WRITE_FAILED");
+    await assert.rejects(executor.execute({ command: "echo again" }), (e: any) => e.code === "AUDIT_LOG_WRITE_FAILED");
+    assert.equal(started, 0); assert.equal(writes, 1);
+  } finally { release(); await executor.shutdown(); }
+});
 
 test("long command requests retain explicit budgets and clamp only above the host maximum", async () => {
   const executor = new CommandExecutor(createConfig({ defaultTimeoutMs: 15_000, maxTimeoutMs: 300_000 }), new MemoryAuditLog());

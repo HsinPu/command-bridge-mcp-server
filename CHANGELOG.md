@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.1.16 — 2026-10-07
+
+PATCH from 4.1.15: release each command execution slot when its process settles, independently of terminal Audit completion. Bound shared Audit write/read waits (including queue time) to five seconds and cap outstanding Audit operations at 64. Fail closed after an Audit failure: do not start new commands/transfers, expose output or silently resume after late I/O; queued expired operations never start. Track actual unfinished Audit I/O during the existing 15-second shutdown budget, and bound/coalesce readiness probes. Add controlled-stall, admission, slot-release, output-withholding and real HTTP/MCP readiness regressions. Docker and process-tree termination policies remain unchanged.
+
 ## 4.1.15 — 2026-10-07
 
 PATCH from 4.1.14: raise the configurable default command maximum from 60 to 300 seconds and print a 360-second Codex tool deadline on both platforms, leaving the ordinary 15-second default and explicit existing timeout settings unchanged. Document existing-install migration and the required long-command timeoutMs. Add configuration and generated-setup regressions; do not change Audit, cancellation or process termination deadlines.

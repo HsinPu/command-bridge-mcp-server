@@ -9,6 +9,7 @@ import { get } from "node:http";
 import { FileAuditLog } from "./fileAuditLog.js";
 import { createAuditEvent, runFixedProcess, type AuditLog, type CommandAuditEvent } from "./auditLog.js";
 import { CommandExecutor, terminateProcessTree } from "./commandExecutor.js";
+import { BoundedAuditLog } from "./boundedAuditLog.js";
 import type { AppConfig } from "../config/env.js";
 import { startHttpTransport } from "../transport/httpTransport.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -106,6 +107,32 @@ test("HTTP authenticates readiness and completes actual MCP execution and audit"
     assert.equal((await fetch(base + "/ready", { headers: { Authorization: `Bearer ${cfg.bearerToken}` } })).status, 503);
     await assert.rejects(executor.execute({ command: "hostname" }), /stopping/);
   } finally { await client.close(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+test("HTTP readiness and MCP fail promptly when an Audit operation remains unfinished", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let writes = 0;
+  const cfg = config();
+  const audit = new BoundedAuditLog({ async write() { writes++; await gate; }, async list() { return { events: [], hasMore: false }; } }, 40);
+  const executor = new CommandExecutor(cfg, audit);
+  const server = await startHttpTransport(cfg, executor);
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const client = new Client({ name: "stalled-audit-test", version: "1" });
+  try {
+    const response = await fetch(base + "/ready", { headers: { Authorization: `Bearer ${cfg.bearerToken}` }, signal: AbortSignal.timeout(2_000) });
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).checks.audit, false);
+    await client.connect(new StreamableHTTPClientTransport(new URL(base + "/mcp"), { requestInit: { headers: { Authorization: `Bearer ${cfg.bearerToken}` } } }));
+    const result = await client.callTool({ name: "command_bridge_run_command", arguments: { command: "echo diagnostic" } }, undefined, { timeout: 2_000 });
+    assert.equal(result.isError, true);
+    assert.match(JSON.stringify(result), /AUDIT_LOG_WRITE_FAILED/);
+    assert.equal(writes, 1);
+    assert.equal((await fetch(base + "/health")).status, 200);
+  } finally {
+    release(); await client.close(); await executor.shutdown();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
 });
 
 test("readiness fails closed when audit storage is unavailable", async () => {
