@@ -1,5 +1,9 @@
 # Changelog
 
+## 4.3.3 — 2026-10-07
+
+PATCH from 4.3.2: make disposable startup-failure evidence idempotent across service restart attempts. Preserve the first valid SHA/stage/fault marker and keep emitting the designated failure instead of EEXIST; reject mismatched evidence. Retain stale-marker preflight and both fault/evidence assertions. Add repeated-startup and mismatched-marker regressions; production behavior and publication gates are unchanged.
+
 ## 4.3.2 — 2026-10-07
 
 PATCH from 4.3.1: preserve the real entry point and its early version arguments in disposable health-failure snapshots. Inject failure only during server startup for the exact deployed SHA, leaving source/other-SHA runs and version queries unaffected. Version queries cannot produce activation evidence. This fixes the hosted rollback case failing before service activation; no production validation bypass is introduced.

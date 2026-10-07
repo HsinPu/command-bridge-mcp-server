@@ -69,6 +69,16 @@ main();
     assert.equal(started.status, 1);
     assert.match(started.stderr, /INJECTED_STARTUP_FAILURE/);
     assert.equal(run([helper, "assert", marker, sha, "started"]).status, 0);
+    const original = readFileSync(marker, "utf8");
+    for (let retry = 0; retry < 3; retry++) {
+      const restarted = run([executable]);
+      assert.equal(restarted.status, 1);
+      assert.match(restarted.stderr, /INJECTED_STARTUP_FAILURE/);
+      assert.equal(readFileSync(marker, "utf8"), original, "Retries preserve the first activation evidence");
+    }
+    writeFileSync(marker, JSON.stringify({ stage: 'started', sha: '3'.repeat(40), fault: 'INJECTED_STARTUP_FAILURE' }));
+    assert.match(run([executable]).stderr, /Unexpected health fixture evidence/);
+    writeFileSync(marker, original);
     assert.notEqual(run([helper, "prepare", root, "health", sha, marker]).status, 0, "Stale markers must be rejected");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

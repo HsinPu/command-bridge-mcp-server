@@ -1,6 +1,10 @@
 # Architecture implementation validation
 
-The current package is 4.3.2, adding service update/check commands while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+The current package is 4.3.3, adding service update/check commands while retaining existing execution policies, self-protection and service-account modes. Historical results below retain their tested versions. The existing v0.4.0 tag is unchanged. Installation availability is determined by the CI-published channel, independently of Git tags or this document's version number. A new commit is available through the public bootstrap only after its full cross-platform service gate succeeds.
+
+## 4.3.3 validation
+
+4.3.2 hosted general jobs passed on both platforms. The Linux service gate passed health rollback, then failed the installer-account switch fault-message assertion. Repeated startup exposed exclusive marker creation replacing the intended fault with EEXIST. The fixture now reuses only matching SHA/stage/fault evidence and rejects unexpected evidence; the pre-case stale-marker check and fault/evidence assertions remain mandatory. Local Windows npm test passed 95/111 with 16 platform/elevation skips; WSL with checksum-verified Node.js 24.18.0 passed 98/111 with 13 skips. Regression tests verify three retries retain both the designated fault and unchanged evidence, and reject a mismatched marker. Bash/PowerShell syntax and git diff --check passed. Hosted service/migration/rollback and channel verification are pending at local validation time; Oracle Linux Enforcing and actual reboot remain unverified.
 
 ## 4.3.2 validation
 

@@ -43,7 +43,13 @@ export function prepare(root, mode, sha, marker, host) {
     const fault = `  const faultFs = await import('node:fs');
   const faultInfo = new URL('../install-info.json', import.meta.url);
   if (faultFs.existsSync(faultInfo) && JSON.parse(faultFs.readFileSync(faultInfo, 'utf8')).sourceSha === ${JSON.stringify(sha)}) {
-    faultFs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({stage:'started', sha:${JSON.stringify(sha)}, fault:'INJECTED_STARTUP_FAILURE'}), {flag:'wx'});
+    const faultMarker = ${JSON.stringify(marker)};
+    if (!faultFs.existsSync(faultMarker)) {
+      faultFs.writeFileSync(faultMarker, JSON.stringify({stage:'started', sha:${JSON.stringify(sha)}, fault:'INJECTED_STARTUP_FAILURE'}), {flag:'wx'});
+    } else {
+      const evidence = JSON.parse(faultFs.readFileSync(faultMarker, 'utf8'));
+      if (evidence.stage !== 'started' || evidence.sha !== ${JSON.stringify(sha)} || evidence.fault !== 'INJECTED_STARTUP_FAILURE') throw new Error('Unexpected health fixture evidence');
+    }
     console.error('INJECTED_STARTUP_FAILURE');
     process.exitCode = 1;
     return;
