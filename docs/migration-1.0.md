@@ -47,7 +47,7 @@ Only successful main-push CI runs publish the channel, after both platforms pass
 
 安裝入口與程式版本已分開。升版只維護 package.json 與 lockfile 根套件版本，建置會產生 MCP 版本資訊。每個安裝保存版本、SHA 與 Runtime 資訊。Git tag 可留作歷史參考，不是安裝前置條件。本機 clone 安裝需先提交變更，以免同一 SHA 對應不同內容。
 
-Uninstall prefers the root/admin-controlled uninstaller saved by the installed release. Windows downloads the current verified snapshot when that file is absent. Linux also uses that SHA-pinned fallback when a required saved layout helper is absent or an older uninstaller leaves managed program assets. Existing unsafe assets are rejected; missing-helper help/dry-run remains a preview. Default uninstall keeps configuration/token/work data; explicit purge removes them. A failed migration is rejected before switching the running application.
+Uninstall prefers the root/admin-controlled modern uninstaller saved by the installed release. Windows downloads the current verified snapshot when that file is absent. Linux also uses that SHA-pinned fallback when a required saved layout helper is absent or a legacy script lacks full layout preflight, before the legacy script can stop or remove the old service. If the downloaded script cannot validate all roots, removal is refused with the deployment intact. Both original alias parents and canonical saved-asset paths must be protected; unsafe assets are rejected. Offline legacy help and safe missing-helper help/dry-run remain previews. Default uninstall keeps configuration/token/work data; explicit purge removes them. A failed migration is rejected before switching the running application.
 
 ## Audit backends / 稽核後端
 

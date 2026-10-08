@@ -43,6 +43,9 @@ assert_managed_program_tree() {
 assert_layout_alias() {
   local path=$1 target resolved
   [[ -L "$path" ]] || return 0
+  # Resolving the alias alone skips the original parent (for example /opt).
+  # Protect the directory entry as well as its target before any host changes.
+  assert_admin_path "${path%/*}"
   [[ "$(stat -c %u "$path")" == 0 ]] || fail "Non-administrator deployment alias: $path"
   target=$(readlink "$path")
   [[ "$path" != "$INSTALL_ROOT" && ( "$target" == "$INSTALL_ROOT" || ( "$path" == "$LEGACY_INSTALL_ROOT" && "$target" == "$PREVIOUS_INSTALL_ROOT" ) ) ]] || fail "Unexpected deployment alias: $path"

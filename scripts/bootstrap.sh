@@ -13,17 +13,38 @@ if [[ "${1:-}" == "--update" ]]; then
   if [[ "$check" == 0 && "$EUID" != 0 ]]; then echo 'Run sudo command-bridge update from an administrator terminal.' >&2; exit 1; fi
 fi
 if [[ "${1:-}" == "--uninstall" ]]; then mode=uninstall; shift; fi
-trusted_installed_path() {
-  local path=$1 mode resolved
-  resolved=$(readlink -f "$path") || return 1
-  case "$resolved" in /usr/local/lib/command-bridge/*|/opt/command-bridge/*|/opt/command-bridge-mcp-server/*) ;; *) return 1 ;; esac
-  path=$resolved
+trusted_physical_path() {
+  local path=$1 mode
   while [[ "$path" != / ]]; do
     [[ ! -L "$path" && "$(stat -c %u "$path")" == 0 ]] || return 1
     mode=$(stat -c %a "$path")
     (( (8#$mode & 022) == 0 )) || return 1
     path=${path%/*}; [[ -n "$path" ]] || path=/
   done
+}
+trusted_installed_path() {
+  local path=$1 cursor mode resolved root
+  case "$path" in
+    /usr/local/lib/command-bridge/*) root=/usr/local/lib/command-bridge ;;
+    /opt/command-bridge/*) root=/opt/command-bridge ;;
+    /opt/command-bridge-mcp-server/*) root=/opt/command-bridge-mcp-server ;;
+    *) return 1 ;;
+  esac
+  trusted_physical_path "${root%/*}" || return 1
+  # Check lexical ancestors too: canonical paths omit compatibility aliases.
+  cursor=$path
+  while [[ "$cursor" != "${root%/*}" ]]; do
+    [[ "$(stat -c %u "$cursor")" == 0 ]] || return 1
+    if [[ ! -L "$cursor" ]]; then
+      mode=$(stat -c %a "$cursor")
+      (( (8#$mode & 022) == 0 )) || return 1
+    fi
+    cursor=${cursor%/*}
+  done
+  resolved=$(readlink -f "$path") || return 1
+  case "$resolved" in /usr/local/lib/command-bridge/*|/opt/command-bridge/*|/opt/command-bridge-mcp-server/*) ;; *) return 1 ;; esac
+  trusted_physical_path "$resolved" || return 1
+  TRUSTED_INSTALLED_PATH=$resolved
 }
 managed_program_remains() {
   local path
@@ -39,26 +60,32 @@ managed_program_remains() {
   return 1
 }
 if [[ "$mode" == uninstall ]]; then
+  # Older saved modern helpers may not check alias parents. Protect every
+  # existing root/backup's entry before selecting or downloading an uninstaller.
+  for installed_root in /usr/local/lib/command-bridge /opt/command-bridge /opt/command-bridge-mcp-server; do
+    if [[ -e "$installed_root" || -L "$installed_root" || -e "$installed_root.migration-backup" || -L "$installed_root.migration-backup" ]]; then
+      trusted_physical_path "${installed_root%/*}" || { echo 'Installed program parent is unsafe.' >&2; exit 1; }
+    fi
+  done
   for installed_root in /usr/local/lib/command-bridge /opt/command-bridge /opt/command-bridge-mcp-server; do
     if [[ -f "$installed_root/current/uninstall.sh" ]]; then
       trusted_installed_path "$installed_root/current/uninstall.sh" || { echo 'Installed uninstaller or its parent is unsafe.' >&2; exit 1; }
-      if grep -Fq 'remove_all_program_roots' "$installed_root/current/uninstall.sh"; then
-        helper="$installed_root/current/layout.sh"
+      saved_uninstaller=$TRUSTED_INSTALLED_PATH
+      if grep -Fq 'remove_all_program_roots' "$saved_uninstaller"; then
+        helper="${saved_uninstaller%/*}/layout.sh"
         if [[ ! -e "$helper" && ! -L "$helper" ]]; then
           echo 'Installed layout helper is missing; using the verified channel uninstaller.' >&2
           break
         fi
-        [[ -f "$helper" ]] && trusted_installed_path "$helper" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
-        exec bash "$installed_root/current/uninstall.sh" "$@"
+        [[ -f "$helper" && ! -L "$helper" ]] && trusted_installed_path "$helper" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
+        exec bash "$saved_uninstaller" "$@"
       fi
       for option in "$@"; do
-        case "$option" in --help|-h) exec bash "$installed_root/current/uninstall.sh" "$@" ;; esac
+        case "$option" in --help|-h) exec bash "$saved_uninstaller" "$@" ;; esac
       done
-      bash "$installed_root/current/uninstall.sh" "$@"
-      # An older uninstaller only knows its own layout. Inspect all known roots
-      # and assets before reporting success; use the verified fallback if needed.
-      managed_program_remains || exit 0
-      echo 'Old uninstaller completed; checking remaining managed deployment assets with the verified uninstaller.'
+      # A legacy script cannot preflight the other roots. Do not let it stop or
+      # remove the old deployment before the verified full-layout preflight.
+      echo 'Installed uninstaller lacks complete layout validation; using the verified channel uninstaller.'
       break
     fi
   done
@@ -68,7 +95,10 @@ installed_sha=
 if [[ "$update" == 1 ]]; then
   for candidate in /usr/local/lib/command-bridge /opt/command-bridge /opt/command-bridge-mcp-server; do
     if [[ -f "$candidate/current/install-info.json" ]]; then
-      trusted_installed_path "$candidate/current/install-info.json" && trusted_installed_path "$candidate/runtime/current/bin/node" || { echo 'Installed update assets are unsafe.' >&2; exit 1; }
+      trusted_installed_path "$candidate/current/install-info.json" || { echo 'Installed update assets are unsafe.' >&2; exit 1; }
+      installed_info=$TRUSTED_INSTALLED_PATH
+      trusted_installed_path "$candidate/runtime/current/bin/node" || { echo 'Installed update assets are unsafe.' >&2; exit 1; }
+      installed_node=$TRUSTED_INSTALLED_PATH
       physical=$(readlink -f "$candidate")
       [[ -z "$installed_root" || "$physical" == "$installed_root" ]] || { echo 'Multiple independent deployments exist; update was not started.' >&2; exit 1; }
       installed_root=$physical
@@ -77,7 +107,7 @@ if [[ "$update" == 1 ]]; then
   [[ -n "$installed_root" ]] || { echo 'No managed installation; use the one-command installer first.' >&2; exit 1; }
   [[ -f "$installed_root/current/install-info.json" && -x "$installed_root/runtime/current/bin/node" ]] || { echo 'No managed installation; use the one-command installer first.' >&2; exit 1; }
   # Metadata is data, not executable configuration. Print only version/SHA.
-  installed=$("$installed_root/runtime/current/bin/node" -e 'try { const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!/^[a-f0-9]{40}$/.test(i.sourceSha)||!/^\d+\.\d+\.\d+$/.test(i.version)) throw 0; console.log(i.version+" "+i.sourceSha) } catch { console.error("Invalid installed metadata."); process.exit(1) }' "$installed_root/current/install-info.json")
+  installed=$("$installed_node" -e 'try { const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!/^[a-f0-9]{40}$/.test(i.sourceSha)||!/^\d+\.\d+\.\d+$/.test(i.version)) throw 0; console.log(i.version+" "+i.sourceSha) } catch { console.error("Invalid installed metadata."); process.exit(1) }' "$installed_info")
   installed_sha=${installed#* }
 fi
 work=$(mktemp -d /tmp/command-bridge-bootstrap.XXXXXX)
@@ -98,6 +128,16 @@ mkdir "$work/source"
 tar -xzf "$work/source.tar.gz" -C "$work/source" --strip-components=1
 printf '%s\n' "$sha" > "$work/source/.command-bridge-source-sha"
 printf '%s\n' "${fields[1]}" > "$work/source/.command-bridge-source-version"
+if [[ "$mode" == uninstall ]]; then
+  uninstaller="$work/source/scripts/linux-systemd/uninstall.sh"
+  if grep -Fq 'remove_all_program_roots' "$uninstaller"; then
+    [[ -f "${uninstaller%/*}/layout.sh" && ! -L "${uninstaller%/*}/layout.sh" ]] || { echo 'Verified uninstaller layout helper is missing or invalid; no changes were made.' >&2; exit 1; }
+  else
+    preview=0
+    for option in "$@"; do case "$option" in --dry-run|--help|-h) preview=1 ;; esac; done
+    [[ "$preview" == 1 ]] || { echo 'Verified channel uninstaller is too old to validate all known program roots; no changes were made. Wait for a successful CI publication.' >&2; exit 1; }
+  fi
+fi
 bash "$work/source/scripts/linux-systemd/${mode}.sh" "$@"
 if [[ "$mode" == uninstall ]]; then
   for option in "$@"; do case "$option" in --dry-run|--help|-h) exit 0 ;; esac; done

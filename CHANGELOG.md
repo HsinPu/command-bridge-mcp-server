@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.6.2 — 2026-10-08
+
+PATCH: fix Linux alias-parent validation and uninstall preflight ordering; preserve valid managed deployments, MCP interfaces and fixed installation entry points.
+
+- Validate each compatibility alias's original parent ownership and permissions during installation and uninstall. Bootstrap checks existing program/backup parents, lexical saved-asset ancestors and canonical targets, and executes the verified canonical saved script/runtime.
+- Replace legacy saved uninstallers with the CI-pinned full-layout uninstaller before any service stop or removal. Refuse an older downloaded uninstaller that lacks full-layout validation, or a missing/invalid modern helper, without changing the installed service. Keep offline legacy help, safe previews and channel error handling.
+- Add private filesystem regressions for unsafe aliases, foreign/mounted/writable roots, fallback failures, preview/data preservation and successful pinned cleanup. Extend both real Linux service-account scenarios to prove unknown new roots leave the old service, source identity, configuration, updater, work and authenticated MCP/Audit intact.
+- Synchronize both READMEs, platform/migration guides, project rules and validation evidence; no source publication is claimed before CI succeeds.
+
 ## 4.6.1 — 2026-10-08
 
 PATCH: close Linux migration, self-protection and uninstall reliability gaps without changing supported MCP interfaces or installation entry points.

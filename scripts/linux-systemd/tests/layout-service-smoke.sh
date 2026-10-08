@@ -55,6 +55,28 @@ for mode in ${LAYOUT_TEST_MODES:-dedicated installer}; do
   sudo touch "$data_root/layout-preserved"
   asset_hash=$(sudo sha256sum /usr/local/libexec/command-bridge-update/request /etc/systemd/system/command-bridge-update.service)
   [[ ! -e /usr/local/libexec/command-bridge-diagnostics && ! -e /etc/sudoers.d/command-bridge-diagnostics ]]
+  # A legacy saved uninstaller must not stop the real old service before the
+  # channel's full-layout preflight rejects an unknown new program directory.
+  preflight_archive="$work/preflight-$mode.tar.gz"
+  tar -C "$work" -czf "$preflight_archive" new
+  node --input-type=module - "$root" "$preflight_archive" "$version" "$work/preflight-$mode.sh" <<'JS'
+import {readFileSync,writeFileSync} from 'node:fs';import {pathToFileURL} from 'node:url';
+const [root,archive,version,out]=process.argv.slice(2);
+const {fixtureBootstrap}=await import(pathToFileURL(root+'/scripts/tests/managed-update-fixture.mjs'));
+writeFileSync(out,fixtureBootstrap(readFileSync(root+'/scripts/bootstrap.sh','utf8'),'linux','b'.repeat(40),version,archive));
+JS
+  sudo mkdir -- "$new_root"
+  sudo touch "$new_root/layout-foreign-fixture"
+  if sudo bash "$work/preflight-$mode.sh" --uninstall --yes > "$work/preflight-$mode.log" 2>&1; then echo 'Expected unknown program root rejection'; exit 1; fi
+  grep -q 'No managed release identity' "$work/preflight-$mode.log"
+  sudo systemctl is-active --quiet command-bridge
+  [[ "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" && "$(sudo sha256sum "$old_root/current/install-info.json" | cut -d' ' -f1)" == "$info_hash" ]]
+  [[ "$(sudo sha256sum /usr/local/libexec/command-bridge-update/request /etc/systemd/system/command-bridge-update.service)" == "$asset_hash" ]]
+  sudo test -f "$new_root/layout-foreign-fixture"
+  sudo test -f "$data_root/layout-preserved"
+  sudo "$old_root/runtime/current/bin/node" "$old_root/current/scripts/verify-install.mjs" "$config"
+  sudo rm -- "$new_root/layout-foreign-fixture"
+  sudo rmdir -- "$new_root"
   assert_restored() {
     [[ -d "$old_root" && ! -L "$old_root" && ! -e "$new_root" && ! -L "$new_root" ]]
     [[ "$(readlink "$old_root/current")" == "$old_target" && "$(sudo sha256sum "$old_root/current/install-info.json" | cut -d' ' -f1)" == "$info_hash" ]]

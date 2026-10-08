@@ -119,6 +119,23 @@ reset_migration; inspect_application_layout; prepare_application_migration; comm
 INSTALL_SUCCEEDED=1; ACTIVATION_STARTED=0; finish_application_migration
 [[ ! -e "$PREVIOUS_INSTALL_ROOT.migration-backup" && -L "$PREVIOUS_INSTALL_ROOT" ]]
 inspect_application_layout; [[ "$EXISTING_APP_ROOT" == "$INSTALL_ROOT" ]]
+# Migrated aliases must still protect their original parent, even though their
+# canonical target lives under the safe new parent. Both installation and the
+# actual uninstaller's pre-stop validator must refuse before changing files.
+source <(sed -n '/^validate_all_program_removals()/,/^}/p' scripts/linux-systemd/uninstall.sh)
+for alias in "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"; do
+  for bits in 0777 0775; do
+    chmod "$bits" "${alias%/*}"
+    expect_failure assert_layout_alias "$alias"
+    expect_failure inspect_application_layout
+    expect_failure validate_all_program_removals
+    [[ -L "$alias" && -f "$INSTALL_ROOT/current/preserved" ]]
+  done
+  chmod 0755 "${alias%/*}"
+  BAD_OWNER_PATH=${alias%/*}; expect_failure assert_layout_alias "$alias"
+  expect_failure validate_all_program_removals; BAD_OWNER_PATH=
+  inspect_application_layout; validate_all_program_removals
+done
 # Two real deployments are ambiguous for installation, but verified leftovers
 # at all roots must be removable together by the uninstaller.
 unlink "$PREVIOUS_INSTALL_ROOT"; make_app "$PREVIOUS_INSTALL_ROOT"
