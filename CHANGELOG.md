@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.0.3 — 2026-10-08
+
+PATCH: fix a Linux recovery test dependency exposed by real installer service validation; production deployment, command policies and release gates are unchanged.
+
+- Run the private uninstall/purge recovery regression with the installer's restricted `/usr/bin:/bin` PATH. Simulate absent identity tools inside that fixture and fail any unexpected deletion call, rather than depending on host sbin tools or touching host accounts.
+- Emit fixed scenario/line/exit metadata on recovery fixture failure. Keep complete backup, preserved data, unsafe-purge rejection and activation/fault evidence assertions.
+- Record 6.0.2 hosted general-test success and the Linux service/layout source-build failure. Update current version examples and guides without changing bootstrap commands or relaxing installer validation.
+
 ## 6.0.2 — 2026-10-08
 
 PATCH: stabilize Windows PowerShell Shell source transport and built-in file cmdlet loading while retaining command policies, input/output fields and existing production deadlines.

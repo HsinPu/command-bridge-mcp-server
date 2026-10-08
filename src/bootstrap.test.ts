@@ -49,7 +49,7 @@ test("Linux bootstrap replaces legacy uninstallers before mutation and trusts sa
     writeFileSync(join(directory, "source/scripts/linux-systemd/uninstall.sh"), '#!/bin/bash\nset -eu\n# remove_all_program_roots\nprintf "fallback %s\\n" "$(cat "$(dirname "$0")/../../.command-bridge-source-sha")" >> "$FIXTURE/order"\nfor arg do case "$arg" in --dry-run|--help|-h) exit 0 ;; esac; done\nif [[ "${LEAVE_REMAINS:-0}" == 0 ]]; then rm -rf -- "$FIXTURE/old" "$FIXTURE/app.migration-backup"; fi\n');
     writeFileSync(join(directory, "source/scripts/linux-systemd/layout.sh"), "# saved helper\n");
     execFileSync("tar", ["-czf", join(directory, "archive.tar.gz"), "-C", directory, "source"]);
-    writeFileSync(join(directory, "channel"), `${sha}\n6.0.2\n`);
+    writeFileSync(join(directory, "channel"), `${sha}\n6.0.3\n`);
     writeFileSync(join(bin, "curl"), '#!/bin/bash\nset -eu\nurl=; out=\nwhile (($#)); do case "$1" in https:*) url="$1";; -o) shift; out="$1";; esac; shift; done\nprintf "%s\\n" "$url" >> "$FIXTURE/requests"\nif [[ "$url" == */channel.txt ]]; then [[ "${FAIL_CHANNEL:-0}" == 0 ]] || exit 22; cp "$FIXTURE/channel" "$out"; else cp "$FIXTURE/archive.tar.gz" "$out"; fi\n');
     writeFileSync(join(bin, "stat"), '#!/bin/sh\n[ -e "$3" ] || [ -L "$3" ] || exec /usr/bin/stat "$@"\ncase "$2" in %u) if [ "$3" = "${UNSAFE_PATH:-}" ]; then echo 1234; else echo 0; fi;; %a) echo 755;; *) /usr/bin/stat "$@";; esac\n');
     chmodSync(join(bin, "curl"), 0o755); chmodSync(join(bin, "stat"), 0o755);
@@ -141,13 +141,13 @@ else [[ "\${FAIL_ARCHIVE:-0}" == 0 ]] || exit 22; cp "$FIXTURE/archive.tar.gz" "
       for (const path of roots) rmSync(path, { recursive: true, force: true });
       mkdirSync(join(root, "current"), { recursive: true });
       writeFileSync(join(root, "current/uninstall.sh"), '#!/bin/bash\nset -eu\n# remove_all_program_roots\nsource "$(dirname "$0")/layout.sh"\necho saved >> "$FIXTURE/order"\n');
-      writeFileSync(channel, `${sha}\n6.0.2\n`); writeFileSync(order, ""); writeFileSync(requests, "");
+      writeFileSync(channel, `${sha}\n6.0.3\n`); writeFileSync(order, ""); writeFileSync(requests, "");
       rmSync(join(directory, "flags"), { force: true });
     };
     const run = (flags: string[] = [], extra = {}) => spawnSync("bash", [bootstrap, "--uninstall", "--yes", ...flags],
       { encoding: "utf8", timeout: 15_000, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE: directory, ...extra } });
     const assertSnapshot = () => {
-      assert.equal(readFileSync(order, "utf8"), `fallback ${sha} 6.0.2\n`);
+      assert.equal(readFileSync(order, "utf8"), `fallback ${sha} 6.0.3\n`);
       assert.deepEqual(readFileSync(requests, "utf8").trim().split("\n"), [
         "https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/install-channel/channel.txt",
         `https://github.com/HsinPu/command-bridge-mcp-server/archive/${sha}.tar.gz`
@@ -170,7 +170,7 @@ else [[ "\${FAIL_ARCHIVE:-0}" == 0 ]] || exit 22; cp "$FIXTURE/archive.tar.gz" "
       prepare(); assert.notEqual(run([], failure).status, 0);
       assert.equal(readFileSync(order, "utf8"), ""); assert.equal(existsSync(join(app, "current/uninstall.sh")), true);
     }
-    prepare(); writeFileSync(channel, "main\n6.0.2\n"); assert.notEqual(run().status, 0);
+    prepare(); writeFileSync(channel, "main\n6.0.3\n"); assert.notEqual(run().status, 0);
     assert.equal(readFileSync(order, "utf8"), ""); assert.equal(readFileSync(requests, "utf8").trim().split("\n").length, 1);
     const helper = join(app, "current/layout.sh");
     for (const failure of ["owner", "writable", "directory", "dangling", "escape", "parent"] as const) {

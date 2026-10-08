@@ -7,7 +7,12 @@ import { tmpdir } from "node:os";
 
 for (const scenario of ["backup", "configuration", "restore", "retain", "uninstall"]) {
   test(`Linux installer recovery preserves originals and reports failures: ${scenario}`, { skip: process.platform !== "linux" }, () => {
-    const result = spawnSync("bash", ["scripts/linux-systemd/tests/recovery.test.sh", scenario], { encoding: "utf8", timeout: 30_000 });
+    const result = spawnSync("bash", ["scripts/linux-systemd/tests/recovery.test.sh", scenario], {
+      encoding: "utf8", timeout: 30_000,
+      // Match the installer's unprivileged build PATH for the isolated purge
+      // case. Fixture identity tools must never delete real host accounts.
+      env: scenario === "uninstall" ? { ...process.env, PATH: "/usr/bin:/bin" } : process.env
+    });
     assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
   });
 }

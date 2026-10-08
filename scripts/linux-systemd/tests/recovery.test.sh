@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # All paths and mutations are confined to a disposable directory, also as non-root.
 set -Eeuo pipefail
+scenario=${1:-}
+trap 'fixture_exit=$?; printf "Recovery fixture failed: scenario=%s line=%s exit=%s\n" "$scenario" "$LINENO" "$fixture_exit" >&2' ERR
 work=$(mktemp -d /tmp/cb-recovery-test.XXXXXX)
 trap 'rm -rf --one-file-system -- "$work"' EXIT
 export FIXTURE=$work
@@ -231,6 +233,10 @@ acquire_lock() { :; }
 stat() { if [[ "$1" == -c && "$2" == %u ]]; then echo 0; elif [[ "$1" == -c && "$2" == %a ]]; then echo 755; else command stat "$@"; fi; }
 systemctl() { [[ "$1" == daemon-reload || "$1" == reset-failed ]]; }
 getent() { return 2; }
+# The simulated identities do not exist. Do not require sbin or permit an
+# accidental real host identity deletion when run under the build PATH.
+groupdel() { echo 'Unexpected fixture group deletion' >&2; return 1; }
+userdel() { echo 'Unexpected fixture user deletion' >&2; return 1; }
 SH
     for fault in writable symlink metadata hidden; do
       if FAULT=$fault bash -c '

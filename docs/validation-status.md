@@ -1,6 +1,14 @@
 # Architecture implementation validation
 
-The current package is 6.0.2, improving Windows PowerShell source transport and explicit built-in file cmdlet loading after the 6.0.1 reliability fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.0.3, fixing a private Linux recovery fixture under the installer's build environment after the Windows/dotenv reliability fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 6.0.3 validation (2026-10-08)
+
+PATCH: reproduce the Linux private uninstall recovery failure with `PATH=/usr/bin:/bin` before the fix, and verify the same original data/unsafe-purge assertions pass afterward. The fixture now provides simulated identity tools that fail any unexpected deletion, making source tests independent of sbin discovery without granting privilege or changing production PATH/account checks. Fixed scenario/line/exit metadata aids diagnosis; source-build failure still cannot substitute for service activation evidence.
+
+Full native Windows `npm test` with checksum-verified Node.js 24.18.0 passed **159/190**, with **31 platform/elevation skips**. The private WSL Ubuntu snapshot under `nobody`, using the same verified runtime, locked dependencies and the installer's restricted PATH, passed **163/190**, with **27 platform skips**. Both reported zero failures; the original uninstall recovery scenario fails before the correction and passes afterward under `/usr/bin:/bin`.
+
+All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses** and **WinSW XML** passed. Package/root lock/build versions, unchanged dependency versions, fixed bilingual bootstrap commands, documentation links and `git diff --check` are verified before commit. Hosted CI/service/layout/channel checks for the final SHA are pending at commit time; Oracle Linux 8.10 SELinux Enforcing and actual reboot remain untested.
 
 ## 6.0.2 validation (2026-10-08)
 
@@ -9,6 +17,8 @@ PATCH: Windows PowerShell Shell source now uses a fixed ASCII entry and private 
 Full native Windows `npm test` with checksum-verified Node.js 24.18.0 passed **159/190**, with **31 platform/elevation skips**; the private WSL Ubuntu snapshot under `nobody` with the same verified runtime and locked dependencies passed **163/190**, with **27 platform skips**. Both reported zero failures. Eight native Windows fixed-stage probes completed, including raw Unicode source, pinned module discovery, explicit Management loading, environment source transport, .NET reading and an ASCII reference.
 
 All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses**, **WinSW XML** and the diagnostic JavaScript syntax passed. Package/root lock/build versions, unchanged third-party dependency versions, the fixed bilingual bootstrap commands, relative links and `git diff --check` are verified before commit. Hosted CI and disposable Windows/Linux service/layout checks for the final SHA are pending at commit time. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested; installation-channel availability still requires all hosted gates and the final exact SHA/version.
+
+After push, [CI run 37782957217](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/37782957217) for `3f84364e3c5d7e2afec72e722d8669b6c949fa9d` passed both general jobs: Windows **160/190, zero failures, 30 skips**, Linux **163/190, zero failures, 27 skips**. The previous PowerShell UTF-8 read, long source, exit/error and explicit module-path cases passed. Linux service/layout validation then exposed the private uninstall fixture's dependency on absent sbin tools while running source tests under the restricted build PATH; the required fault activation evidence was absent, so both gates correctly failed. This drives 6.0.3; general-job success does not establish channel publication.
 
 ## 6.0.1 validation (2026-10-08)
 

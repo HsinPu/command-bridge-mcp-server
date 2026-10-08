@@ -1,12 +1,14 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.0.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.0.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
 From 6.0.0, reinstallation retains UTF-8 configuration BOM, Chinese text, LF/CRLF and the final-newline state while changing managed fields. Default dotenv/policy input rejects invalid UTF-8 before permissive decoding or rewriting, and rollback restores verified original bytes. Existing locale variables, including `LC_CTYPE`, remain available to child commands. Command-output encoding is separate from file encoding; see the [Chinese text and UTF-8 guide](text-encoding.md).
 
 6.0.1 validates the actual dotenv CLI-selected path/encoding and retains explicit legacy overrides. An empty existing configuration still receives the install mode selected by the current invocation; a failed install restores the exact empty file. This does not make an incomplete HTTP configuration ready or bypass MCP/Audit/service verification.
+
+6.0.3 verifies the private uninstall/purge recovery fixture under the installer's restricted build PATH. The fixture's simulated identity tools reject any unexpected deletion; production account checks, deletion rules, recovery retention and source tests are unchanged. An early build/test failure still cannot count as successful activation-fault rollback evidence.
 
 ## Supported hosts
 
@@ -156,8 +158,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.0.2-<source-sha>
-├── releases/v6.0.2-<source-sha>/
+├── current -> releases/v6.0.3-<source-sha>
+├── releases/v6.0.3-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
