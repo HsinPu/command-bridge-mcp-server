@@ -495,7 +495,10 @@ function Wait-ForHealth {
   if ($httpHost -eq '::') { $httpHost = '::1' }
   if ($httpHost.Contains(':')) { $httpHost = "[$httpHost]" }
   $uri = "http://{0}:{1}/health" -f $httpHost, $port
-  $hostHeader = ((Get-ConfigValue 'COMMAND_BRIDGE_ALLOWED_HOSTS') -split ',')[0].Trim()
+  $hostModule = ([Uri](Join-Path $InstallRoot "$ApplicationRelativePath\dist\config\allowedHosts.js")).AbsoluteUri
+  $hostHeader = & (Join-Path $InstallRoot 'runtime\node.exe') -e 'import(process.argv[1]).then(m=>console.log(m.normalizeAllowedHosts(process.argv[2])[0] ?? String()))' $hostModule (Get-ConfigValue 'COMMAND_BRIDGE_ALLOWED_HOSTS')
+  if ($LASTEXITCODE -ne 0) { throw 'Invalid allowed Host configuration.' }
+  $hostHeader = ([string]$hostHeader).Trim()
   $lastFailure = 'UnexpectedContent'
   for ($attempt = 1; $attempt -le 20; $attempt += 1) {
     try {

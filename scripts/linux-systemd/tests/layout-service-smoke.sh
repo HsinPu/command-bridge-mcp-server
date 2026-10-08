@@ -27,7 +27,7 @@ finish() {
   exit "$code"
 }
 trap finish EXIT
-for path in "$new_root" "$old_root" /opt/command-bridge-mcp-server /etc/command-bridge /etc/command-bridge-mcp-server /var/lib/command-bridge /var/lib/command-bridge-installer; do
+for path in "$new_root" "$old_root" /opt/command-bridge-mcp-server /etc/command-bridge /etc/command-bridge-mcp-server /var/lib/command-bridge /var/lib/command-bridge-installer /var/lib/command-bridge-recovery; do
   [[ ! -e "$path" && ! -L "$path" ]] || { echo "Disposable test requires an empty path: $path"; exit 1; }
 done
 bash scripts/linux-systemd/tests/prepare-disposable-host.sh
@@ -162,6 +162,30 @@ JS
   [[ "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" ]]
   sudo test -f "$data_root/layout-preserved"
   # Create verified old program leftovers; uninstall must inspect all three roots.
+  stage=rollback-storage-failure
+  recovery_fixture="$work/recovery-$mode"; mkdir "$recovery_fixture"
+  cp -a "$work/new/." "$recovery_fixture/"
+  recovery_sha=$(printf '%040d' "$([[ "$mode" == dedicated ]] && echo 12 || echo 13)")
+  recovery_marker="$data_root/recovery-$mode.json"
+  sudo test ! -e "$recovery_marker"
+  node scripts/tests/recovery-fixture.mjs prepare "$recovery_fixture" "$recovery_sha" "$recovery_marker"
+  if sudo env SUDO_USER="$account" SUDO_UID="$account_uid" SUDO_GID="$account_gid" bash "$recovery_fixture/scripts/linux-systemd/install.sh" "${flags[@]}" > "$work/recovery-$mode.log" 2>&1; then echo 'Expected incomplete recovery'; exit 1; fi
+  grep -q INJECTED_RECOVERY_FAILURE "$work/recovery-$mode.log"
+  grep -q 'Rollback is incomplete' "$work/recovery-$mode.log"
+  sudo "$test_node" scripts/tests/recovery-fixture.mjs assert "$recovery_marker" "$recovery_sha"
+  if sudo systemctl is-active --quiet command-bridge; then echo 'Incomplete recovery restarted service'; exit 1; fi
+  [[ "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" ]]
+  retained=$(sudo find /var/lib/command-bridge-recovery -mindepth 1 -maxdepth 1 -type d -name 'failed.*' -print)
+  sudo test -f "$retained/snapshots/update-assets-backup/complete"
+  if sudo env SUDO_USER="$account" SUDO_UID="$account_uid" SUDO_GID="$account_gid" bash "$work/new/scripts/linux-systemd/install.sh" "${flags[@]}" > "$work/pending-$mode.log" 2>&1; then echo 'Pending recovery ignored'; exit 1; fi
+  grep -q 'Incomplete installer recovery exists' "$work/pending-$mode.log"
+  # Model explicit administrator recovery using the unmodified fixed module.
+  sudo bash -c 'source "$1/install.sh"; trap - EXIT ERR; source "$1/managed-update.sh"; detect_selinux; MANAGED_UPDATE_BACKUP="$2/snapshots/update-assets-backup"; restore_managed_update_assets' _ "$work/new/scripts/linux-systemd" "$retained"
+  sudo systemctl restart command-bridge
+  sudo "$test_node" scripts/tests/wait-for-listener.mjs "$config"
+  sudo "$new_root/runtime/current/bin/node" "$new_root/current/scripts/verify-install.mjs" "$config"
+  [[ "$(sudo "$test_node" -p 'JSON.parse(require("fs").readFileSync(process.argv[1])).sourceSha' "$new_root/current/install-info.json")" == "$target_sha" ]]
+  sudo test -f "$data_root/layout-preserved"
   stage=complete-uninstall
   sudo cp -a --no-preserve=context "$new_root" "$old_root"
   sudo cp -a --no-preserve=context "$new_root" /opt/command-bridge-mcp-server
@@ -189,9 +213,10 @@ JS
   for path in "$new_root" "$old_root" /opt/command-bridge-mcp-server; do [[ ! -e "$path" && ! -L "$path" ]]; done
   [[ "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" ]]
   sudo test -f "$data_root/layout-preserved"
+  sudo test -f "$retained/snapshots/update-assets-backup/complete"
   stage=purge
   sudo bash "$work/bootstrap.sh" --uninstall --purge --yes > "$work/purge-$mode.log" 2>&1 || { tail -n 30 "$work/purge-$mode.log"; exit 1; }
-  for path in /etc/command-bridge /var/lib/command-bridge /var/lib/command-bridge-installer /var/lib/command-bridge-update; do sudo test ! -e "$path"; done
+  for path in /etc/command-bridge /var/lib/command-bridge /var/lib/command-bridge-installer /var/lib/command-bridge-update /var/lib/command-bridge-recovery; do sudo test ! -e "$path"; done
   getent passwd "$account" >/dev/null
   echo "Real $mode migration, activation evidence, rollback, MCP update and complete uninstall passed."
 done

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { delimiter, resolve, isAbsolute } from "node:path";
 import { z } from "zod";
+import { normalizeAllowedHosts } from "./allowedHosts.js";
 import type { ExecutionMode, ShellKind } from "../services/commandPolicy.js";
 import { loadCommandProfiles, validateEnabledProfiles, type CommandProfile } from "../services/commandProfiles.js";
 
@@ -65,7 +66,7 @@ export function loadConfig(): AppConfig {
   const raw = result.data;
   if ((raw.COMMAND_BRIDGE_UPLOAD_ENABLED === "true" || raw.COMMAND_BRIDGE_DOWNLOAD_ENABLED === "true") &&
       (!raw.COMMAND_BRIDGE_TRANSFER_ROOT || !isAbsolute(raw.COMMAND_BRIDGE_TRANSFER_ROOT))) throw new Error("Enabled file transfer requires an absolute COMMAND_BRIDGE_TRANSFER_ROOT.");
-  const allowedHosts = parseCommaList(raw.COMMAND_BRIDGE_ALLOWED_HOSTS);
+  const allowedHosts = normalizeAllowedHosts(raw.COMMAND_BRIDGE_ALLOWED_HOSTS);
   const allowedShells = parseAllowedShells(raw.COMMAND_BRIDGE_ALLOWED_SHELLS);
   const allowedCommands = new Set(
     (raw.COMMAND_BRIDGE_ALLOWED_COMMANDS

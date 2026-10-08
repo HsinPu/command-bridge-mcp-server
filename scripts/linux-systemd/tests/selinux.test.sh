@@ -10,6 +10,7 @@ sed -e "s|/usr/local/lib/command-bridge|${work}/app/command-bridge|g" \
     -e "s|/usr/local/libexec/|${work}/helpers/|g" \
     -e "s|/etc/sudoers.d/|${work}/sudoers/|g" \
     -e "s|/opt/command-bridge|${work}/old/command-bridge|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
+cp scripts/linux-systemd/recovery.sh "$work/recovery.sh"
 source "$work/installer.sh"
 source scripts/linux-systemd/layout.sh
 source scripts/linux-systemd/program-migration.sh
@@ -145,7 +146,9 @@ MOCK_FAIL_RESTORE=''
 # Restored files/links must be relabeled before the old service is restarted.
 PREVIOUS_RELEASE="$release"; PREVIOUS_RUNTIME="$runtime"
 CONFIG_BACKUP="$work/previous.env"
-printf 'preserved token\n' > "$CONFIG_BACKUP"
+printf 'preserved token\n' > "$CONFIG_FILE"
+save_file_backup "$CONFIG_FILE" "$CONFIG_BACKUP"
+CONFIG_CHANGED=1
 printf 'candidate token\n' > "$CONFIG_FILE"
 ACTIVATION_STARTED=1
 : > "$LABEL_EVENTS"
@@ -158,11 +161,12 @@ restart=$(grep -n '^systemctl restart ' "$LABEL_EVENTS" | cut -d: -f1)
 MOCK_FAIL_RESTORE="$INSTALL_ROOT"
 : > "$LABEL_EVENTS"
 ACTIVATION_STARTED=1
-rollback_activation > "$work/rollback-warning" || exit 1
+if rollback_activation > "$work/rollback-warning"; then echo 'Failed rollback returned success'; exit 1; fi
 grep -Fxq 'systemctl stop command-bridge.service' "$LABEL_EVENTS"
 ! grep -q '^systemctl restart ' "$LABEL_EVENTS"
-grep -q 'restored service was not restarted' "$work/rollback-warning"
+grep -q 'Rollback is incomplete' "$work/rollback-warning"
 MOCK_FAIL_RESTORE=''
+RECOVERY_FAILED=0
 
 # Migration rollback must label the old paths, after moving directories back.
 LEGACY_MIGRATION=1; LEGACY_APP_PRESENT=1; LEGACY_CONFIG_PRESENT=1; LEGACY_STATE_PRESENT=1

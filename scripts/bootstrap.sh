@@ -78,6 +78,10 @@ if [[ "$mode" == uninstall ]]; then
           break
         fi
         [[ -f "$helper" && ! -L "$helper" ]] && trusted_installed_path "$helper" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
+        if [[ ( -e /var/lib/command-bridge-recovery || -L /var/lib/command-bridge-recovery ) ]] && ! grep -Fq 'validate_installer_recovery()' "$helper"; then
+          echo 'Installed uninstaller cannot inspect retained recovery records; using the verified channel uninstaller.' >&2
+          break
+        fi
         exec bash "$saved_uninstaller" "$@"
       fi
       for option in "$@"; do
@@ -132,6 +136,10 @@ if [[ "$mode" == uninstall ]]; then
   uninstaller="$work/source/scripts/linux-systemd/uninstall.sh"
   if grep -Fq 'remove_all_program_roots' "$uninstaller"; then
     [[ -f "${uninstaller%/*}/layout.sh" && ! -L "${uninstaller%/*}/layout.sh" ]] || { echo 'Verified uninstaller layout helper is missing or invalid; no changes were made.' >&2; exit 1; }
+    if [[ ( -e /var/lib/command-bridge-recovery || -L /var/lib/command-bridge-recovery ) ]] && ! grep -Fq 'validate_installer_recovery()' "${uninstaller%/*}/layout.sh"; then
+      echo 'Verified uninstaller is too old to inspect retained recovery records; no changes were made.' >&2
+      exit 1
+    fi
   else
     preview=0
     for option in "$@"; do case "$option" in --dry-run|--help|-h) preview=1 ;; esac; done

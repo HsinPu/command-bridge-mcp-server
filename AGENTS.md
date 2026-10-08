@@ -101,6 +101,9 @@ npm start
 
 ## 修改時應維持的行為
 
+- 5.0.1 起，Linux 備份完成複製、內容與 metadata 驗證後才發布可用狀態；原本存在、完整備份與實際修改須分開記錄，不得以備份缺失推定應刪除原檔。回復需逐項檢查檔案、權限、SELinux、CLI／layout 與 systemd 結果，Bash 條件呼叫不可吞掉失敗。回復不完整時不得重啟，保留 root 私有的必要資料於 `/var/lib/command-bridge-recovery`，後續安裝拒絕略過未完成回復。一般卸載保留、完整安全預檢後 purge 才移除；舊卸載器缺少 recovery 預檢時使用同一 CI SHA 的完整後備。暫存清理與更新 worker 不得刪掉必要回復資料。
+- 5.0.1 起，指令 stdout／stderr 及固定 helper 使用獨立 UTF-8 串流解碼器，維持字元／原始位元組限制、逾時及 Audit 終結規則。Windows cmd 的 verbatim 引數只適用於 Shell 模式，不得套用到原生 allowlist argv。Host 設定與安裝探測共用正規化，hostname 比對忽略選用 port；保留 Bearer／Host 拒絕行為，不將 Host 政策宣稱為來源 IP 防火牆。
+
 - 4.5.0 起，`command_bridge_get_diagnostics` 預設開啟，使用既有 Bearer／Host 驗證，但不依賴 Audit 成功。僅回傳固定 schema 的版本／服務／儲存狀態、首次 Audit 故障與最多 100 筆記憶體指令摘要；禁止回傳指令文字、cwd、stdout／stderr、Token、設定、原始錯誤／日誌或完整內部路徑。限制總回應 64 KiB／5 秒、完成結果快取 2 秒；底層 I/O 未結束時必須共用實際工作，不能因回應逾時反覆新增 helper。
 - 診斷讀取器只能使用固定來源，Linux 兩帳號模式都使用 root 管理的無參數 reader 與精確 numeric UID／NOSETENV sudoers；Windows 使用受保護的固定腳本，不增加通用提權。安裝需保存／回復資產、驗證 SELinux／ACL 並通過真實 MCP 診斷及 Audit，卸載移除讀取器授權。
 - 只有 Audit 故障且所有非 Audit 依賴已確認成功時，可保留唯讀診斷啟動；`/ready` 必須失敗，新的指令、傳輸及更新仍維持 Audit 先寫入規則。其他設定、政策或依賴錯誤拒絕啟動；診斷模式不得作為安裝成功或自動恢復 Audit 的依據。詳見 docs/diagnostics.md。

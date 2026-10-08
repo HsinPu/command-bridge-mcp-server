@@ -197,7 +197,7 @@ confirm_removal() {
 
 assert_safe_tree_path() {
   case "$1" in
-    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-diagnostics" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update")
+    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-diagnostics" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update" | "/var/lib/command-bridge-recovery")
       ;;
     "$PREVIOUS_INSTALL_ROOT" | "$LEGACY_INSTALL_ROOT" | "$INSTALL_ROOT.migration-backup" | "$PREVIOUS_INSTALL_ROOT.migration-backup" | "$LEGACY_INSTALL_ROOT.migration-backup" | "$LEGACY_CONFIG_DIR" | "$LEGACY_STATE_DIR") ;;
     *)
@@ -533,6 +533,7 @@ main() {
   confirm_removal
 
   validate_all_program_removals
+  validate_installer_recovery
   inspect_installed_unit
   inspect_installed_unit /etc/systemd/system/command-bridge-mcp-server.service command-bridge-mcp-server
   validate_legacy_data_paths
@@ -569,12 +570,14 @@ main() {
     remove_tree "${INSTALLER_STATE_DIR}"
     remove_tree "${SERVICE_HOME}"
     remove_tree /var/lib/command-bridge-update
+    remove_tree /var/lib/command-bridge-recovery
     remove_tree "$LEGACY_CONFIG_DIR"
     remove_tree "$LEGACY_STATE_DIR"
   fi
 
   print_summary
   log "Update task records in /var/lib/command-bridge-update are preserved unless --purge is used."
+  log "Private installer recovery records in /var/lib/command-bridge-recovery are preserved unless --purge is used."
 }
 
 main "$@"

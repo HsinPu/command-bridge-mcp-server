@@ -3,6 +3,7 @@ set -Eeuo pipefail
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 sed "s|/usr/local/lib/command-bridge|${work}/opt/command-bridge|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
+cp scripts/linux-systemd/recovery.sh "$work/recovery.sh"
 export CLEANUP_FIXTURE="$work"
 for mode in runtime release; do
   rm -rf -- "$work/opt"

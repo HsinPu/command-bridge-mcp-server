@@ -4,6 +4,7 @@ import express from "express";
 import { hostHeaderValidation, localhostHostValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { AppConfig } from "../config/env.js";
+import { normalizeAllowedHosts, normalizeHostHeader } from "../config/allowedHosts.js";
 import { createCommandBridgeServer } from "../server.js";
 import type { CommandExecutor } from "../services/commandExecutor.js";
 
@@ -17,7 +18,14 @@ export async function startHttpTransport(
   }
 
   const app = express();
-  if (config.allowedHosts.length) app.use(hostHeaderValidation(config.allowedHosts));
+  app.use((req, res, next) => {
+    if (req.headers.host) {
+      try { req.headers.host = normalizeHostHeader(req.headers.host); }
+      catch { res.status(403).json({ error: "Invalid Host header" }); return; }
+    }
+    next();
+  });
+  if (config.allowedHosts.length) app.use(hostHeaderValidation(normalizeAllowedHosts(config.allowedHosts)));
   else if (["127.0.0.1", "localhost", "::1"].includes(config.httpHost)) app.use(localhostHostValidation());
 
   app.get("/health", (_req, res) => {

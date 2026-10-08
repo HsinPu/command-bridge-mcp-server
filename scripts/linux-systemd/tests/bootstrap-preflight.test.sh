@@ -10,7 +10,7 @@ legacy="$work/old/command-bridge-mcp-server"
 mkdir -p "$work/bin" "$work/source/scripts/linux-systemd" "$work/data"
 printf 'keep-token-and-work\n' > "$work/data/keep"
 sha=dddddddddddddddddddddddddddddddddddddddd
-printf '%s\n5.0.0\n' "$sha" > "$work/channel"
+printf '%s\n5.0.1\n' "$sha" > "$work/channel"
 cp scripts/linux-systemd/layout.sh "$work/source/scripts/linux-systemd/layout.sh"
 # Use the real uninstaller's pre-stop validation, with a harmless stop marker.
 cat > "$work/modern.sh" <<'SH'
@@ -27,6 +27,7 @@ sed -n '/^validate_all_program_removals()/,/^}/p' scripts/linux-systemd/uninstal
 cat >> "$work/modern.sh" <<'SH'
 for option in "$@"; do case "$option" in --help|-h) exit 0 ;; esac; done
 validate_all_program_removals
+validate_installer_recovery
 printf 'fallback-preflight\n' >> "$FIXTURE/stages"
 for option in "$@"; do case "$option" in --dry-run) exit 0 ;; esac; done
 printf 'fallback-stop\n' >> "$FIXTURE/stages"
@@ -68,10 +69,11 @@ export PATH="$work/bin:$PATH"
 sed -e "s|/usr/local/lib/command-bridge|$app|g" -e "s|/opt/command-bridge-mcp-server|$legacy|g" \
     -e "s|/opt/command-bridge|$old|g" -e "s|/etc/systemd/system/|$work/units/|g" \
     -e "s|/usr/local/libexec/|$work/helpers/|g" -e "s|/etc/sudoers.d/|$work/sudoers/|g" \
+    -e "s|/var/lib/command-bridge-recovery|$work/recovery|g" \
     scripts/bootstrap.sh > "$work/bootstrap.sh"
 archive_modern() {
   cp "$work/modern.sh" "$work/source/scripts/linux-systemd/uninstall.sh"
-  cp scripts/linux-systemd/layout.sh "$work/source/scripts/linux-systemd/layout.sh"
+  sed "s|/var/lib/command-bridge-recovery|$work/recovery|g" scripts/linux-systemd/layout.sh > "$work/source/scripts/linux-systemd/layout.sh"
   tar -czf "$work/archive.tar.gz" -C "$work" source
 }
 make_app() {
@@ -83,7 +85,7 @@ make_app() {
 }
 reset() {
   chmod 0755 "$work/old" 2>/dev/null || true
-  rm -rf -- "$app" "$old" "$legacy"
+  rm -rf -- "$app" "$old" "$legacy" "$work/recovery"
   : > "$work/stages"; : > "$work/requests"; printf running > "$work/service"
   archive_modern
 }
@@ -139,6 +141,29 @@ for root in "$old" "$legacy"; do
   BAD_OWNER_PATH="$root/current" expect_failure
   grep -q 'Installed uninstaller or its parent is unsafe' "$work/result"
   assert_preserved; [[ ! -s "$work/requests" ]]
+done
+# A saved pre-5.0.1 layout helper cannot inspect retained recovery records.
+# Obtain a capable pinned fallback before running either uninstaller.
+for fault in channel archive old-helper safe; do
+  reset; make_app "$app"
+  cp "$work/modern.sh" "$app/current/uninstall.sh"
+  sed '/^validate_installer_recovery()/,/^}/d' scripts/linux-systemd/layout.sh > "$app/current/layout.sh"
+  mkdir -m 0700 -p "$work/recovery/failed.fixture/snapshots"
+  printf 'schemaVersion=1\n' > "$work/recovery/failed.fixture/snapshots/context"
+  chmod 0600 "$work/recovery/failed.fixture/snapshots/context"
+  case "$fault" in
+    channel) FAIL_CHANNEL=1 expect_failure; assert_preserved ;;
+    archive) FAIL_ARCHIVE=1 expect_failure; assert_preserved ;;
+    old-helper)
+      sed -i '/^validate_installer_recovery()/,/^}/d' "$work/source/scripts/linux-systemd/layout.sh"
+      tar -czf "$work/archive.tar.gz" -C "$work" source
+      expect_failure; assert_preserved
+      grep -q 'too old to inspect retained recovery records' "$work/result" ;;
+    safe)
+      run; [[ "$(cat "$work/stages")" == $'fallback-preflight\nfallback-stop' ]]
+      [[ -f "$work/recovery/failed.fixture/snapshots/context" && ! -e "$app" ]]
+      grep -Fxq "https://github.com/HsinPu/command-bridge-mcp-server/archive/$sha.tar.gz" "$work/requests" ;;
+  esac
 done
 # Saved modern uninstallers must also reject writable/non-root alias parents,
 # even when the new root is selected first and both aliases resolve into it.

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-5.0.0-blue)
+![Version](https://img.shields.io/badge/version-5.0.1-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -32,7 +32,7 @@ CommandBridge 是部署在目標主機上的 [Model Context Protocol（MCP）](h
 - **執行政策**：預設使用指令白名單，另可限制 Shell、工作目錄、逾時、輸出量、環境變數與同時執行數。
 - **操作稽核**：記錄執行前後的 Audit 事件；初始稽核寫入失敗時不啟動指令。
 - **低權限服務**：Linux 使用專用 `command-bridge` 帳號；Windows 使用 `LocalService`。
-- **保留既有設定**：重新安裝會保留設定與 Token；升級流程提供啟用失敗時的回復機制。
+- **保留既有設定**：重新安裝會保留設定與 Token；升級流程提供啟用失敗時的回復機制。Linux 替換檔案前先驗證備份；回復不完整時停止重啟，並保留私有回復紀錄供管理員處理。
 
 ## 運作方式
 

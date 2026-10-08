@@ -79,6 +79,8 @@ INSTALLER_UID=""
 INSTALLER_GID=""
 INSTALLER_HOME=""
 CONFIG_BACKUP=""
+CONFIG_CHANGED=0
+UNIT_CHANGED=0
 INSTALL_SUCCEEDED=0
 LEGACY_MIGRATION=0
 LEGACY_WAS_ACTIVE=0
@@ -100,6 +102,7 @@ APP_ORIGINAL_ROOT=""
 APP_BACKUP_PATH=""
 APP_ALIAS_NAMES=()
 APP_ALIAS_TARGETS=()
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/recovery.sh"
 
 log() {
   printf '[CommandBridge] %s\n' "$*"
@@ -329,29 +332,29 @@ cleanup_staging() {
 }
 
 cleanup() {
-  if [[ "${INSTALL_SUCCEEDED}" == 0 && "${APP_MIGRATION_STARTED}" == 1 && "${ACTIVATION_STARTED}" == 0 ]]; then
-    rollback_application_layout || log "WARNING: Program migration cleanup needs administrator recovery."
+  local exit_code=$?
+  trap - ERR
+  if [[ "${INSTALL_SUCCEEDED}" == 0 && "${APP_MIGRATION_STARTED}" == 1 && "${ACTIVATION_STARTED}" == 0 && "$RECOVERY_FAILED" == 0 ]]; then
+    rollback_application_layout || RECOVERY_FAILED=1
   fi
   if declare -F cleanup_application_staging >/dev/null; then cleanup_application_staging || true; fi
   cleanup_staging
-  if [[ "${INSTALL_SUCCEEDED}" == 0 && "${LEGACY_ROLLBACK_DONE}" == 0 ]]; then
-    if [[ "${LEGACY_MIGRATION}" == 1 && -n "${LEGACY_CONFIG_BACKUP}" && -f "${LEGACY_CONFIG_BACKUP}" ]]; then
-      install -m 0600 "${LEGACY_CONFIG_BACKUP}" "${CONFIG_FILE}" || log "WARNING: Could not restore configuration."
-    elif [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
-      install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}" || log "WARNING: Could not restore configuration."
-    fi
-    if [[ -n "${CONFIG_BACKUP}" || -n "${LEGACY_CONFIG_BACKUP}" ]]; then
-      restore_selinux_path "${CONFIG_FILE}" || log "WARNING: Restored configuration SELinux label could not be verified."
-    fi
+  if [[ "${INSTALL_SUCCEEDED}" == 0 && "${LEGACY_ROLLBACK_DONE}" == 0 && "$RECOVERY_FAILED" == 0 ]]; then
+    restore_configuration || RECOVERY_FAILED=1
   fi
   cleanup_build_account || true
+  if [[ "$RECOVERY_FAILED" == 1 ]]; then
+    preserve_failed_recovery || true
+    (( exit_code != 0 )) || exit_code=1
+  fi
   if [[ -n "${TEMP_DIR}" && -d "${TEMP_DIR}" ]]; then
     case "${TEMP_DIR}" in
       /tmp/command-bridge-install.*)
-        rm -rf -- "${TEMP_DIR}"
+        if [[ "$RECOVERY_FAILED" == 0 || "$RECOVERY_RETAINED" == 1 ]]; then rm -rf -- "${TEMP_DIR}"; fi
         ;;
     esac
   fi
+  exit "$exit_code"
 }
 
 create_build_account() {
@@ -516,15 +519,19 @@ install_cli_entry() {
 }
 
 rollback_cli_entry() {
-  if [[ -n "${CLI_PREVIOUS_TARGET}" && -L "${CLI_LINK}" && "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]]; then
-    ln -sfnT "${CLI_PREVIOUS_TARGET}" "${CLI_LINK}"
+  if [[ -n "${CLI_PREVIOUS_TARGET}" ]]; then
+    [[ -L "${CLI_LINK}" && "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]] || return 1
+    ln -sfnT "${CLI_PREVIOUS_TARGET}" "${CLI_LINK}" || return 1
+    restore_selinux_path "${CLI_LINK}" || return 1
+    CLI_PREVIOUS_TARGET=""
   fi
-  CLI_PREVIOUS_TARGET=""
-  if [[ "${CLI_LINK_CREATED}" == 1 && -L "${CLI_LINK}" &&
-        "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]]; then
-    unlink "${CLI_LINK}"
+  if [[ "${CLI_LINK_CREATED}" == 1 ]]; then
+    if [[ -e "${CLI_LINK}" || -L "${CLI_LINK}" ]]; then
+      [[ -L "${CLI_LINK}" && "$(readlink "${CLI_LINK}")" == "${CURRENT_LINK}/command-bridge" ]] || return 1
+      unlink "${CLI_LINK}" || return 1
+    fi
+    CLI_LINK_CREATED=0
   fi
-  CLI_LINK_CREATED=0
 }
 
 report_execution_context() {
@@ -920,10 +927,10 @@ move_legacy_tree() {
 restore_legacy_tree() {
   local old=$1 new=$2
   if [[ -L "${old}" && "$(readlink "${old}")" == "${new}" ]]; then
-    unlink "${old}"
+    unlink "${old}" || return 1
   fi
   if [[ ! -e "${old}" && ! -L "${old}" && -d "${new}" ]]; then
-    mv -T -- "${new}" "${old}"
+    mv -T -- "${new}" "${old}" || return 1
   fi
 }
 
@@ -967,8 +974,8 @@ migrate_legacy_layout() {
   LEGACY_MIGRATION=1
   ACTIVATION_STARTED=1
   if [[ -f "${LEGACY_UNIT_FILE}" ]]; then
-    LEGACY_UNIT_BACKUP="${TEMP_DIR}/legacy-unit.service"
-    install -m 0600 "${LEGACY_UNIT_FILE}" "${LEGACY_UNIT_BACKUP}"
+    save_file_backup "${LEGACY_UNIT_FILE}" "${TEMP_DIR}/recovery/legacy-unit.service" || fail "Legacy unit backup failed; the original unit was preserved."
+    LEGACY_UNIT_BACKUP="${TEMP_DIR}/recovery/legacy-unit.service"
     if systemctl is-enabled --quiet "${LEGACY_SERVICE_NAME}.service"; then LEGACY_WAS_ENABLED=1; fi
     if systemctl is-active --quiet "${LEGACY_SERVICE_NAME}.service"; then
       LEGACY_WAS_ACTIVE=1
@@ -980,14 +987,15 @@ migrate_legacy_layout() {
   move_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
 
   if [[ -f "${CONFIG_FILE}" ]]; then
-    LEGACY_CONFIG_BACKUP="${TEMP_DIR}/legacy-config.env"
-    install -m 0600 "${CONFIG_FILE}" "${LEGACY_CONFIG_BACKUP}"
+    save_file_backup "${CONFIG_FILE}" "${TEMP_DIR}/recovery/legacy-config.env" || fail "Legacy configuration backup failed; the original configuration was preserved."
+    LEGACY_CONFIG_BACKUP="${TEMP_DIR}/recovery/legacy-config.env"
     awk -v old_config="${LEGACY_CONFIG_DIR}" -v new_config="${CONFIG_DIR}" \
         -v old_state="${LEGACY_STATE_DIR}" -v new_state="${STATE_DIR}" '
       /^COMMAND_BRIDGE_POLICY_FILE=/ { gsub(old_config, new_config) }
       /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ { gsub(old_state, new_state) }
       { print }
     ' "${CONFIG_FILE}" > "${TEMP_DIR}/migrated-config.env"
+    CONFIG_CHANGED=1
     install -m 0600 -o root -g root "${TEMP_DIR}/migrated-config.env" "${CONFIG_FILE}"
   fi
 }
@@ -1002,16 +1010,16 @@ backup_audit_access() {
   if [[ -e "${AUDIT_READER_PATH}" || -L "${AUDIT_READER_PATH}" ]]; then
     [[ -f "${AUDIT_READER_PATH}" && ! -L "${AUDIT_READER_PATH}" ]] || \
       fail "Existing audit reader is not a regular file."
-    PREVIOUS_AUDIT_READER_BACKUP="${TEMP_DIR}/previous-audit-reader"
-    install -m 0600 "${AUDIT_READER_PATH}" "${PREVIOUS_AUDIT_READER_BACKUP}"
+    save_file_backup "${AUDIT_READER_PATH}" "${TEMP_DIR}/recovery/previous-audit-reader" || fail "Audit reader backup failed."
+    PREVIOUS_AUDIT_READER_BACKUP="${TEMP_DIR}/recovery/previous-audit-reader"
     AUDIT_READER_WAS_PRESENT=1
   fi
 
   if [[ -e "${AUDIT_SUDOERS_FILE}" || -L "${AUDIT_SUDOERS_FILE}" ]]; then
     [[ -f "${AUDIT_SUDOERS_FILE}" && ! -L "${AUDIT_SUDOERS_FILE}" ]] || \
       fail "Existing audit sudoers entry is not a regular file."
-    PREVIOUS_AUDIT_SUDOERS_BACKUP="${TEMP_DIR}/previous-audit-reader.sudoers"
-    install -m 0600 "${AUDIT_SUDOERS_FILE}" "${PREVIOUS_AUDIT_SUDOERS_BACKUP}"
+    save_file_backup "${AUDIT_SUDOERS_FILE}" "${TEMP_DIR}/recovery/previous-audit-reader.sudoers" || fail "Audit sudoers backup failed."
+    PREVIOUS_AUDIT_SUDOERS_BACKUP="${TEMP_DIR}/recovery/previous-audit-reader.sudoers"
     AUDIT_SUDOERS_WAS_PRESENT=1
   fi
 }
@@ -1056,27 +1064,27 @@ remove_audit_access_for_installer() {
 rollback_audit_access() {
   [[ "${AUDIT_ACCESS_INSTALLED}" == "1" ]] || return 0
 
+  local failed=0
   if [[ "${AUDIT_READER_DIR_WAS_PRESENT}" == "1" ]]; then
-    install -d -m 0755 -o root -g root "${AUDIT_READER_DIR}" || true
+    install -d -m 0755 -o root -g root "${AUDIT_READER_DIR}" || return 1
   fi
 
-  if [[ "${AUDIT_SUDOERS_WAS_PRESENT}" == "1" && -f "${PREVIOUS_AUDIT_SUDOERS_BACKUP}" ]]; then
-    install -m 0440 -o root -g root \
-      "${PREVIOUS_AUDIT_SUDOERS_BACKUP}" "${AUDIT_SUDOERS_FILE}" || true
+  if [[ "${AUDIT_SUDOERS_WAS_PRESENT}" == "1" ]]; then
+    restore_file_backup "${PREVIOUS_AUDIT_SUDOERS_BACKUP}" "${AUDIT_SUDOERS_FILE}" || failed=1
   else
-    rm -f -- "${AUDIT_SUDOERS_FILE}" || true
+    rm -f -- "${AUDIT_SUDOERS_FILE}" || failed=1
   fi
 
-  if [[ "${AUDIT_READER_WAS_PRESENT}" == "1" && -f "${PREVIOUS_AUDIT_READER_BACKUP}" ]]; then
-    install -m 0755 -o root -g root \
-      "${PREVIOUS_AUDIT_READER_BACKUP}" "${AUDIT_READER_PATH}" || true
+  if [[ "${AUDIT_READER_WAS_PRESENT}" == "1" ]]; then
+    restore_file_backup "${PREVIOUS_AUDIT_READER_BACKUP}" "${AUDIT_READER_PATH}" || failed=1
   else
-    rm -f -- "${AUDIT_READER_PATH}" || true
+    rm -f -- "${AUDIT_READER_PATH}" || failed=1
   fi
 
   if [[ "${AUDIT_READER_DIR_WAS_PRESENT}" == "0" ]]; then
-    rmdir "${AUDIT_READER_DIR}" >/dev/null 2>&1 || true
+    rmdir "${AUDIT_READER_DIR}" >/dev/null 2>&1 || failed=1
   fi
+  [[ "$failed" == 0 ]] || return 1
   AUDIT_ACCESS_INSTALLED=0
 }
 
@@ -1164,8 +1172,8 @@ install_runtime_and_release() {
   fi
   if [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
     [[ -f "${UNIT_FILE}" ]] || fail "Existing systemd unit is not a regular file."
-    PREVIOUS_UNIT_BACKUP="${TEMP_DIR}/previous-${SERVICE_NAME}.service"
-    install -m 0600 "${UNIT_FILE}" "${PREVIOUS_UNIT_BACKUP}"
+    save_file_backup "${UNIT_FILE}" "${TEMP_DIR}/recovery/previous-${SERVICE_NAME}.service" || fail "Service unit backup failed."
+    PREVIOUS_UNIT_BACKUP="${TEMP_DIR}/recovery/previous-${SERVICE_NAME}.service"
     UNIT_WAS_PRESENT=1
   fi
 
@@ -1237,13 +1245,14 @@ install_configuration() {
 
   if [[ -e "${CONFIG_FILE}" ]]; then
     log "Preserving configuration and bearer token; setting execution mode to ${execution_mode}."
-    chown root:root "${CONFIG_FILE}"
-    chmod 0600 "${CONFIG_FILE}"
     # Every install selects the mode from its explicit option, even on reinstall.
-    CONFIG_BACKUP="${TEMP_DIR}/previous-config.env"
-    cp -p "${CONFIG_FILE}" "${CONFIG_BACKUP}"
+    save_file_backup "${CONFIG_FILE}" "${TEMP_DIR}/recovery/previous-config.env" || fail "Configuration backup failed; the original configuration was preserved."
+    CONFIG_BACKUP="${TEMP_DIR}/recovery/previous-config.env"
     # Updates preserve the complete configuration, including comments and quoting.
     if [[ "${UPDATE_ONLY}" == 1 ]]; then return 0; fi
+    CONFIG_CHANGED=1
+    chown root:root "${CONFIG_FILE}"
+    chmod 0600 "${CONFIG_FILE}"
     if [[ "${REFRESH_NETWORK}" == 1 ]]; then host=$(detect_private_ipv4); fi
     if [[ "${RUN_AS_INSTALLER}" == 1 && "${EXISTING_INSTALLER_MODE}" == 0 ]]; then
       allowed_roots="${INSTALLER_HOME}:/"
@@ -1319,6 +1328,13 @@ read_config_value() {
   awk -v key="${key}" 'index($0, key "=") == 1 { sub(/^[^=]*=/, ""); print; exit }' "${CONFIG_FILE}"
 }
 
+restore_configuration() {
+  [[ "$CONFIG_CHANGED" == 1 ]] || return 0
+  local backup=${LEGACY_CONFIG_BACKUP:-$CONFIG_BACKUP}
+  if [[ -n "$backup" ]]; then restore_file_backup "$backup" "$CONFIG_FILE" || return 1; fi
+  CONFIG_CHANGED=0
+}
+
 health_url() {
   local host port
   host=$(read_config_value COMMAND_BRIDGE_HTTP_HOST)
@@ -1340,92 +1356,104 @@ health_url() {
 }
 
 rollback_activation() {
-  rollback_cli_entry
-  local labels_ok=1
+  local recovery_ok=1
   ROLLBACK_IN_PROGRESS=1
   log "Rolling back the activated release..."
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
-    systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
-  elif [[ -n "${PREVIOUS_RELEASE}" ]]; then
+    if [[ "$UNIT_CHANGED" == 1 ]]; then
+      systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || recovery_ok=0
+    fi
+  elif [[ -n "${PREVIOUS_RELEASE}" || "$UNIT_CHANGED" == 1 ]]; then
     # A failed label repair below must not leave the rejected candidate running.
-    systemctl stop "${SERVICE_NAME}.service" || log "WARNING: Candidate service could not be stopped during rollback."
+    systemctl stop "${SERVICE_NAME}.service" || recovery_ok=0
   fi
-  if [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]]; then
-    install -m 0600 "${CONFIG_BACKUP}" "${CONFIG_FILE}"
+  if [[ "$recovery_ok" != 1 ]]; then
+    # Do not rewrite or remove a deployment while its candidate may still run.
+    RECOVERY_FAILED=1
+    ACTIVATION_STARTED=0
+    ROLLBACK_IN_PROGRESS=0
+    log "ERROR: Rollback is incomplete; service stop failed. Deployment and private snapshots were retained."
+    return 1
   fi
-  if [[ "${LEGACY_MIGRATION}" == "1" && -n "${LEGACY_CONFIG_BACKUP}" && -f "${LEGACY_CONFIG_BACKUP}" ]]; then
-    install -m 0600 "${LEGACY_CONFIG_BACKUP}" "${CONFIG_FILE}"
-  fi
-
-  rollback_audit_access
-  restore_diagnostic_assets || labels_ok=0
-  restore_managed_update_assets || labels_ok=0
-  if [[ "${LEGACY_MIGRATION}" == "0" && -z "${PREVIOUS_RELEASE}" ]]; then
-    systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+  # Functions called with || do not inherit errexit: check every mutation.
+  rollback_cli_entry || recovery_ok=0
+  restore_configuration || recovery_ok=0
+  rollback_audit_access || recovery_ok=0
+  restore_diagnostic_assets || recovery_ok=0
+  restore_managed_update_assets || recovery_ok=0
+  if [[ "${LEGACY_MIGRATION}" == "0" && -z "${PREVIOUS_RELEASE}" && "$UNIT_CHANGED" == 1 ]]; then
+    systemctl disable --now "${SERVICE_NAME}.service" >/dev/null 2>&1 || recovery_ok=0
   fi
   if [[ -n "${PREVIOUS_RUNTIME}" && -d "${PREVIOUS_RUNTIME}" ]]; then
-    ln -sfnT "${PREVIOUS_RUNTIME}" "${RUNTIME_LINK}"
-  elif [[ -L "${RUNTIME_LINK}" ]]; then
-    unlink "${RUNTIME_LINK}" || true
+    ln -sfnT "${PREVIOUS_RUNTIME}" "${RUNTIME_LINK}" || recovery_ok=0
+  elif [[ -L "${RUNTIME_LINK}" && "$UNIT_CHANGED" == 1 ]]; then
+    unlink "${RUNTIME_LINK}" || recovery_ok=0
   fi
   if [[ -n "${PREVIOUS_RELEASE}" && -d "${PREVIOUS_RELEASE}" ]]; then
-    ln -sfnT "${PREVIOUS_RELEASE}" "${CURRENT_LINK}"
-  elif [[ -L "${CURRENT_LINK}" ]]; then
-    unlink "${CURRENT_LINK}" || true
+    ln -sfnT "${PREVIOUS_RELEASE}" "${CURRENT_LINK}" || recovery_ok=0
+  elif [[ -L "${CURRENT_LINK}" && "$UNIT_CHANGED" == 1 ]]; then
+    unlink "${CURRENT_LINK}" || recovery_ok=0
   fi
-  if [[ "${UNIT_WAS_PRESENT}" == "1" && -f "${PREVIOUS_UNIT_BACKUP}" ]]; then
-    install -m 0644 "${PREVIOUS_UNIT_BACKUP}" "${UNIT_FILE}"
-  elif [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
-    unlink "${UNIT_FILE}" || true
+  if [[ "$UNIT_CHANGED" == 1 ]]; then
+    if [[ "${UNIT_WAS_PRESENT}" == "1" ]]; then
+      restore_file_backup "${PREVIOUS_UNIT_BACKUP}" "${UNIT_FILE}" || recovery_ok=0
+    elif [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
+      unlink "${UNIT_FILE}" || recovery_ok=0
+    fi
   fi
   if [[ "${LEGACY_MIGRATION}" == "1" && -n "${LEGACY_UNIT_BACKUP}" && \
         -f "${LEGACY_UNIT_BACKUP}" && ! -f "${LEGACY_UNIT_FILE}" ]]; then
-    install -m 0644 "${LEGACY_UNIT_BACKUP}" "${LEGACY_UNIT_FILE}" || true
+    restore_file_backup "${LEGACY_UNIT_BACKUP}" "${LEGACY_UNIT_FILE}" || recovery_ok=0
   fi
-  rollback_application_layout || labels_ok=0
+  rollback_application_layout || recovery_ok=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then
-    if [[ "${LEGACY_CONFIG_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}" || true; fi
-    if [[ "${LEGACY_STATE_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}" || true; fi
+    if [[ "${LEGACY_CONFIG_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}" || recovery_ok=0; fi
+    if [[ "${LEGACY_STATE_PRESENT}" == "1" ]]; then restore_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}" || recovery_ok=0; fi
     if [[ "${APP_MIGRATION_STARTED}" == 0 && -n "${LEGACY_CURRENT_TARGET}" && -d "${LEGACY_INSTALL_ROOT}" ]]; then
-      ln -sfnT "${LEGACY_CURRENT_TARGET}" "${LEGACY_INSTALL_ROOT}/current" || true
+      ln -sfnT "${LEGACY_CURRENT_TARGET}" "${LEGACY_INSTALL_ROOT}/current" || recovery_ok=0
     fi
     if [[ -n "${LEGACY_RUNTIME_TARGET}" && -d "${LEGACY_INSTALL_ROOT}/runtime" ]]; then
-      ln -sfnT "${LEGACY_RUNTIME_TARGET}" "${LEGACY_INSTALL_ROOT}/runtime/current" || true
+      ln -sfnT "${LEGACY_RUNTIME_TARGET}" "${LEGACY_INSTALL_ROOT}/runtime/current" || recovery_ok=0
     fi
     restore_selinux_layout "${LEGACY_INSTALL_ROOT}" "${LEGACY_CONFIG_DIR}" "${LEGACY_STATE_DIR}" \
-      "${LEGACY_UNIT_FILE}" "${LEGACY_AUDIT_READER_DIR}" "${LEGACY_AUDIT_SUDOERS_FILE}" || labels_ok=0
-    systemctl daemon-reload >/dev/null 2>&1 || true
+      "${LEGACY_UNIT_FILE}" "${LEGACY_AUDIT_READER_DIR}" "${LEGACY_AUDIT_SUDOERS_FILE}" || recovery_ok=0
+    systemctl daemon-reload >/dev/null 2>&1 || recovery_ok=0
     if [[ "${LEGACY_WAS_ENABLED}" == "1" ]]; then
-      systemctl enable "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || true
+      systemctl enable "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || recovery_ok=0
     fi
-    if [[ "${LEGACY_WAS_ACTIVE}" == "1" && "${labels_ok}" == 1 ]]; then
-      systemctl reset-failed "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || true
-      systemctl restart "${LEGACY_SERVICE_NAME}.service" || log "WARNING: Legacy service could not be restarted."
+    if [[ "${LEGACY_WAS_ACTIVE}" == "1" && "${recovery_ok}" == 1 ]]; then
+      systemctl reset-failed "${LEGACY_SERVICE_NAME}.service" >/dev/null 2>&1 || recovery_ok=0
+      if [[ "$recovery_ok" == 1 ]]; then systemctl restart "${LEGACY_SERVICE_NAME}.service" || recovery_ok=0; fi
     fi
   else
     if [[ -n "${APP_ORIGINAL_ROOT}" ]]; then
-      restore_selinux_layout "${APP_ORIGINAL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" "${UNIT_FILE}" "${AUDIT_READER_DIR}" "${AUDIT_SUDOERS_FILE}" || labels_ok=0
+      restore_selinux_layout "${APP_ORIGINAL_ROOT}" "${CONFIG_DIR}" "${STATE_DIR}" "${UNIT_FILE}" "${AUDIT_READER_DIR}" "${AUDIT_SUDOERS_FILE}" || recovery_ok=0
     else
-      restore_current_selinux_layout || labels_ok=0
+      restore_current_selinux_layout || recovery_ok=0
     fi
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    if [[ -n "${PREVIOUS_RELEASE}" && ( -d "${PREVIOUS_RELEASE}" || -n "${APP_ORIGINAL_ROOT}" ) && "${labels_ok}" == 1 ]]; then
+    systemctl daemon-reload >/dev/null 2>&1 || recovery_ok=0
+    if [[ -n "${PREVIOUS_RELEASE}" && ( -d "${PREVIOUS_RELEASE}" || -n "${APP_ORIGINAL_ROOT}" ) && "${recovery_ok}" == 1 ]]; then
       # Failed candidate starts can exhaust StartLimitBurst. Clear that candidate's
       # failure counter before restarting the restored, previously verified release.
-      systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
-      systemctl restart "${SERVICE_NAME}.service" || log "WARNING: Restored service could not be restarted."
+      systemctl reset-failed "${SERVICE_NAME}.service" >/dev/null 2>&1 || recovery_ok=0
+      if [[ "$recovery_ok" == 1 ]]; then systemctl restart "${SERVICE_NAME}.service" || recovery_ok=0; fi
     fi
   fi
-  [[ "${labels_ok}" == 1 ]] || log "WARNING: Rollback could not complete helper restoration or SELinux label repair; restored service was not restarted."
   ACTIVATION_STARTED=0
   if [[ "${LEGACY_MIGRATION}" == "1" ]]; then LEGACY_ROLLBACK_DONE=1; fi
   ROLLBACK_IN_PROGRESS=0
+  if [[ "$recovery_ok" != 1 ]]; then
+    RECOVERY_FAILED=1
+    log "ERROR: Rollback is incomplete; administrator recovery is required."
+    return 1
+  fi
 }
 
 install_and_start_service() {
   local url healthy=0 health_host_header
   local -a curl_options
 
+  UNIT_CHANGED=1
   install -m 0644 "${TEMP_DIR}/${SERVICE_NAME}.service" "${UNIT_FILE}"
   restore_selinux_path "${UNIT_FILE}" || fail "Could not prepare SELinux label for the systemd unit."
   systemctl daemon-reload
@@ -1440,9 +1468,7 @@ install_and_start_service() {
   fi
 
   url=$(health_url)
-  health_host_header=$(read_config_value COMMAND_BRIDGE_ALLOWED_HOSTS)
-  health_host_header=${health_host_header%%,*}
-  health_host_header=${health_host_header//[[:space:]]/}
+  health_host_header=$("${RUNTIME_LINK}/bin/node" -e 'import(process.argv[1]).then(m=>console.log(m.normalizeAllowedHosts(process.argv[2])[0] ?? ""))' "${CURRENT_LINK}/dist/config/allowedHosts.js" "$(read_config_value COMMAND_BRIDGE_ALLOWED_HOSTS)")
   curl_options=(--fail --silent --show-error --max-time 2 --noproxy '*')
   if [[ -n "${health_host_header}" ]]; then
     curl_options+=(--header "Host: ${health_host_header}")
@@ -1590,7 +1616,7 @@ main() {
   parse_arguments "$@"
   require_root_systemd_linux
   for command_name in \
-    awk chown chmod cp curl df env find flock getent grep groupadd groupdel gzip id install \
+    awk chown chmod cmp cp curl df env find flock getent grep groupadd groupdel gzip id install \
     ldd ln mktemp mv od pgrep pkill readlink rmdir runuser sha256sum sleep stat sudo tar \
     tr uname unlink useradd userdel sed touch cat du findmnt; do
     require_command "${command_name}"
@@ -1603,6 +1629,7 @@ main() {
   exec 9>"${LOCK_DIR}/install.lock"
   chmod 0600 "${LOCK_DIR}/install.lock"
   flock -n 9 || fail "Another CommandBridge installation is already running."
+  assert_no_pending_recovery
   inspect_application_layout
   assert_application_migration_driver
   prepare_update

@@ -21,6 +21,7 @@ test("Linux default program root and both legacy roots remain protected", () => 
 });
 
 test("Linux fixed migration backups are protected without covering similarly named directories", () => {
+  assert.throws(() => assertNoSelfModification("sudo tee /var/lib/command-bridge-recovery/snapshots/config", "/tmp", { platform: "linux" }), { code: "SELF_MODIFICATION_BLOCKED" });
   for (const root of ["/usr/local/lib/command-bridge", "/opt/command-bridge", "/opt/command-bridge-mcp-server"]) {
     const backup = `${root}.migration-backup`;
     for (const command of [`sudo -n rm -rf -- ${backup}`, `sudo chmod 777 ${backup}/releases`,

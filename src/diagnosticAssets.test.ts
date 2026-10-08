@@ -11,7 +11,7 @@ test("fixed diagnostic assets are pinned, protected, activated transactionally a
  for(const [constant,path] of [["DIAGNOSTIC_READER_SHA256","packaging/linux/diagnostic-reader"],["DIAGNOSTIC_PROGRAM_SHA256","scripts/diagnostics/read-linux.mjs"]]){const hash=createHash("sha256").update(readFileSync(resolve(path!))).digest("hex");assert.ok(installer.includes(`${constant}="${hash}"`));}
  assert.match(module,/#%s ALL=\(root\) NOPASSWD: NOSETENV: \/usr\/local\/libexec\/command-bridge-diagnostics\/reader ""/);
  assert.match(module,/visudo -cf/);assert.match(module,/install -m 0440 -o root -g root/);assert.match(module,/restore_selinux_path "\$asset_root" 1/);
- assert.ok(installer.indexOf("restore_diagnostic_assets || labels_ok=0")<installer.indexOf('systemctl restart "${SERVICE_NAME}.service"'));
+ assert.ok(installer.indexOf("restore_diagnostic_assets || recovery_ok=0")<installer.indexOf('systemctl restart "${SERVICE_NAME}.service"'));
  const main=installer.slice(installer.indexOf("main() {"));assert.ok(main.indexOf("install_diagnostic_assets")<main.indexOf("install_and_start_service"));
  assert.match(uninstall,/remove_tree \/usr\/local\/libexec\/command-bridge-diagnostics/);assert.match(uninstall,/rm -f -- \/etc\/sudoers.d\/command-bridge-diagnostics/);
  assert.match(read("scripts/windows/install.ps1"),/scripts\\windows\\diagnostics\\read-diagnostics.ps1/);
@@ -61,6 +61,7 @@ set -euo pipefail
 # Validation tools have fixed system locations; no host privilege is granted.
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 source '${modulePath}'
+source '${resolve("scripts/linux-systemd/recovery.sh")}'
 fail() { echo "$*" >&2; exit 1; }
 require_command() { command -v "$1" >/dev/null; }
 assert_managed_update_directory() { [[ ! -L "$1" ]]; }

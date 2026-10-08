@@ -1,8 +1,12 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 5.0.0; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 5.0.1; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
+
+From 5.0.1, configured allowed Hosts accept hostnames/IPs with optional ports, normalize DNS case and bracketed IPv6, and use hostname-only matching. Ports in this list do not change the listener or restrict remote clients; malformed values, URLs, paths, credentials and wildcards are rejected. Installation probes and the HTTP server use the same normalization. Bearer authentication remains required for `/ready` and `/mcp`.
+
+The 5.0.1 cmd Shell fix preserves quoted executable paths and literal arguments using cmd's `/d /s /c` rules. Native allowlist argv and PowerShell remain unchanged. Command stdout/stderr and fixed helper output preserve UTF-8 characters split across read buffers; output limits and Audit-before-result behavior still apply.
 
 Audit helpers receive only standard Windows directory variables and load fixed built-in PowerShell modules, without inheriting arbitrary environment secrets or external module paths. Their five-second deadline remains unchanged. Startup diagnostics include rotated log files because WinSW restarts can leave the current error log empty.
 

@@ -4,6 +4,21 @@ layout_roots() {
   printf '%s\n' "$INSTALL_ROOT" "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
 }
 
+validate_installer_recovery() {
+  local root=/var/lib/command-bridge-recovery item unsafe
+  assert_admin_path "$root"
+  [[ -e "$root" || -L "$root" ]] || return 0
+  [[ -d "$root" && ! -L "$root" ]] || fail "Unsafe installer recovery directory."
+  assert_no_program_mounts "$root"
+  unsafe=$(find -P "$root" -xdev \( -type l -o ! -uid 0 -o -perm /022 \) -print -quit) || fail "Cannot inspect installer recovery contents."
+  [[ -z "$unsafe" ]] || fail "Unsafe installer recovery contents; no files were removed."
+  for item in "$root"/* "$root"/.[!.]* "$root"/..?*; do
+    [[ -e "$item" ]] || continue
+    [[ "$item" == "$root/failed."* && -d "$item/snapshots" && -f "$item/snapshots/context" ]] || fail "Unrecognized installer recovery contents; no files were removed."
+    grep -Fxq 'schemaVersion=1' "$item/snapshots/context" || fail "Unrecognized installer recovery metadata."
+  done
+}
+
 assert_admin_path() {
   local path=$1 mode
   while [[ "$path" != / ]]; do

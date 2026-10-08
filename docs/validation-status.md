@@ -1,6 +1,18 @@
 # Architecture implementation validation
 
-The current package is 5.0.0, removing historical `/opt` program roots and aliases after verified migration, and correcting the layout service gate's protected-directory check for an unprivileged CI caller. This breaking path change requires a first terminal migration for a physical `/opt` deployment; subsequent MCP updates remain supported. Existing configuration, Token and logs/work are retained. Historical results below keep their tested versions. The v0.4.0 tag is unchanged. Public installation availability depends on the CI-published channel, independently of Git tags or this document's version; all cross-platform service/layout gates must succeed.
+The current package is 5.0.1, repairing Linux snapshot/rollback reliability, UTF-8 output, Windows cmd quoting and Host normalization. The 5.0.0 Linux program-path migration rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 5.0.1 validation (2026-10-08)
+
+The six reviewed defects are addressed with private filesystem/process/HTTP regressions: partial configuration backup replacing an intact original; partial helper backup deleting originals; conditional Bash recovery hiding failures; split UTF-8 corruption; Windows cmd quote corruption; and accepted Host values failing real HTTP/MCP access.
+
+Full native Windows `npm test` passed 141/171 with 30 platform/elevation skips using supported Node.js 20.15.1. A private WSL Ubuntu snapshot under `nobody`, using checksum-verified CI Node.js 24.18.0 and locked dependencies, passed 152/171 with 19 platform skips. Both suites reported zero failures. All 23 Bash scripts/four fixed launchers, 20 PowerShell scripts and WinSW XML passed syntax checks.
+
+Behavior regressions cover incomplete configuration copies, first-through-last helper copy/validation failure, original absence versus missing snapshots, corrupt snapshot rejection, explicit copy/remove/label/reload/CLI failures, refusal to restart or change deployment after stop failure, early legacy recovery before candidate unit creation, minimal private snapshot retention and pending-recovery rejection, unknown/hidden/writable recovery purge rejection, and old-helper/download fallback failures before service mutation. Native processes verify incremental command/helper UTF-8 and cmd arguments; real HTTP verifies Host/Bearer/readiness/MCP initialization. Windows installer probes use the same normalization module in a private runtime fixture. Deployed-SHA injection boundary tests require exact activation stage and evidence; source builds/other SHAs cannot trigger them.
+
+The final recovery-directory inspection failure regression also passed separately. Root package/lockfile/build versions agree, third-party lock entries and channel gates are unchanged, both READMEs retain all four exact bootstrap commands and valid relative file links, and `git diff --check` passed.
+
+Hosted Windows/Linux service and layout checks, including both-account injected post-verification recovery failure and administrator restoration, have not executed for this patch. The workflow still requires these gates before channel publication. Oracle Linux 8.10 SELinux Enforcing and actual host reboot are not verified by WSL or simulated labeling tests. No 5.0.1 publication is claimed.
 
 ## 5.0.0 validation (2026-10-08)
 

@@ -33,6 +33,15 @@ $EnableUpload = $false
 $EnableDownload = $false
 $ExecutionMode = ''
 $ConfigBackup = $null
+$HostFixture = Join-Path $env:TEMP ("command bridge host " + [guid]::NewGuid())
+$InstallRoot = $HostFixture
+$ApplicationRelativePath = 'current'
+[void][IO.Directory]::CreateDirectory((Join-Path $HostFixture 'runtime'))
+[void][IO.Directory]::CreateDirectory((Join-Path $HostFixture 'current\dist\config'))
+[IO.File]::Copy($env:COMMAND_BRIDGE_TEST_NODE, (Join-Path $HostFixture 'runtime\node.exe'))
+$hostSource = Join-Path (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path 'dist\config\allowedHosts.js'
+[IO.File]::Copy($hostSource, (Join-Path $HostFixture 'current\dist\config\allowedHosts.js'))
+[IO.File]::WriteAllText((Join-Path $HostFixture 'current\package.json'), '{"type":"module"}')
 $script:addresses = @(
   [pscustomobject]@{ IPAddress = '8.8.8.8'; InterfaceIndex = 1; SkipAsSource = $false },
   [pscustomobject]@{ IPAddress = '10.0.0.2'; InterfaceIndex = 2; SkipAsSource = $false },
@@ -58,6 +67,8 @@ try {
   Assert-True ($configuration -match 'COMMAND_BRIDGE_HTTP_HOST=192\.168\.1\.20') "Detected HTTP host missing."
   Assert-True ($configuration -match 'COMMAND_BRIDGE_ALLOWED_HOSTS=192\.168\.1\.20') "Allowed host missing."
   Assert-True ($configuration -match 'COMMAND_BRIDGE_BEARER_TOKEN=[a-f0-9]{64}') "Generated token missing."
+  $configuration = $configuration.Replace('COMMAND_BRIDGE_ALLOWED_HOSTS=192.168.1.20', 'COMMAND_BRIDGE_ALLOWED_HOSTS=192.168.1.20:8800')
+  [IO.File]::WriteAllText($ConfigFile, $configuration)
   function Invoke-LocalHealthRequest {
     param($Uri, $HostHeader)
     Assert-True ($Uri -eq 'http://192.168.1.20:8800/health') "Unexpected health URL."
@@ -130,6 +141,7 @@ try {
     [Environment]::SetEnvironmentVariable($key, $savedEnvironment[$key])
   }
   Remove-Item -LiteralPath $ConfigFile -Force -ErrorAction SilentlyContinue
+  [IO.Directory]::Delete($HostFixture, $true)
 }
 
 # Build with the current runtime as the downloaded runtime, and no Node on PATH.

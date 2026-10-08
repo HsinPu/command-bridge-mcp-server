@@ -15,6 +15,7 @@ sed -e "s|/usr/local/lib/command-bridge|${work}/app/command-bridge|g" \
     -e "s|/etc/passwd|${work}/passwd|g" \
     -e "s|/etc/login.defs|${work}/login.defs|g" \
     -e "s|/opt/command-bridge|${work}/old/command-bridge|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
+cp scripts/linux-systemd/recovery.sh "$work/recovery.sh"
 source "$work/installer.sh"
 source scripts/linux-systemd/layout.sh
 source scripts/linux-systemd/program-migration.sh

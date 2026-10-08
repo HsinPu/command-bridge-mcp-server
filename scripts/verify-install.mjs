@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
+import { normalizeAllowedHosts } from '../dist/config/allowedHosts.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
@@ -12,7 +13,7 @@ if (host === '::') host = '::1';
 if (host.includes(':')) host = `[${host}]`;
 const base = `http://${host}:${config.COMMAND_BRIDGE_HTTP_PORT}`;
 const headers = { Authorization: `Bearer ${config.COMMAND_BRIDGE_BEARER_TOKEN}` };
-const allowedHost = config.COMMAND_BRIDGE_ALLOWED_HOSTS?.split(',')[0]?.trim();
+const allowedHost = normalizeAllowedHosts(config.COMMAND_BRIDGE_ALLOWED_HOSTS)[0];
 if (allowedHost) headers.Host = allowedHost;
 // Node fetch may replace Host. Preserve the configured virtual host while connecting locally.
 async function serviceFetch(input, init) {

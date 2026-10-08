@@ -18,3 +18,17 @@ test("long command limits retain the ordinary default and explicit host override
     Object.assign(process.env, saved);
   }
 });
+
+test("environment Host validation normalizes existing hostname:port configuration and rejects malformed values", () => {
+  const saved = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("COMMAND_BRIDGE_")));
+  for (const key of Object.keys(saved)) delete process.env[key];
+  try {
+    process.env.COMMAND_BRIDGE_ALLOWED_HOSTS = "Bridge.INTERNAL:8800,[::1]:8800";
+    assert.deepEqual(loadConfig().allowedHosts, ["bridge.internal", "[::1]"]);
+    process.env.COMMAND_BRIDGE_ALLOWED_HOSTS = "https://bridge.internal/mcp";
+    assert.throws(loadConfig, /COMMAND_BRIDGE_ALLOWED_HOSTS/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (key.startsWith("COMMAND_BRIDGE_")) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});

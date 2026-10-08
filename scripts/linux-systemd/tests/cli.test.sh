@@ -5,6 +5,7 @@ trap 'rm -rf -- "$work"' EXIT
 # Redirect every launcher mutation to this disposable tree.
 sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/usr/local/lib/command-bridge|$work/app|g" scripts/linux-systemd/install.sh > "$work/install.sh"
 sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/usr/local/lib/command-bridge|$work/app|g" -e '/^main "\$@"$/d' scripts/linux-systemd/uninstall.sh > "$work/uninstall.sh"
+cp scripts/linux-systemd/recovery.sh "$work/recovery.sh"
 source "$work/install.sh"
 source scripts/linux-systemd/layout.sh
 source scripts/linux-systemd/program-migration.sh
@@ -23,6 +24,20 @@ install_cli_entry
 grep -Fxq "$CLI_LINK" "$work/labels"
 rollback_cli_entry
 [[ ! -L "$CLI_LINK" ]]
+install_cli_entry
+CLI_LINK_CREATED=0; CLI_PREVIOUS_TARGET="$work/app/v1/command-bridge"
+ln() { return 91; }
+if rollback_cli_entry; then echo 'CLI restore failure was hidden'; exit 1; fi
+[[ "$CLI_PREVIOUS_TARGET" == "$work/app/v1/command-bridge" ]]
+unset -f ln
+restore_selinux_path() { return 92; }
+if rollback_cli_entry; then echo 'CLI label failure was hidden'; exit 1; fi
+[[ "$CLI_PREVIOUS_TARGET" == "$work/app/v1/command-bridge" ]]
+restore_selinux_path() { printf '%s\n' "$1" >> "$work/labels"; }
+ln -sfnT "$CURRENT_LINK/command-bridge" "$CLI_LINK"
+rollback_cli_entry
+[[ "$(readlink "$CLI_LINK")" == "$work/app/v1/command-bridge" && -z "$CLI_PREVIOUS_TARGET" ]]
+unlink "$CLI_LINK"
 install_cli_entry
 CLI_LINK_CREATED=0
 ln -sfnT "$work/app/v2" "$CURRENT_LINK"

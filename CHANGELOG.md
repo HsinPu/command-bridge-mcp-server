@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.0.1 — 2026-10-08
+
+PATCH: repair confirmed Linux backup/rollback failures, UTF-8 stream decoding, Windows cmd quoting and accepted Host configuration. Existing MCP tools, policies, defaults and deployment paths are unchanged.
+
+- Publish configuration, service-unit and Audit/helper snapshots only after complete copy, byte verification and recorded ownership/mode/digest. Track original absence and actual modification separately; a missing or partial backup must not overwrite/delete intact originals.
+- Restore files atomically on the destination filesystem; explicitly propagate file, label, CLI/layout and systemd errors, including functions invoked in Bash conditional contexts. Do not restart after incomplete recovery. Retain minimal private snapshots in `/var/lib/command-bridge-recovery`; refuse further installation until administrator recovery. Ordinary uninstall preserves these records, verified purge removes them, and old uninstall helpers defer to the verified channel when recovery validation is required.
+- Decode command stdout/stderr and fixed Audit/update/diagnostic helper output across UTF-8 chunk boundaries. Keep separate streams, output limits, deadlines and terminal Audit gating.
+- Pass cmd Shell text with the correct `/d /s /c` outer quoting and Windows verbatim arguments; keep native allowlist argv and PowerShell execution unchanged.
+- Normalize allowed Host ports, DNS case and IPv6 consistently for runtime and installation probes. Canonicalize valid incoming Host authorities for the SDK adapter; reject malformed values while retaining Host/Bearer checks.
+- Add private filesystem failure regressions, native process/HTTP tests and both-account real-service recovery fault checks without production fault flags. Keep every CI/channel publication gate; hosted service validation and publication require actual CI success.
+
 ## 5.0.0 — 2026-10-08
 
 MAJOR: remove historical Linux program paths completely after verified migration, without compatibility symlinks. Scripts that reference `/opt/command-bridge` or `/opt/command-bridge-mcp-server` must use `/usr/local/lib/command-bridge` or the managed `command-bridge` CLI.

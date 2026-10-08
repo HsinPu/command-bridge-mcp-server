@@ -4,6 +4,7 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 sed -e "s|/usr/local/bin/command-bridge|$work/bin/command-bridge|g" -e "s|/var/lib/command-bridge|$work/state|g" -e "s|/usr/local/lib/command-bridge|$work/app|g" -e "s|/opt/command-bridge|$work/old|g" -e "s|/etc/command-bridge|$work/config|g" \
   -e "s|/etc/systemd/system/|$work/units/|g" scripts/linux-systemd/install.sh > "$work/installer.sh"
+cp scripts/linux-systemd/recovery.sh "$work/recovery.sh"
 source "$work/installer.sh"
 source scripts/linux-systemd/layout.sh
 source scripts/linux-systemd/program-migration.sh
@@ -19,7 +20,7 @@ sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '{"sourceSha":"%s"}\n' "$sha" > "$CURRENT_LINK/install-info.json"
 printf '{}\n' > "$CONFIG_DIR/policy.json"
 TEMP_DIR="$work/temp"
-install() { :; }
+install() { local -a args=(); while (($#)); do case "$1" in -o|-g) shift 2;; *) args+=("$1"); shift;; esac; done; command install "${args[@]}"; }
 chown() { :; }
 getent() { printf 'alice:x:10001:10002::%s:/bin/bash\n' "$work/home"; }
 SUDO_USER=alice; SUDO_UID=10001

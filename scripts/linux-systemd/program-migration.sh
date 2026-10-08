@@ -57,8 +57,8 @@ rollback_application_layout() {
     fi
   done
   if [[ "${APP_MIGRATION_PREPARED:-0}" == 1 ]]; then
-    assert_admin_path "$INSTALL_ROOT"
-    assert_no_program_mounts "$INSTALL_ROOT"
+    (assert_admin_path "$INSTALL_ROOT") || return 1
+    (assert_no_program_mounts "$INSTALL_ROOT") || return 1
     rm -rf --one-file-system -- "$INSTALL_ROOT" || return 1
   fi
   cleanup_application_staging || return 1

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -557,6 +558,8 @@ export function runFixedProcess(
 ): Promise<string> {
   return new Promise((resolvePromise, reject) => {
     let output = "";
+    let outputBytes = 0;
+    const decoder = new StringDecoder("utf8");
     let settled = false;
     const child = spawn(executable, args, {
       env: environment,
@@ -593,11 +596,14 @@ export function runFixedProcess(
 
     child.once("error", fail);
     child.stdout?.on("data", (chunk: Buffer) => {
-      output += chunk.toString("utf8");
-      if (Buffer.byteLength(output, "utf8") > MAX_AUDIT_READER_OUTPUT_BYTES) {
+      if (settled) return;
+      outputBytes += chunk.length;
+      if (outputBytes > MAX_AUDIT_READER_OUTPUT_BYTES) {
         stopHelper();
         fail(new AppError("AUDIT_READER_OUTPUT_LIMIT", "Fixed audit helper output exceeded its safe limit."));
+        return;
       }
+      output += decoder.write(chunk);
     });
     child.once("close", (code) => {
       if (settled) {
@@ -609,6 +615,7 @@ export function runFixedProcess(
       }
       settled = true;
       clearTimeout(timeout);
+      output += decoder.end();
       resolvePromise(output);
     });
   });

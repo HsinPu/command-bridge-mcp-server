@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { access, open, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
@@ -50,6 +51,7 @@ export interface CommandResult {
 interface ShellInvocation {
   executable: string;
   args: string[];
+  windowsVerbatimArguments?: boolean;
 }
 
 const defaultEnvironmentKeys = [
@@ -367,11 +369,14 @@ export class CommandExecutor {
         env: environment,
         detached: process.platform !== "win32",
         windowsHide: true,
+        windowsVerbatimArguments: invocation.windowsVerbatimArguments,
         stdio: ["ignore", "pipe", "pipe"]
       });
 
       let stdout = "";
       let stderr = "";
+      const stdoutDecoder = new StringDecoder("utf8");
+      const stderrDecoder = new StringDecoder("utf8");
       let timedOut = false;
       let truncated = false;
       let settled = false;
@@ -413,8 +418,8 @@ export class CommandExecutor {
       signal?.addEventListener("abort", cancel, { once: true });
       if (this.stopping || signal?.aborted) cancel();
 
-      const appendOutput = (current: string, chunk: Buffer): string => {
-        const text = chunk.toString("utf8");
+      const appendOutput = (current: string, text: string): string => {
+        if (!text) return current;
         const remaining = this.config.maxOutputChars - stdout.length - stderr.length;
 
         if (remaining <= 0) {
@@ -428,18 +433,22 @@ export class CommandExecutor {
         if (text.length > remaining) {
           truncated = true;
           terminate();
-          return current + text.slice(0, remaining);
+          const prefix = text.slice(0, remaining);
+          // Do not return half of a UTF-16 surrogate pair at the character cap.
+          return current + prefix.replace(/[\uD800-\uDBFF]$/, "");
         }
 
         return current + text;
       };
 
       child.stdout.on("data", (chunk: Buffer) => {
-        stdout = appendOutput(stdout, chunk);
+        stdout = appendOutput(stdout, stdoutDecoder.write(chunk));
       });
       child.stderr.on("data", (chunk: Buffer) => {
-        stderr = appendOutput(stderr, chunk);
+        stderr = appendOutput(stderr, stderrDecoder.write(chunk));
       });
+      child.stdout.once("end", () => { stdout = appendOutput(stdout, stdoutDecoder.end()); });
+      child.stderr.once("end", () => { stderr = appendOutput(stderr, stderrDecoder.end()); });
 
       child.once("error", (error) => {
         if (settled) {
@@ -524,7 +533,9 @@ function buildShellInvocation(shell: ShellKind, command: string): ShellInvocatio
         ]
       };
     case "cmd":
-      return { executable: "cmd.exe", args: ["/d", "/s", "/c", command] };
+      // /s removes exactly the outer quotes. CRT argument escaping would instead
+      // introduce backslashes that cmd treats as literal command characters.
+      return { executable: "cmd.exe", args: ["/d", "/s", "/c", `"${command}"`], windowsVerbatimArguments: process.platform === "win32" };
   }
 }
 

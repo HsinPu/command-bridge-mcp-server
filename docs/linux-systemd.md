@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 5.0.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 5.0.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -115,6 +115,8 @@ If the key is absent or the configuration path is customized, add/update it in t
 
 ## Program relocation from /opt (5.0.0)
 
+The current installer also includes the 5.0.1 recovery fixes below; the migration behavior introduced in 5.0.0 remains in effect.
+
 The fixed default application/runtime root is `/usr/local/lib/command-bridge`. Use the same bootstrap install and uninstall commands; no directory option or prior uninstall is required. Configuration, policy, work data, installer-account Audit and update records keep their existing locations. The service remains `command-bridge.service`; Windows paths are unchanged.
 
 Before modifying services, the installer inspects the new root and both `/opt/command-bridge` and `/opt/command-bridge-mcp-server`. It validates administrator ownership, non-administrator write permissions, managed release identity, active pointers, mounted subtrees and any compatibility aliases. Two independent real deployments are rejected; no contents are merged. Destination free space is checked on the actual filesystem with room for the copied deployment and the new build. A directory change on the same filesystem does not increase free disk space.
@@ -150,8 +152,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v5.0.0-<source-sha>
-├── releases/v5.0.0-<source-sha>/
+├── current -> releases/v5.0.1-<source-sha>
+├── releases/v5.0.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -332,7 +334,7 @@ COMMAND_BRIDGE_HTTP_HOST=100.64.10.20
 COMMAND_BRIDGE_ALLOWED_HOSTS=100.64.10.20,command-bridge.internal
 ```
 
-Then restrict port 8800 with the host firewall and restart the service. `COMMAND_BRIDGE_ALLOWED_HOSTS` protects Host header handling; it is not a source-IP firewall. CommandBridge HTTP does not provide TLS, so do not expose it directly to the public internet or send its bearer token over an untrusted network.
+Then restrict port 8800 with the host firewall and restart the service. `COMMAND_BRIDGE_ALLOWED_HOSTS` accepts comma-separated hostnames or IPs, including hostname:port and bracketed IPv6:port. DNS case and address formatting are normalized; optional ports are ignored for hostname matching, and do not change the listener or firewall. URLs, credentials, paths, wildcards and invalid ports are rejected. Host validation is not a source-IP firewall. CommandBridge HTTP does not provide TLS, so do not expose it directly to the public internet or send its bearer token over an untrusted network.
 
 ## Permission boundary
 
@@ -397,6 +399,16 @@ Token output is opt-in: use `update --print-codex-setup`, not with `--check`. Ru
 From 4.3.1, dependency pruning uses `--no-save` to preserve the source manifests; repeated source installation still requires a clean checkout. Hosted Linux service fixtures explicitly secure their disposable CLI parent instead of weakening production directory validation. Windows lock fixtures use unique mutex names so installation builds do not contend with their own production lock.
 
 From 4.3.2, disposable health-failure fixtures preserve CLI version queries and inject only into server startup for the deployed SHA. Source build/version checks cannot create startup evidence; rollback gates still require the real new-service marker and restored MCP/Audit verification.
+
+### Incomplete installer recovery (5.0.1)
+
+Configuration, unit and helper backups become usable only after the copy and recorded digest/metadata are complete. Rollback restores files atomically and checks file, ownership/mode, SELinux, CLI/layout and systemd operations. A missing snapshot is a recovery error, not evidence that the original file should be deleted.
+
+If recovery cannot finish, the installer returns an error and does not restart the old service. Necessary snapshots and their target/digest/ownership/mode metadata are retained under root-only `/var/lib/command-bridge-recovery/failed.*/snapshots`; ordinary download/build temporary files are cleaned. If retaining this bundle also fails, the installer preserves its original private temporary directory and reports its location. These records can contain the Bearer Token: keep them private and do not attach them to issues or CI logs.
+
+Further installation is refused while durable recovery records remain. An administrator must inspect the fixed targets and snapshot integrity, complete restoration and SELinux/systemd checks, then verify readiness, real MCP hostname/Audit, diagnostics and the original version/SHA before archiving or removing the bundle. Do not restart or reinstall merely to clear the error. Full program migration backups remain at their existing protected locations when layout recovery fails. Power loss or forced termination still requires administrator inspection.
+
+Ordinary uninstall preserves private recovery records along with configuration/log/work data. `--purge` removes recognized, administrator-owned recovery records after preflight; unknown, writable or mounted contents are rejected before stopping the service. If a saved old uninstaller cannot validate retained records, bootstrap uses the verified channel fallback and refuses an incompatible fallback. Direct MCP modifications of the recovery root are covered by the same accidental-self-modification guard.
 
 From 4.3.3, service restart retries reuse matching startup evidence without replacing the designated failure with a file-exists error. Unexpected evidence remains an error, and each test case still requires its marker to be absent before deployment.
 

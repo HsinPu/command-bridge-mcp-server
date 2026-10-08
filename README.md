@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-5.0.0-blue)
+![Version](https://img.shields.io/badge/version-5.0.1-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -32,7 +32,7 @@ Each host runs its own MCP endpoint. The server supports local `stdio` and remot
 - **Execution policy:** command allowlisting by default, with limits on shells, working directories, timeouts, output, inherited environment variables, and concurrent commands.
 - **Audit trail:** records command lifecycle events; commands do not start if the initial audit write fails.
 - **Low-privilege services:** a dedicated `command-bridge` account on Linux and `LocalService` on Windows.
-- **Configuration preservation:** reinstalls retain configuration and tokens, with recovery mechanisms for failures during upgrade activation.
+- **Configuration preservation:** reinstalls retain configuration and tokens, with recovery mechanisms for failures during upgrade activation. Linux verifies backups before replacing files; incomplete recovery stops restart and retains private recovery records for an administrator.
 
 ## How it works
 
