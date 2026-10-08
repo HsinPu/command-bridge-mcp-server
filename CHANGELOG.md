@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.0.4 — 2026-10-08
+
+PATCH: correct CI managed-update failure diagnosis, which previously inspected Linux messages even on Windows. Runtime update behavior and all release gates are unchanged.
+
+- Summarize the private worker log against the actual platform's installer/bootstrap sources, reporting only numeric message indices, bounded script locations, fixed stage/error categories and failure counts.
+- Add a regression proving Windows/Linux classification, bounded locations and exclusion of tokens, paths, command text and raw errors. Do not expose the worker log or alter the MCP diagnostics schema.
+- Record the actual Windows service installation success followed by managed-update failure; this diagnostic correction does not claim the update failure is resolved or installation-channel publication has succeeded.
+
 ## 6.0.3 — 2026-10-08
 
 PATCH: fix a Linux recovery test dependency exposed by real installer service validation; production deployment, command policies and release gates are unchanged.

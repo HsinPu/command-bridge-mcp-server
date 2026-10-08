@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.0.3-blue)
+![Version](https://img.shields.io/badge/version-6.0.4-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -171,7 +171,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.0.3 保留程序終止、Audit helper、dotenv 與 Windows PowerShell 修正，並修正安裝器受限建置環境中的 Linux 私有回復測試。既有指令、Audit 與停機時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
+6.0.4 保留 Windows／dotenv 可靠性與 Linux 回復測試修正，並改善各平台 CI 更新故障診斷，不公開私有日誌。既有指令、Audit 與停機時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
 
 例如，你可以請已連線的用戶端：
 

@@ -129,6 +129,22 @@ test("control diagnostics expose only validated numeric locations", async () => 
   await assert.rejects(runUpdateControl(process.execPath,["-e","console.log(JSON.stringify({controlError:true,stage:2,hresult:0,line:8,secret:'must-stay-hidden'}));process.exit(1)"]), error=>error instanceof Error && !error.message.includes("must-stay-hidden") && !error.message.includes("control-stage"));
 });
 
+test("CI update failure summaries use platform sources and never reveal private log text", async () => {
+  const helper = await import(new URL("../../scripts/tests/update-failure-summary.mjs", import.meta.url).href);
+  const secret = "must-stay-private-token-and-path";
+  const log = `Authorization: Bearer ${secret}\nStaged CLI version verification failed.\nInvalid installation channel.\nAt C:\\${secret}\\scripts\\windows\\install.ps1:701 char:18\nAt C:\\${secret}\\bootstrap.ps1:52 char:3\n[CommandBridge] Downloading Node.js runtime\n[CommandBridge] Installing locked dependencies\nParserError WebException\n✖ private command ${secret}\n`;
+  const result = helper.summarizeUpdateFailure(log, "win32");
+  assert.ok(result.installerErrorIndices.length > 0); assert.ok(result.bootstrapErrorIndices.length > 0);
+  assert.deepEqual(result.locations, [{ role: "installer", line: 701, column: 18 }, { role: "bootstrap", line: 52, column: 3 }]);
+  assert.deepEqual(result.stages, ["runtime-download", "source-tests"]); assert.equal(result.specFailureCount, 1);
+  assert.deepEqual(result.knownErrorCategories, ["ParserError", "WebException"]);
+  assert.equal(JSON.stringify(result).includes(secret), false);
+  const bounded = helper.summarizeUpdateFailure(log.repeat(40), "win32"); assert.ok(bounded.locations.length <= 16);
+  const linux = helper.summarizeUpdateFailure("Invalid installation channel.\nnot ok 7\ncurl: (22)\nENOENT " + secret, "linux");
+  assert.ok(linux.bootstrapErrorIndices.length > 0); assert.deepEqual(linux.failedTestIndices, [7]); assert.deepEqual(linux.curlExitCodes, [22]);
+  assert.deepEqual(linux.knownErrorCategories, ["ENOENT"]); assert.equal(JSON.stringify(linux).includes(secret), false);
+});
+
 
 test("Linux deployment permissions remain readable under strict updater umask", {skip:process.platform!=="linux"}, async()=>{
  const {spawnSync}=await import("node:child_process");

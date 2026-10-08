@@ -1,6 +1,14 @@
 # Architecture implementation validation
 
-The current package is 6.0.3, fixing a private Linux recovery fixture under the installer's build environment after the Windows/dotenv reliability fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.0.4, correcting platform-specific CI update failure diagnosis after the Windows/dotenv and private Linux fixture fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 6.0.4 validation (2026-10-08)
+
+PATCH: CI previously searched Linux installer/bootstrap messages even for a Windows worker. The corrected helper reads fixed platform sources and returns only numeric indices, bounded locations/counts and a fixed vocabulary of stages/error categories. A behavior test includes synthetic secrets and proves no matched private text/path/token is returned. This changes test diagnostics only, retains the MCP schema and makes no claim that a failed managed update is fixed.
+
+Full native Windows `npm test` using checksum-verified CI Node.js 24.18.0 passed **160/191**, with **31 platform/elevation skips**. A private WSL Ubuntu snapshot under `nobody` with the same runtime, locked dependencies and restricted installer PATH passed **164/191**, with **27 platform skips**. Both reported zero failures, including Windows/Linux message classification and synthetic-secret exclusion.
+
+All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses**, **WinSW XML** and both update diagnostic JavaScript files passed syntax checks. Package/root lock/build versions, unchanged dependency versions, fixed bilingual bootstrap commands, relative documentation links and `git diff --check` are verified before commit. Hosted service/layout/channel checks for the final SHA are pending at commit time; Oracle Linux 8.10 SELinux Enforcing and actual reboot remain untested.
 
 ## 6.0.3 validation (2026-10-08)
 
@@ -19,6 +27,8 @@ Full native Windows `npm test` with checksum-verified Node.js 24.18.0 passed **1
 All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses**, **WinSW XML** and the diagnostic JavaScript syntax passed. Package/root lock/build versions, unchanged third-party dependency versions, the fixed bilingual bootstrap commands, relative links and `git diff --check` are verified before commit. Hosted CI and disposable Windows/Linux service/layout checks for the final SHA are pending at commit time. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested; installation-channel availability still requires all hosted gates and the final exact SHA/version.
 
 After push, [CI run 37782957217](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/37782957217) for `3f84364e3c5d7e2afec72e722d8669b6c949fa9d` passed both general jobs: Windows **160/190, zero failures, 30 skips**, Linux **163/190, zero failures, 27 skips**. The previous PowerShell UTF-8 read, long source, exit/error and explicit module-path cases passed. Linux service/layout validation then exposed the private uninstall fixture's dependency on absent sbin tools while running source tests under the restricted build PATH; the required fault activation evidence was absent, so both gates correctly failed. This drives 6.0.3; general-job success does not establish channel publication.
+
+The same 6.0.2 run completed real Windows installation as LocalService and MCP/Audit verification, then its managed-update worker failed at the generic child-installer exit check (worker line 26). Existing diagnosis searched Linux messages on Windows and only matched a normal update banner, so it could not locate the cause. Windows service/channel gates failed/skipped; 6.0.4 adds safe platform-specific evidence for continued investigation.
 
 ## 6.0.1 validation (2026-10-08)
 

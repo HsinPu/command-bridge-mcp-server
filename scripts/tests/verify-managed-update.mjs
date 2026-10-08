@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { summarizeUpdateFailure } from './update-failure-summary.mjs';
 const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
 let host = config.COMMAND_BRIDGE_HTTP_HOST;
 if (host === '0.0.0.0') host = '127.0.0.1';
@@ -52,15 +53,7 @@ function diagnostics(reply) {
   // Report only numeric test indices and a fixed errno vocabulary; never log text.
   if (job && /^[a-f0-9-]{36}$/.test(job.jobId) && existsSync(root+'/diagnostics/'+job.jobId+'.log')) {
     const log=readFileSync(root+'/diagnostics/'+job.jobId+'.log','utf8');
-    const source = readFileSync(new URL('../linux-systemd/install.sh', import.meta.url),'utf8');
-    const messages = [...source.matchAll(/fail "([^"\n]+)/g)].map(match=>match[1].split('$')[0]);
-    console.error('Installer error indices:', messages.flatMap((prefix,index)=>prefix.length>12 && log.includes(prefix) ? [index+1] : []));
-    const bootstrapSource = readFileSync(new URL('../bootstrap.sh', import.meta.url),'utf8');
-    const bootstrapMessages = [...bootstrapSource.matchAll(/echo '([^']+)'/g)].map(match=>match[1]);
-    console.error('Bootstrap error indices:', bootstrapMessages.flatMap((prefix,index)=>prefix.length>12 && log.includes(prefix) ? [index+1] : []));
-    console.error('Curl exit codes:', [...log.matchAll(/curl: \((\d+)\)/g)].map(match=>Number(match[1])));
-    console.error('Failed test indices:' , [...log.matchAll(/not ok (\d+)/g)].map(match=>Number(match[1])));
-    console.error('Known error categories:', ['EACCES','ENOENT','EEXIST','ERR_ASSERTION','ECONNREFUSED','EPERM'].filter(code=>log.includes(code)));
+    console.error('Update failure summary:', JSON.stringify(summarizeUpdateFailure(log, process.platform)));
   }
 }
 const targetSha = process.argv[3];
