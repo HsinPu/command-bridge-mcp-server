@@ -1,6 +1,14 @@
 # Architecture implementation validation
 
-The current package is 6.0.4, correcting platform-specific CI update failure diagnosis after the Windows/dotenv and private Linux fixture fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.0.5, correcting Windows managed-update native stderr handling after the Windows/dotenv, private Linux fixture and CI diagnosis fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 6.0.5 validation (2026-10-08)
+
+PATCH: a private actual worker/bootstrap/installer helper chain reproduces the original false failure when a native executable emits diagnostic stderr and exits zero. The same regression passes after the correction for both `.exe` and npm-style `.cmd`, checks nonzero exits and a missing executable still fail, preserves both streams and confirms the caller preference is restored. Native exit code is reset/read in global scope rather than masked by a local variable. No Audit/command deadline, policy, verification or release gate is changed.
+
+Full native Windows `npm test` with checksum-verified CI Node.js 24.18.0 passed **161/192**, with **31 platform/elevation skips**. A private WSL Ubuntu snapshot under `nobody`, using the same runtime, locked dependencies and restricted installer PATH, passed **164/192**, with **28 platform skips**. Both reported zero failures. The new nested native-stderr regression failed against the original helper and passed with the correction; its original success/failure/stream assertions remain intact.
+
+All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses** and **WinSW XML** passed. Package/root lock/build versions, unchanged dependency versions, fixed bilingual bootstrap commands, relative documentation links and `git diff --check` are verified before commit. Hosted service/layout/channel checks for the final SHA are pending at commit time; Oracle Linux 8.10 SELinux Enforcing and actual reboot remain untested.
 
 ## 6.0.4 validation (2026-10-08)
 
@@ -9,6 +17,8 @@ PATCH: CI previously searched Linux installer/bootstrap messages even for a Wind
 Full native Windows `npm test` using checksum-verified CI Node.js 24.18.0 passed **160/191**, with **31 platform/elevation skips**. A private WSL Ubuntu snapshot under `nobody` with the same runtime, locked dependencies and restricted installer PATH passed **164/191**, with **27 platform skips**. Both reported zero failures, including Windows/Linux message classification and synthetic-secret exclusion.
 
 All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses**, **WinSW XML** and both update diagnostic JavaScript files passed syntax checks. Package/root lock/build versions, unchanged dependency versions, fixed bilingual bootstrap commands, relative documentation links and `git diff --check` are verified before commit. Hosted service/layout/channel checks for the final SHA are pending at commit time; Oracle Linux 8.10 SELinux Enforcing and actual reboot remain untested.
+
+After push, [CI run 37785929965](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/37785929965) for `2bb8160faafcd5c957830ccc9ee5a989396835f7` passed both general jobs and the Linux layout gate. Real Windows installation/MCP/Audit succeeded, but its update worker failed during source tests. The fixed summary reported runtime/wrapper/source-test stages, no actual test failure and an Audit diagnostic code; the private nested regression then reproduced PowerShell promoting diagnostic stderr to a terminating error despite native exit zero. This drives 6.0.5; channel publication remained blocked by the failed Windows gate.
 
 ## 6.0.3 validation (2026-10-08)
 

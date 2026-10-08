@@ -220,3 +220,45 @@ Write-Output 'native-streams-and-exit-ok'
   await fs.rm(fixture,{recursive:true,force:true});
  }
 });
+
+test("Windows managed update installer accepts native diagnostic stderr but rejects real failures", { skip: process.platform !== "win32" }, async () => {
+  const fs = await import("node:fs/promises"), os = await import("node:os"), path = await import("node:path"), { spawnSync } = await import("node:child_process");
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "cb-external-stderr-"));
+  try {
+    await fs.copyFile("scripts/managed-update/common.ps1", path.join(directory, "common.ps1"));
+    await fs.writeFile(path.join(directory, "emit.mjs"), 'process.stdout.write("stdout-marker");process.stderr.write("diagnostic-marker");process.exit(Number(process.env.TEST_EXIT));');
+    await fs.writeFile(path.join(directory, "native.cmd"), '@echo off\r\n"%TEST_NODE%" %*\r\nexit /b %errorlevel%\r\n');
+    await fs.writeFile(path.join(directory, "bootstrap.ps1"), `param([switch]$Update)
+$ErrorActionPreference='Stop'
+$ast=[Management.Automation.Language.Parser]::ParseFile($env:TEST_INSTALLER,[ref]$null,[ref]$null)
+$definition=$ast.EndBlock.Statements | Where-Object { $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -eq 'Invoke-External' }
+. ([scriptblock]::Create($definition.Extent.Text))
+$LASTEXITCODE=0
+Invoke-External $env:TEST_NATIVE @($env:TEST_PROGRAM)
+if ($ErrorActionPreference -ne 'Stop') { throw 'Error preference was not restored' }
+`);
+    const probe = path.join(directory, "probe.ps1");
+    await fs.writeFile(probe, `param([string]$Fixture)
+. ([IO.Path]::Combine($PSScriptRoot,'common.ps1'))
+$bootstrap=Join-Path $Fixture 'bootstrap.ps1'
+foreach ($kind in @('exe','cmd')) {
+ $env:TEST_NATIVE=if ($kind -eq 'exe') { $env:TEST_NODE } else { Join-Path $Fixture 'native.cmd' }
+ foreach ($code in @(0,17)) {
+ $env:TEST_EXIT=[string]$code
+ $actual=Invoke-UpdateBootstrap $bootstrap $Fixture
+ if (($code -eq 0 -and $actual -ne 0) -or ($code -ne 0 -and $actual -eq 0)) { throw 'Nested native stderr/exit classification failed' }
+ $log=[IO.File]::ReadAllText((Join-Path $Fixture 'install.log'))
+ if (-not $log.Contains('stdout-marker') -or -not $log.Contains('diagnostic-marker')) {throw 'Nested native streams were not drained'}
+ }
+}
+$env:TEST_NATIVE=Join-Path $Fixture 'missing-native.exe'
+if ((Invoke-UpdateBootstrap $bootstrap $Fixture) -eq 0) { throw 'Missing native executable was accepted' }
+Write-Output 'nested-native-stderr-and-exit-ok'
+`);
+    const result = spawnSync(path.join(process.env.SystemRoot!, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", probe, "-Fixture", directory], {
+      encoding: "utf8", windowsHide: true, timeout: 15_000, env: { ...process.env, TEST_INSTALLER: path.resolve("scripts/windows/install.ps1"), TEST_NODE: process.execPath, TEST_PROGRAM: path.join(directory, "emit.mjs") }
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+    assert.match(result.stdout, /nested-native-stderr-and-exit-ok/);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});

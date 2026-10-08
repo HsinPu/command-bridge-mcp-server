@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.0.4-blue)
+![Version](https://img.shields.io/badge/version-6.0.5-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -171,7 +171,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.0.4 retains the Windows/dotenv reliability and Linux recovery-test fixes, and improves platform-specific CI update failure diagnosis without exposing private logs. Existing command, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
+6.0.5 retains the Windows/dotenv and Linux recovery fixes, and prevents Windows managed updates from mistaking normal native diagnostic output for installation failure. Real exit failures and MCP/Audit validation still stop deployment. Existing command, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
 
 Example requests for a connected client:
 

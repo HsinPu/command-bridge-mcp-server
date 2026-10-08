@@ -76,8 +76,18 @@ function Invoke-External {
     if ($WorkingDirectory) {
       Set-Location -LiteralPath $WorkingDirectory
     }
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
+    # Windows PowerShell 5.1 can turn native diagnostic stderr into terminating
+    # ErrorRecords when this installer runs with redirected worker streams.
+    # Preserve that output and judge only the actual native completion status.
+    $previousErrorActionPreference = $ErrorActionPreference
+    $nativeExitCode = $null
+    try {
+      $ErrorActionPreference = 'Continue'
+      $global:LASTEXITCODE = $null
+      & $FilePath @Arguments
+      $nativeExitCode = $global:LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousErrorActionPreference }
+    if ($null -eq $nativeExitCode -or $nativeExitCode -ne 0) {
       throw "External command failed: $FilePath"
     }
   } finally {

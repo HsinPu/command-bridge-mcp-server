@@ -101,6 +101,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.0.5 起，Windows 安裝器原生程序 helper 須相容更新 worker 重導向串流；stderr 診斷不得自動等同失敗，仍須保留日誌及核對真正退出碼。僅在原生呼叫期間調整錯誤偏好並於 finally 還原，以 global LASTEXITCODE 避免區域遮蔽及沿用舊成功值；啟動失敗、非零退出及其他 PowerShell／MCP／Audit 驗證仍拒絕。需用私有實際巢狀程序測試 .exe／.cmd、診斷輸出、真失敗與缺失程式，不延長正式時限。
+
 - 6.0.4 起，CI 更新故障摘要依實際平台的安裝器與 bootstrap 原始碼分類，不得拿 Linux 訊息分類 Windows。僅輸出有上限的數字位置／計數、固定階段與錯誤詞彙，私有 worker 日誌、Token、指令及路徑不得公開；需有分類／秘密排除行為測試。此摘要不改 MCP diagnostics schema，也不能將安裝成功推定為自我更新或 channel 已通過。
 
 - 6.0.3 起，私有 Linux 卸載／purge 回復測試須以安裝器建置 PATH `/usr/bin:/bin` 驗證，不依賴 host sbin 帳號管理工具；僅在私有 fixture 模擬不存在的身分，任何非預期刪除呼叫須失敗。不得為此放寬正式帳號／回復預檢或略過來源測試；失敗只輸出固定案例、行號與 exit 分類，提前建置失敗仍不得當作回復成功證據。

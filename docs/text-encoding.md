@@ -1,4 +1,4 @@
-# 中文與 UTF-8 / Chinese text and UTF-8 (6.0.4)
+# 中文與 UTF-8 / Chinese text and UTF-8 (6.0.5)
 
 以 **UTF-8** 為主要文件格式。指令輸出、檔案内容與 MCP JSON 是不同的編碼邊界，不能只設定 stdout 就假設讀寫文件也安全。 / UTF-8 is the primary document format. Command output, file contents and MCP JSON have separate encoding boundaries.
 

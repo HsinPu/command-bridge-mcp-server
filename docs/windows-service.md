@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 6.0.4; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 6.0.5; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 The local health probe bypasses Internet proxy/WPAD settings and uses the configured allowed Host. It supports IPv4 and IPv6 listeners; this does not create firewall rules or bypass bearer authentication on MCP/readiness endpoints.
 
@@ -13,6 +13,8 @@ From 6.0.0, cmd Shell commands use a fixed UTF-8 PowerShell console host with cm
 6.0.2 transfers PowerShell Shell source through a private environment value to a fixed ASCII entry command and clears it before executing the source. The default entry explicitly imports the fixed built-in Management module; authorized custom module paths remain available for discovery. Unicode, quotes, long commands and exit codes are tested without extending the 15-second normal-test budget or changing production deadlines. This does not bypass the host's script execution policy or change native allowlist argv.
 
 6.0.4 CI failure diagnosis uses Windows installer/bootstrap messages, rather than the Linux message catalogue. It reports only bounded numeric locations/counts and fixed categories from the administrator-private worker log; it does not print that log, configuration, tokens, commands or paths. Successful installation alone is insufficient: actual managed update/reconnection and rollback cases must still pass before channel publication.
+
+6.0.5 fixes the installer native-command helper under redirected update-worker streams. Windows PowerShell 5.1 diagnostic stderr remains visible but does not abort a successful native call; a real zero exit code is mandatory, missing startup/nonzero exit still fails, and the caller's error preference is restored. Regression uses the actual nested worker/bootstrap helper for both `.exe` and npm-style `.cmd` calls. No Audit gate, script policy, verification or deadline is relaxed.
 
 Audit helpers receive only standard Windows directory variables and load fixed built-in PowerShell modules, without inheriting arbitrary environment secrets or external module paths. Their five-second deadline remains unchanged. Startup diagnostics include rotated log files because WinSW restarts can leave the current error log empty.
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.0.5 — 2026-10-08
+
+PATCH: fix Windows installer false failures when running inside the managed-update worker with redirected native streams. Command policies, Audit enforcement, deployment verification and production deadlines are unchanged.
+
+- Keep native stderr visible without promoting informational/expected diagnostic output to a PowerShell 5.1 terminating error. Temporarily adjust preference only around the native invocation, restore it in `finally`, and require a real zero native exit code.
+- Reset/read PowerShell's global native exit variable so a missing executable cannot reuse a previous success and a function-local variable cannot hide the actual exit code.
+- Reproduce the original failure in a private actual worker/bootstrap/installer process chain. Verify both `.exe` and npm-style `.cmd` diagnostic stderr with exit zero, nonzero exits and a missing executable; preserve stdout/stderr and the original caller preference.
+- Record 6.0.4 Windows service success followed by source-test interruption, and keep every general/service/layout/channel gate intact.
+
 ## 6.0.4 — 2026-10-08
 
 PATCH: correct CI managed-update failure diagnosis, which previously inspected Linux messages even on Windows. Runtime update behavior and all release gates are unchanged.
