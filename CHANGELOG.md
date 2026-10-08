@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.0.2 — 2026-10-08
+
+PATCH: stabilize Windows PowerShell Shell source transport and built-in file cmdlet loading while retaining command policies, input/output fields and existing production deadlines.
+
+- Pass Windows PowerShell Shell source through a private child environment value to a fixed ASCII entry command, clear the value before user code runs, and retain Unicode, quotes, the existing 20,000-character input limit and explicit exit codes. Native allowlist argv and Linux Shell invocation remain unchanged.
+- Load the fixed built-in Management module explicitly when using the default module path. Keep explicitly authorized `PSModulePath` passthrough and clear reserved internal environment values case-insensitively.
+- Add real Windows long-source/error/exit/environment and custom module-discovery regressions. Expand failure-only CI probes to isolate engine initialization, UTF-8 prefix, module loading, Unicode directories and source transport using private fixtures and fixed stage metadata only.
+- Record the remaining 6.0.1 hosted PowerShell read timeout and skipped service/channel gates; no command/Audit deadline or publication requirement is relaxed.
+
 ## 6.0.1 — 2026-10-08
 
 PATCH: fix Windows termination/PowerShell reliability and missed UTF-8 configuration validation without changing the MCP interface, encoding choices, policies or production time limits.

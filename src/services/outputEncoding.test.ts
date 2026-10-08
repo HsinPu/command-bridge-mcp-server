@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, copyFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, copyFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AppConfig } from "../config/env.js";
@@ -186,4 +186,39 @@ test("Windows cmd and PowerShell return Unicode text and explicitly edit complet
     assert.deepEqual(await readFile(file), Buffer.from(original.replace("首行", "修改首行")));
     const unsuccessful = await executor.execute({ command: "exit /b 7" }); assert.equal(unsuccessful.exitCode, 7); assert.equal(unsuccessful.ok, false);
   } finally { await executor.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("Windows PowerShell preserves long Unicode source, quotes and explicit exits without leaking its request environment", { skip: process.platform !== "win32" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-powershell-source-")), cfg = fixtureConfig(root);
+  cfg.allowedShells = ["powershell"];
+  const executor = new CommandExecutor(cfg, memoryAudit().audit);
+  try {
+    const command = "# " + "中文字".repeat(6600) + "\n$value='中文''引號';[Console]::Out.Write($value);[Console]::Error.Write('stderr');";
+    assert.ok(command.length <= 20000);
+    const result = await executor.execute({ command }); assertSucceeded(result, "long-powershell-source");
+    assert.equal(result.stdout, "中文'引號"); assert.equal(result.stderr, "stderr");
+    const cleared = await executor.execute({ command: "[Console]::Out.Write([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_REQUEST')))" });
+    assertSucceeded(cleared, "powershell-request-cleared"); assert.equal(cleared.stdout, "True");
+    const exit = await executor.execute({ command: "exit 7" }); assert.equal(exit.exitCode, 7); assert.equal(exit.ok, false); assert.equal(exit.timedOut, false);
+    const failure = await executor.execute({ command: "throw 'fixture failure'" });
+    assert.equal(failure.ok, false); assert.equal(failure.exitCode, 1); assert.equal(failure.timedOut, false); assert.match(failure.stderr, /fixture failure/);
+  } finally { await executor.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("Windows PowerShell honors explicitly allowed module-path passthrough", { skip: process.platform !== "win32" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-powershell-module-")), cfg = fixtureConfig(root);
+  const previous = process.env.PSModulePath;
+  cfg.allowedShells = ["powershell"]; cfg.passthroughEnv = ["PSModulePath"];
+  const executor = new CommandExecutor(cfg, memoryAudit().audit);
+  try {
+    const directory = join(root, "CommandBridgeFixture"); await mkdir(directory);
+    await writeFile(join(directory, "CommandBridgeFixture.psm1"), "function Get-CommandBridgeFixture { [Console]::Out.Write('fixture-module') }");
+    process.env.PSModulePath = root;
+    // Module discovery is independent of the host's script execution policy.
+    const result = await executor.execute({ command: "[Console]::Out.Write((Get-Module -ListAvailable -Name CommandBridgeFixture).Name)" });
+    assertSucceeded(result, "powershell-explicit-module-path"); assert.equal(result.stdout, "CommandBridgeFixture");
+  } finally {
+    if (previous === undefined) delete process.env.PSModulePath; else process.env.PSModulePath = previous;
+    await executor.shutdown(); await rm(root, { recursive: true, force: true });
+  }
 });

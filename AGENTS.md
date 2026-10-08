@@ -101,6 +101,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.0.2 起，Windows PowerShell Shell 原始來源由獨立的私有子程序環境值傳給固定 ASCII 入口，執行前清除；保留中文／引號／20,000 字元與退出碼，預設明確載入固定內建 Management 模組，保留授權自訂模組路徑。內部環境鍵須忽略大小寫清除，原生 allowlist 與 Linux 不套用此入口。不得以放寬腳本政策或指令／Audit 時限處理 CI 故障；診斷只輸出固定階段與結果分類。
+
 - 6.0.1 起，dotenv UTF-8 預檢須使用與 dotenv/config 相同的命令列選項優先順序、最後有效值與空白環境預設。Windows taskkill 結束後仍須在原 5 秒上限內確認程序與兩個擷取串流結束；不得以 leader 已退出或工具先回傳推定成功。Windows Shell 使用固定 PowerShell 與預設內建模組路徑，保留明確允許的模組路徑傳遞；檔案 Audit 使用過濾環境、.NET ACL API 與停用模組自動載入，不放寬 Audit／指令時限。Linux 空檔重裝仍須寫入本次模式並可精確回復。
 
 - 6.0.0 起，以 UTF-8 為主要文件格式，`command_bridge_run_command` 的選用 `outputEncoding` 可指定 utf8／utf16le／big5／gbk／gb18030；不得猜測編碼或自動轉換檔案。stdout／stderr 使用各自嚴格串流解碼器，正常結束的非法或不完整輸出不回傳，記錄唯一 failed Audit 並釋放名額；逾時／截斷不補入替代字元。Windows cmd 使用固定 UTF-8 主控台包裝程式及原始串流轉送，原生 allowlist 仍直接傳 argv。Windows PowerShell 5.1 的 stdout 編碼不代表文件編碼，檔案操作須明確指定，不能以亂碼或截斷輸出覆寫全文。設定與政策 UTF-8 預檢、Windows 原始位元組備份／回復、兩平台 BOM／換行保留與檔案傳輸雜湊都須有行為驗證。正式 PS1 保持 ASCII，含非 ASCII 時需 UTF-8 BOM；不全面轉碼工作資料、不宣稱任意外部程式寫檔可自動防護。詳見 docs/text-encoding.md。

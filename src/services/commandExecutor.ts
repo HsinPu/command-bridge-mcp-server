@@ -371,9 +371,17 @@ export class CommandExecutor {
         for (const key of Object.keys(environment)) if (key.toLowerCase() === "psmodulepath") delete environment[key];
         environment.PSModulePath = join(dirname(invocation.executable), "Modules");
       }
-      if (shell === "powershell" && process.platform === "win32" &&
-          !Object.keys(environment).some(key => key.toLowerCase() === "psmodulepath")) {
-        environment.PSModulePath = join(dirname(invocation.executable), "Modules");
+      if (shell === "powershell" && process.platform === "win32") {
+        // Keep Unicode/long source out of Windows native command-line quoting.
+        // Clear reserved keys case-insensitively before setting our own values.
+        for (const key of Object.keys(environment)) {
+          if (["command_bridge_powershell_request", "command_bridge_powershell_builtins"].includes(key.toLowerCase())) delete environment[key];
+        }
+        if (!Object.keys(environment).some(key => key.toLowerCase() === "psmodulepath")) {
+          environment.PSModulePath = join(dirname(invocation.executable), "Modules");
+          environment.COMMAND_BRIDGE_POWERSHELL_BUILTINS = "1";
+        }
+        environment.COMMAND_BRIDGE_POWERSHELL_REQUEST = command;
       }
     }
     const startedAt = Date.now();
@@ -555,7 +563,13 @@ function buildShellInvocation(shell: ShellKind, command: string): ShellInvocatio
           "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); " +
             "[Console]::InputEncoding = [Console]::OutputEncoding; " +
             "$OutputEncoding = [Console]::OutputEncoding; " +
-            command
+            (process.platform === "win32" ?
+              "$commandBridgeSource = [Environment]::GetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_REQUEST'); " +
+              "[Environment]::SetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_REQUEST',$null); " +
+              "if ([Environment]::GetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_BUILTINS') -eq '1') { " +
+              "Import-Module -Name ([IO.Path]::Combine($PSHOME,'Modules\\Microsoft.PowerShell.Management\\Microsoft.PowerShell.Management.psd1')) -ErrorAction Stop }; " +
+              "[Environment]::SetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_BUILTINS',$null); " +
+              ". ([scriptblock]::Create($commandBridgeSource))" : command)
         ]
       };
     case "cmd":

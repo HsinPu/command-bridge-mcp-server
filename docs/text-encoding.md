@@ -1,4 +1,4 @@
-# 中文與 UTF-8 / Chinese text and UTF-8 (6.0.1)
+# 中文與 UTF-8 / Chinese text and UTF-8 (6.0.2)
 
 以 **UTF-8** 為主要文件格式。指令輸出、檔案内容與 MCP JSON 是不同的編碼邊界，不能只設定 stdout 就假設讀寫文件也安全。 / UTF-8 is the primary document format. Command output, file contents and MCP JSON have separate encoding boundaries.
 
@@ -55,6 +55,8 @@ Get-Content -LiteralPath 'C:\work\中文文件.txt' -Raw -Encoding UTF8
 預設 dotenv 設定與 JSON 政策檔必須是有效 UTF-8，可有 UTF-8 BOM；NUL、不完整／非法 UTF-8 拒絕讀取，不自動猜測或重寫。已明確設定的 legacy dotenv encoding override 保持相容。Windows 安裝器更動前嚴格驗證，保存原始位元組，針對欄位修改時保留 BOM／換行；回復使用原始位元組。Linux 重裝保留 BOM、中文、既有換行與最後換行狀態，使用既有經驗證的備份回復。來源預檢失敗時保留原部署。 / Default dotenv and policy files require valid UTF-8, optionally with BOM. Invalid text fails before rewriting. Installer rollback preserves original bytes; explicit legacy dotenv overrides remain compatible.
 
 6.0.1 預檢跟隨 dotenv/config 真正使用的 CLI 選項，命令列優先於環境值、重複選項採最後有效值；空的 path／encoding 環境值使用原本預設。Windows 程序終止需等到程序及 stdout／stderr 都結束，Audit 的 ACL helper 不探索用戶端模組、不繼承無關秘密；既有 5 秒 Audit 和終止上限保留。 / Validation follows actual CLI precedence/defaults. Windows termination waits for process and pipes; the fixed file Audit ACL helper disables module autoload and excludes unrelated caller environment while retaining existing deadlines.
+
+6.0.2 的 Windows PowerShell Shell 入口使用固定 ASCII 指令接收獨立環境值中的原始來源，執行前清除該值；預設明確載入內建 Management 模組，保留授權的自訂模組路徑、中文／引號／20,000 字元上限與退出碼。檔案仍須明確指定編碼，原生 allowlist 不受此包裝影響，也不略過主機的腳本政策。 / The fixed PowerShell Shell entry receives source independently of native command-line quoting, clears its private value, and explicitly loads the built-in Management module by default. Authorized custom module paths, Unicode, quotes, long source and exit codes remain supported; file encoding and host script policy remain separate.
 
 ## 上傳與下載 / File transfer
 

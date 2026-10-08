@@ -1,6 +1,14 @@
 # Architecture implementation validation
 
-The current package is 6.0.1, repairing Windows termination/helper reliability and dotenv option validation after the 6.0.0 encoding update. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.0.2, improving Windows PowerShell source transport and explicit built-in file cmdlet loading after the 6.0.1 reliability fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 6.0.2 validation (2026-10-08)
+
+PATCH: Windows PowerShell Shell source now uses a fixed ASCII entry and private environment value, cleared before execution. Default built-in Management loading is explicit; authorized custom module-path discovery remains supported. Native allowlist argv, Linux execution, strict decoding, Audit gating and all existing deadlines remain unchanged. Windows regressions cover Unicode/quotes, near-limit source, environment clearing, nonzero exit, terminating error and module discovery without bypassing the host's script policy. Failure-only CI probes use private fixtures and emit fixed stage metadata only.
+
+Full native Windows `npm test` with checksum-verified Node.js 24.18.0 passed **159/190**, with **31 platform/elevation skips**; the private WSL Ubuntu snapshot under `nobody` with the same verified runtime and locked dependencies passed **163/190**, with **27 platform skips**. Both reported zero failures. Eight native Windows fixed-stage probes completed, including raw Unicode source, pinned module discovery, explicit Management loading, environment source transport, .NET reading and an ASCII reference.
+
+All **24 Bash scripts/four fixed Linux launchers**, **22 native Windows PowerShell 5.1 parses**, **WinSW XML** and the diagnostic JavaScript syntax passed. Package/root lock/build versions, unchanged third-party dependency versions, the fixed bilingual bootstrap commands, relative links and `git diff --check` are verified before commit. Hosted CI and disposable Windows/Linux service/layout checks for the final SHA are pending at commit time. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested; installation-channel availability still requires all hosted gates and the final exact SHA/version.
 
 ## 6.0.1 validation (2026-10-08)
 
@@ -10,7 +18,7 @@ Full native Windows `npm test`, using checksum-verified CI Node.js 24.18.0, pass
 
 All **24 Bash scripts/four fixed Linux launchers**, **22 Windows PowerShell 5.1 script parses** and **WinSW XML** passed syntax checks. Package/root lock/build versions, unchanged dependency versions, bilingual fixed bootstrap commands, relative documentation links and `git diff --check` are checked before commit.
 
-At this commit's local validation stage, hosted CI and disposable Windows/Linux service/layout/deployment checks for the final SHA are pending. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested. Check the final commit's Actions run and exact `install-channel/channel.txt` SHA/version after push; local tests alone do not establish installation-channel availability.
+At 6.0.1 commit time hosted checks were pending. [CI run 37779777065](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/37779777065) for `2820069372bfb0935271313fb992a100f4639510` subsequently passed Ubuntu tests and the previous Windows termination/stdio Audit failures, but Windows still failed one PowerShell UTF-8 read at its unchanged 15-second budget (**157 passed, one failed, 30 skipped**). Service/layout gates and channel publication were skipped. That remaining failure drives 6.0.2; local passes above do not establish hosted success. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested.
 
 ## 6.0.0 validation (2026-10-08)
 
