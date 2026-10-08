@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildChildEnvironment } from "./commandExecutor.js";
 import { buildWindowsAuditEnvironment } from "./auditLog.js";
+import { createAuditEvent } from "./auditLog.js";
+import { FileAuditLog } from "./fileAuditLog.js";
 
 test("Windows Audit startup excludes secrets and rejects invalid payload without module discovery", { skip: process.platform !== "win32" }, () => {
   const environment = buildWindowsAuditEnvironment(process.env.SystemRoot ?? "C:\\Windows", '{}');
@@ -69,4 +71,23 @@ test("fixed Windows wrapper uses built-in modules and rejects arbitrary commands
     assert.match(injected.stderr, /Cmdlet arguments rejected/);
     assert.equal(existsSync(marker), false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("Windows file Audit protects existing files without loading caller PowerShell modules", { skip: process.platform !== "win32" }, async () => {
+  const directory = mkdtempSync(join(tmpdir(), "cb-audit-module-"));
+  const marker = join(directory, "unexpected-module.txt"), saved = process.env.PSModulePath;
+  try {
+    const module = join(directory, "Microsoft.PowerShell.Utility"); mkdirSync(module);
+    writeFileSync(join(module, "Microsoft.PowerShell.Utility.psm1"), `function New-Object { [IO.File]::WriteAllText('${marker.replaceAll("'", "''")}', 'unexpected'); throw 'Caller module loaded' }`);
+    process.env.PSModulePath = directory;
+    const audit = new FileAuditLog(join(directory, "audit"));
+    for (const phase of ["attempted", "completed"] as const) await audit.write(createAuditEvent({ command: "echo 中文🙂", phase, executionMode: "unrestricted", source: "stdio" }));
+    const events = await audit.list(2);
+    assert.deepEqual(events.events.map(event => event.phase), ["completed", "attempted"]);
+    assert.equal(events.events[0]!.command, "echo 中文🙂");
+    assert.equal(existsSync(marker), false);
+  } finally {
+    if (saved === undefined) delete process.env.PSModulePath; else process.env.PSModulePath = saved;
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

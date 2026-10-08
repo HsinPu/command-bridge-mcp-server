@@ -1,6 +1,16 @@
 # Architecture implementation validation
 
-The current package is 6.0.0, adding an optional output encoding selector and repairing Chinese text, managed UTF-8 file/configuration handling and byte-exact rollback. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.0.1, repairing Windows termination/helper reliability and dotenv option validation after the 6.0.0 encoding update. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 6.0.1 validation (2026-10-08)
+
+PATCH: preserve MCP interfaces, encoding selectors, policies, Audit/command/shutdown deadlines and channel gates while fixing validated defects. Before the fix, the new dotenv CLI/default regression and both Windows taskkill/pipe-order regressions failed against 6.0.0; all pass with the correction. The Linux private installer fixture now also proves a selected mode is written to an empty existing file and rollback restores exactly zero bytes.
+
+Full native Windows `npm test`, using checksum-verified CI Node.js 24.18.0, passed **157/188**, with **31 platform/elevation skips**. A private WSL Ubuntu snapshot under `nobody`, using the same checksum-verified Node version and locked dependencies, passed **163/188**, with **25 platform skips**. Both reported zero failures. Targeted tests additionally cover real HTTP/stdio MCP, strict output rejection with slot reuse, live-pipe termination failure within the original deadline, malicious caller-module exclusion during native file Audit ACL preparation, and all four Windows success result flags. The original failed CI assertions are retained; no production timeout was extended.
+
+All **24 Bash scripts/four fixed Linux launchers**, **22 Windows PowerShell 5.1 script parses** and **WinSW XML** passed syntax checks. Package/root lock/build versions, unchanged dependency versions, bilingual fixed bootstrap commands, relative documentation links and `git diff --check` are checked before commit.
+
+At this commit's local validation stage, hosted CI and disposable Windows/Linux service/layout/deployment checks for the final SHA are pending. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested. Check the final commit's Actions run and exact `install-channel/channel.txt` SHA/version after push; local tests alone do not establish installation-channel availability.
 
 ## 6.0.0 validation (2026-10-08)
 
@@ -14,7 +24,7 @@ Both platforms perform real HTTP and stdio MCP command/Audit round trips, strict
 
 All **24 Bash scripts and four fixed Linux launchers**, **22 native PowerShell script parses** and **WinSW XML** passed syntax checks. Package/lockfile/build versions match; third-party versions and the four bilingual bootstrap one-line commands are unchanged. Relative documentation links and `git diff --check` passed.
 
-Hosted CI, disposable Windows/Linux service deployment/update/recovery validation, Oracle Linux 8.10 SELinux Enforcing and actual host reboot have **not** run for this batch. The version has not been pushed or published; existing channel gates remain required. Local process/MCP/fixture evidence does not substitute for those service or platform checks.
+After push, [CI run 37776491886](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/37776491886) for `29e0fd73f7192aef530069b1ee50504e4f111329` passed Ubuntu tests but failed three Windows encoding integration cases: taskkill/natural-exit race, file Audit unavailability and PowerShell read timeout. Service/layout gates and channel publication were skipped. These failures drive 6.0.1; the original passing local results above are not proof of hosted success. Oracle Linux 8.10 SELinux Enforcing and actual host reboot remain untested.
 
 ## 5.0.1 validation (2026-10-08)
 

@@ -1276,7 +1276,7 @@ install_configuration() {
     fi
     awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v mode="${execution_mode}" -v upload="${ENABLE_UPLOAD}" -v download="${ENABLE_DOWNLOAD}" -v transfer="${transfer_root}" '
       # Read one record and retain its separators, BOM and final-newline state.
-      BEGIN { RS="\0"; ORS="" }
+      BEGIN { RS="\0"; ORS=""; newline="\n" }
       function append(value) {
         if (length(result) && substr(result,length(result),1) != "\n") result=result newline
         result=result value newline
@@ -1297,6 +1297,8 @@ install_configuration() {
           else if (line ~ /^[[:space:]]*(export[[:space:]]+)?COMMAND_BRIDGE_EXECUTION_MODE[[:space:]]*=/) { line="COMMAND_BRIDGE_EXECUTION_MODE=" mode; mode_seen=1 }
           result=result line cr (i<count ? "\n" : "")
         }
+      }
+      END {
         if (upload == "1" && !upload_seen) append("COMMAND_BRIDGE_UPLOAD_ENABLED=true")
         if (download == "1" && !download_seen) append("COMMAND_BRIDGE_DOWNLOAD_ENABLED=true")
         if ((upload == "1" || download == "1") && !transfer_seen) append("COMMAND_BRIDGE_TRANSFER_ROOT=" transfer)

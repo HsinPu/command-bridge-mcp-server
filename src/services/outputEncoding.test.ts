@@ -23,6 +23,11 @@ function memoryAudit() {
   const audit: AuditLog = { async write(event) { events.push(event); }, async list() { return { events, hasMore: false }; } };
   return { audit, events };
 }
+function assertSucceeded(result: Awaited<ReturnType<CommandExecutor["execute"]>>, stage: string): void {
+  const detail = JSON.stringify({ stage, ok: result.ok, exitCode: result.exitCode, timedOut: result.timedOut, truncated: result.truncated, durationMs: result.durationMs });
+  assert.equal(result.ok, true, detail); assert.equal(result.exitCode, 0, detail);
+  assert.equal(result.timedOut, false, detail); assert.equal(result.truncated, false, detail);
+}
 const quote = (value: string) => process.platform === "win32" ? `"${value}"` : `'${value.replaceAll("'", "'\\''")}'`;
 const text = "你好🙂";
 const emitter = (value: string, stderr = false, trailing = false) => `const b=Buffer.from(${JSON.stringify(value)});for(const n of b){process.stdout.write(Buffer.from([n]));${stderr ? "process.stderr.write(Buffer.from([n]));" : ""}await new Promise(r=>setTimeout(r,20));}${trailing ? "process.stdout.write(Buffer.from([0xe4]));" : ""}`;
@@ -154,7 +159,8 @@ test("real stdio MCP and file Audit retain Chinese commands and output without t
     await client.connect(transport);
     const command = `echo ${text}`;
     const result = await client.callTool({ name: "command_bridge_run_command", arguments: { command } });
-    assert.equal(result.isError, false, JSON.stringify(result));
+    const diagnostic = result.isError ? await client.callTool({ name: "command_bridge_get_diagnostics", arguments: {} }) : undefined;
+    assert.equal(result.isError, false, JSON.stringify({ error: (result.structuredContent as any)?.error?.code, audit: (diagnostic?.structuredContent as any)?.audit }));
     assert.equal((result.structuredContent as any).stdout.trim(), text);
     const audit = await client.callTool({ name: "command_bridge_list_audit_events", arguments: { limit: 10 } });
     const events = (audit.structuredContent as { events: CommandAuditEvent[] }).events.filter(e => e.command === command);
@@ -169,12 +175,14 @@ test("Windows cmd and PowerShell return Unicode text and explicitly edit complet
   const executor = new CommandExecutor(cfg, memoryAudit().audit);
   try {
     await writeFile(file, original);
-    assert.equal((await executor.execute({ command: `echo ${text}` })).stdout.trim(), text);
-    assert.equal((await executor.execute({ command: `type "${file}"` })).stdout, original);
+    const echo = await executor.execute({ command: `echo ${text}` }); assertSucceeded(echo, "cmd-echo"); assert.equal(echo.stdout.trim(), text);
+    const type = await executor.execute({ command: `type "${file}"` }); assertSucceeded(type, "cmd-read"); assert.equal(type.stdout, original);
     const escaped = file.replaceAll("'", "''");
-    assert.equal((await executor.execute({ shell: "powershell", command: `[Console]::Out.Write((Get-Content -LiteralPath '${escaped}' -Raw -Encoding UTF8))` })).stdout, original);
+    const read = await executor.execute({ shell: "powershell", command: `[Console]::Out.Write((Get-Content -LiteralPath '${escaped}' -Raw -Encoding UTF8))` });
+    assertSucceeded(read, "powershell-read"); assert.equal(read.stdout, original);
     const { readFile } = await import("node:fs/promises");
-    await executor.execute({ shell: "powershell", command: `$t=Get-Content -LiteralPath '${escaped}' -Raw -Encoding UTF8; [IO.File]::WriteAllText('${escaped}', $t.Replace('首行','修改首行'), [Text.UTF8Encoding]::new($false,$true))` });
+    const edit = await executor.execute({ shell: "powershell", command: `$t=Get-Content -LiteralPath '${escaped}' -Raw -Encoding UTF8; [IO.File]::WriteAllText('${escaped}', $t.Replace('首行','修改首行'), [Text.UTF8Encoding]::new($false,$true))` });
+    assertSucceeded(edit, "powershell-edit");
     assert.deepEqual(await readFile(file), Buffer.from(original.replace("首行", "修改首行")));
     const unsuccessful = await executor.execute({ command: "exit /b 7" }); assert.equal(unsuccessful.exitCode, 7); assert.equal(unsuccessful.ok, false);
   } finally { await executor.shutdown(); await rm(root, { recursive: true, force: true }); }

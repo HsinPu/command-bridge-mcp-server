@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { decodeUtf8File } from "./textEncoding.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { normalizeAuditEventLimit, serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent, type AuditEventList } from "./auditLog.js";
+import { buildWindowsAuditEnvironment, normalizeAuditEventLimit, serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent, type AuditEventList } from "./auditLog.js";
 
 const exec = promisify(execFile);
 export class FileAuditLog implements AuditLog {
@@ -23,13 +23,14 @@ export class FileAuditLog implements AuditLog {
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Unsafe audit directory.");
     if (process.platform === "win32") {
       const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
-      const { stdout } = await exec(join(systemRoot, "System32", "whoami.exe"), ["/user", "/fo", "csv", "/nh"], { windowsHide: true, timeout: 5000 });
+      const environment = buildWindowsAuditEnvironment(systemRoot);
+      const { stdout } = await exec(join(systemRoot, "System32", "whoami.exe"), ["/user", "/fo", "csv", "/nh"], { windowsHide: true, timeout: 5000, env: environment });
       const sid = stdout.match(/S-1-5-(?:\d+-)*\d+/)?.[0];
       if (!sid) throw new Error("Cannot determine audit owner.");
       // Replace all rules, including explicit rules on an existing directory.
-      const script = "$acl = New-Object Security.AccessControl.DirectorySecurity; $acl.SetAccessRuleProtection($true,$false); $sid = New-Object Security.Principal.SecurityIdentifier($env:COMMAND_BRIDGE_AUDIT_SID); $acl.SetOwner($sid); $rule = New-Object Security.AccessControl.FileSystemAccessRule($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'); $acl.AddAccessRule($rule); [IO.Directory]::SetAccessControl($env:COMMAND_BRIDGE_AUDIT_DIRECTORY,$acl)";
-      const protectFiles = "; foreach ($path in [IO.Directory]::GetFiles($env:COMMAND_BRIDGE_AUDIT_DIRECTORY)) { if (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Unsafe audit file' }; $fileAcl = New-Object Security.AccessControl.FileSecurity; $fileAcl.SetAccessRuleProtection($true,$false); $fileAcl.SetOwner($sid); $fileRule = New-Object Security.AccessControl.FileSystemAccessRule($sid,'FullControl','Allow'); $fileAcl.AddAccessRule($fileRule); [IO.File]::SetAccessControl($path,$fileAcl) }";
-      await exec(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; " + script + protectFiles], { windowsHide: true, timeout: 5000, env: { ...process.env, COMMAND_BRIDGE_AUDIT_DIRECTORY: this.directory, COMMAND_BRIDGE_AUDIT_SID: sid } });
+      const script = "$acl = [Security.AccessControl.DirectorySecurity]::new(); $acl.SetAccessRuleProtection($true,$false); $sid = [Security.Principal.SecurityIdentifier]::new($env:COMMAND_BRIDGE_AUDIT_SID); $acl.SetOwner($sid); $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'); $acl.AddAccessRule($rule); [IO.Directory]::SetAccessControl($env:COMMAND_BRIDGE_AUDIT_DIRECTORY,$acl)";
+      const protectFiles = "; foreach ($path in [IO.Directory]::GetFiles($env:COMMAND_BRIDGE_AUDIT_DIRECTORY)) { if (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Unsafe audit file' }; $fileAcl = [Security.AccessControl.FileSecurity]::new(); $fileAcl.SetAccessRuleProtection($true,$false); $fileAcl.SetOwner($sid); $fileRule = [Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','Allow'); $fileAcl.AddAccessRule($fileRule); [IO.File]::SetAccessControl($path,$fileAcl) }";
+      await exec(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; " + script + protectFiles], { windowsHide: true, timeout: 5000, env: { ...environment, COMMAND_BRIDGE_AUDIT_DIRECTORY: this.directory, COMMAND_BRIDGE_AUDIT_SID: sid } });
     } else {
       if (stat.uid !== process.getuid?.()) throw new Error("Audit directory belongs to another user.");
       await chmod(this.directory, 0o700);

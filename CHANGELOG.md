@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.0.1 — 2026-10-08
+
+PATCH: fix Windows termination/PowerShell reliability and missed UTF-8 configuration validation without changing the MCP interface, encoding choices, policies or production time limits.
+
+- Wait within the existing five-second termination deadline for both process exit and captured pipe closure after taskkill finishes. Accept a nonzero tool result only with that independent completion evidence; a live process or pipe still fails, and command slots/Audit remain bounded.
+- Use the fixed Windows PowerShell executable and built-in module path by default; preserve explicitly authorized module-path passthrough. File Audit uses filtered Windows helper environment and .NET ACL constructors with module autoload disabled, retaining current-user-only ACLs and the five-second Audit deadline.
+- Match dotenv/config's exported CLI option parser, including CLI precedence, last-value-wins and empty environment defaults, before checking the actual UTF-8 file. Explicit legacy encoding overrides remain supported; no input bytes are rewritten.
+- Apply the requested Linux install mode even to an empty existing configuration, with exact empty-file rollback. Preserve the existing nonempty BOM/newline behavior.
+- Add regression evidence for CLI validation bypasses, Windows termination races/live pipes and caller-module exclusion; improve Windows/MCP failure diagnostics without logging settings, tokens or captured command output. Keep CI/service/channel release gates unchanged.
+
 ## 6.0.0 — 2026-10-08
 
 MAJOR: stop silently substituting invalid command output. Existing non-UTF-8 program calls now need `outputEncoding` set to their actual encoding, and incomplete/invalid text no longer returns a successful result containing replacement characters. cmd Shell execution now uses a UTF-8 console; cmd text redirection can therefore differ from legacy code pages. Tool names, existing fields, result schema and policies remain intact; valid UTF-8 calls require no changes.

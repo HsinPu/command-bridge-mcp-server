@@ -56,4 +56,11 @@ JS
     done
   done
 done
+: > "$CONFIG_FILE"
+CONFIG_BACKUP=""; CONFIG_CHANGED=0
+install_configuration > "$work/output"
+printf 'COMMAND_BRIDGE_EXECUTION_MODE=guarded\n' > "$CONFIG_FILE.expected"
+cmp "$CONFIG_FILE" "$CONFIG_FILE.expected"
+restore_configuration
+[[ ! -s "$CONFIG_FILE" ]] || { printf 'Empty configuration did not roll back exactly.\n' >&2; exit 1; }
 printf 'Linux UTF-8 configuration edits preserve BOM, Chinese, newlines and exact rollback bytes.\n'

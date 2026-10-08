@@ -1,4 +1,4 @@
-# 中文與 UTF-8 / Chinese text and UTF-8 (6.0.0)
+# 中文與 UTF-8 / Chinese text and UTF-8 (6.0.1)
 
 以 **UTF-8** 為主要文件格式。指令輸出、檔案内容與 MCP JSON 是不同的編碼邊界，不能只設定 stdout 就假設讀寫文件也安全。 / UTF-8 is the primary document format. Command output, file contents and MCP JSON have separate encoding boundaries.
 
@@ -53,6 +53,8 @@ Get-Content -LiteralPath 'C:\work\中文文件.txt' -Raw -Encoding UTF8
 ## 安裝設定與回復 / Managed configuration and rollback
 
 預設 dotenv 設定與 JSON 政策檔必須是有效 UTF-8，可有 UTF-8 BOM；NUL、不完整／非法 UTF-8 拒絕讀取，不自動猜測或重寫。已明確設定的 legacy dotenv encoding override 保持相容。Windows 安裝器更動前嚴格驗證，保存原始位元組，針對欄位修改時保留 BOM／換行；回復使用原始位元組。Linux 重裝保留 BOM、中文、既有換行與最後換行狀態，使用既有經驗證的備份回復。來源預檢失敗時保留原部署。 / Default dotenv and policy files require valid UTF-8, optionally with BOM. Invalid text fails before rewriting. Installer rollback preserves original bytes; explicit legacy dotenv overrides remain compatible.
+
+6.0.1 預檢跟隨 dotenv/config 真正使用的 CLI 選項，命令列優先於環境值、重複選項採最後有效值；空的 path／encoding 環境值使用原本預設。Windows 程序終止需等到程序及 stdout／stderr 都結束，Audit 的 ACL helper 不探索用戶端模組、不繼承無關秘密；既有 5 秒 Audit 和終止上限保留。 / Validation follows actual CLI precedence/defaults. Windows termination waits for process and pipes; the fixed file Audit ACL helper disables module autoload and excludes unrelated caller environment while retaining existing deadlines.
 
 ## 上傳與下載 / File transfer
 

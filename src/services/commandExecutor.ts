@@ -371,6 +371,10 @@ export class CommandExecutor {
         for (const key of Object.keys(environment)) if (key.toLowerCase() === "psmodulepath") delete environment[key];
         environment.PSModulePath = join(dirname(invocation.executable), "Modules");
       }
+      if (shell === "powershell" && process.platform === "win32" &&
+          !Object.keys(environment).some(key => key.toLowerCase() === "psmodulepath")) {
+        environment.PSModulePath = join(dirname(invocation.executable), "Modules");
+      }
     }
     const startedAt = Date.now();
 
@@ -542,7 +546,7 @@ function buildShellInvocation(shell: ShellKind, command: string): ShellInvocatio
       return { executable: "sh", args: ["-lc", command] };
     case "powershell":
       return {
-        executable: process.platform === "win32" ? "powershell.exe" : "pwsh",
+        executable: process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe") : "pwsh",
         args: [
           "-NoLogo",
           "-NoProfile",
@@ -609,10 +613,13 @@ function clampTimeout(
 export async function terminateProcessTree(child: ChildProcess): Promise<void> {
   if (!child.pid) return;
   // A Linux group can outlive its leader while descendants still hold our pipes.
-  if (process.platform === "win32" && (child.exitCode !== null || child.signalCode !== null)) return;
+  const processAndPipesClosed = () => (child.exitCode !== null || child.signalCode !== null) &&
+    child.stdout?.readableEnded !== false && child.stderr?.readableEnded !== false;
+  if (process.platform === "win32" && processAndPipesClosed()) return;
   const pid = child.pid;
   await new Promise<void>((resolve, reject) => {
     let ended = false;
+    let windowsToolFinished = false;
     const timers: NodeJS.Timeout[] = [];
     const done = (error?: Error) => {
       if (ended) return;
@@ -621,23 +628,20 @@ export async function terminateProcessTree(child: ChildProcess): Promise<void> {
       child.removeListener("close", onClose);
       error ? reject(error) : resolve();
     };
-    const onClose = () => { /* Completion is confirmed by taskkill or process-group checks. */ };
+    const onClose = () => {
+      if (process.platform === "win32" && windowsToolFinished && processAndPipesClosed()) done();
+    };
     child.once("close", onClose);
     timers.push(setTimeout(() => done(new Error("Process termination deadline exceeded.")), 5_000));
     if (process.platform === "win32") {
       const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
       killer.once("error", error => done(error));
-      killer.once("close", code => {
-        if (code !== 0) {
-          // A process can exit naturally between the request and taskkill. Only
-          // accept that race after exit AND both captured streams have ended.
-          if ((child.exitCode !== null || child.signalCode !== null) &&
-              child.stdout?.readableEnded !== false && child.stderr?.readableEnded !== false) done();
-          else done(new Error("taskkill failed."));
-          return;
-        }
-        if (child.exitCode !== null || child.signalCode !== null) done();
-        else child.once("close", () => done());
+      killer.once("close", () => {
+        windowsToolFinished = true;
+        // taskkill may finish before Node observes a natural exit. Wait within
+        // the existing deadline for exit AND both pipes, even for a nonzero
+        // tool status. Live or orphaned pipes must still fail at that deadline.
+        if (processAndPipesClosed()) done();
       });
       timers.push(setTimeout(() => killer.kill(), 4_000));
     } else {
