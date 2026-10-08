@@ -49,6 +49,10 @@ Only successful main-push CI runs publish the channel, after both platforms pass
 
 Uninstall prefers the root/admin-controlled modern uninstaller saved by the installed release. Windows downloads the current verified snapshot when that file is absent. Linux also uses that SHA-pinned fallback when a required saved layout helper is absent or a legacy script lacks full layout preflight, before the legacy script can stop or remove the old service. If the downloaded script cannot validate all roots, removal is refused with the deployment intact. Both original alias parents and canonical saved-asset paths must be protected; unsafe assets are rejected. Offline legacy help and safe missing-helper help/dry-run remain previews. Default uninstall keeps configuration/token/work data; explicit purge removes them. A failed migration is rejected before switching the running application.
 
+Linux 5.0.0 removes both historical `/opt` program paths and their compatibility links after verified migration to `/usr/local/lib/command-bridge`. Update scripts using those old paths. Run the first migration from an actual `/opt` deployment in an administrator terminal; legacy MCP update workers are rejected before deployment changes. Configuration, Token, logs and work data remain at their existing locations. Subsequent MCP updates remain supported. See the [Linux migration guide](linux-systemd.md#program-relocation-from-opt-500).
+
+Linux 5.0.0 搬遷驗證成功後，完全移除兩個 `/opt` 舊程式路徑及相容連結，程式與 Runtime 位於 `/usr/local/lib/command-bridge`。引用舊路徑的腳本需更新；實體 `/opt` 部署第一次搬遷須從管理員終端執行，舊 MCP 更新程序會在部署變更前拒絕這次搬遷。設定、Token、log 與工作資料保留，完成搬遷後仍可使用 MCP 自我更新。
+
 ## Audit backends / 稽核後端
 
 `COMMAND_BRIDGE_AUDIT_BACKEND` accepts `auto`, `journal`, `eventlog`, or `file`. Unsupported platform combinations fail explicitly.

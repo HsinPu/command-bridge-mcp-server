@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.6.2-blue)
+![Version](https://img.shields.io/badge/version-5.0.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -83,7 +83,9 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 (script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --guarded --print-codex-setup)
 ~~~
 
-CommandBridge 4.6.0 起，Linux 預設將程式與 Runtime 安裝到 `/usr/local/lib/command-bridge`。一鍵安裝會檢查並遷移 `/opt/command-bridge` 或更早的 `/opt/command-bridge-mcp-server`，驗證成功後移除舊實體程式並保留相容連結；失敗則回復原部署。設定與工作資料仍保留在 `/etc`、`/var/lib`，不需要先解除安裝。
+Linux 的程式與 Runtime 安裝在 `/usr/local/lib/command-bridge`。5.0.0 起，搬遷驗證成功後完全移除 `/opt/command-bridge` 和 `/opt/command-bridge-mcp-server`，包含 4.6.x 留下的相容連結；失敗則回復原部署。設定仍在 `/etc`，工作與狀態資料仍在 `/var/lib`；Token 與既有 Audit log 保留，不需要先解除安裝。
+
+第一次從 `/opt` 實體部署搬遷，請從管理員終端執行一鍵安裝或 `sudo command-bridge update`，並更新引用舊路徑的腳本。舊版 MCP 更新程序無法進行這次搬遷；完成後仍支援 MCP 自我更新。重新安裝下載的是 CI 已發布的來源，`main` 有較新版本仍需全部發布檢查通過。詳見 [搬遷與位置檢查](docs/linux-systemd.md#checking-the-physical-program-location)。
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 

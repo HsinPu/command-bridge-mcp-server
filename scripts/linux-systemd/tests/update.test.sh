@@ -49,4 +49,15 @@ unit command-bridge
 printf 'COMMAND_BRIDGE_EXECUTION_MODE=invalid\n' > "$CONFIG_FILE"
 expect_failure prepare_update
 expect_failure parse_arguments --update --expected-installed-sha "$sha" --guarded
+# A legacy worker retains its /opt installation path in memory. Reject before
+# deployment changes; terminal migration is allowed when that worker is idle.
+EXISTING_APP_ROOT="$PREVIOUS_INSTALL_ROOT"
+systemctl() { printf '%s\n' "${WORKER_STATE:-inactive}"; }
+for state in active activating deactivating unexpected; do
+  WORKER_STATE=$state; expect_failure assert_application_migration_driver
+done
+for state in inactive failed; do WORKER_STATE=$state; assert_application_migration_driver; done
+systemctl() { return 9; }; expect_failure assert_application_migration_driver
+EXISTING_APP_ROOT="$INSTALL_ROOT"; assert_application_migration_driver
+EXISTING_APP_ROOT=; assert_application_migration_driver
 printf 'Linux update preservation and stale/account checks passed.\n'

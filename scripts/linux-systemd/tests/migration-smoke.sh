@@ -52,7 +52,10 @@ sudo systemctl is-enabled --quiet "$new_service"
 [[ ! -e /etc/systemd/system/command-bridge-mcp-server.service ]]
 [[ ! -e /etc/sudoers.d/command-bridge-mcp-server-audit-reader ]]
 [[ ! -e /usr/local/libexec/command-bridge-mcp-server/audit-reader ]]
-for pair in '/opt/command-bridge-mcp-server /usr/local/lib/command-bridge' '/etc/command-bridge-mcp-server /etc/command-bridge' '/var/lib/command-bridge-mcp-server /var/lib/command-bridge'; do
+for path in /opt/command-bridge /opt/command-bridge-mcp-server; do
+  [[ ! -e "$path" && ! -L "$path" && ! -e "$path.migration-backup" ]]
+done
+for pair in '/etc/command-bridge-mcp-server /etc/command-bridge' '/var/lib/command-bridge-mcp-server /var/lib/command-bridge'; do
   read -r old new <<< "$pair"
   [[ "$(readlink "$old")" == "$new" ]]
 done

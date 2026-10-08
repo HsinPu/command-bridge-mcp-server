@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-4.6.2-blue)
+![Version](https://img.shields.io/badge/version-5.0.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -83,7 +83,9 @@ On a glibc Linux host with systemd (x64/ARM64), run this from your non-root logi
 (script="$(mktemp)" && trap 'rm -f -- "$script"' EXIT && curl -fsSL https://raw.githubusercontent.com/HsinPu/command-bridge-mcp-server/main/scripts/bootstrap.sh -o "$script" && sudo bash "$script" --run-as-installer --guarded --print-codex-setup)
 ~~~
 
-From CommandBridge 4.6.0 on Linux, the application and runtime default to `/usr/local/lib/command-bridge`. Installation detects and migrates `/opt/command-bridge` or the older `/opt/command-bridge-mcp-server`; verified success removes the old program and retains compatibility symlinks, while failure restores the original deployment. Configuration and work data remain under `/etc` and `/var/lib`; uninstalling first is unnecessary.
+On Linux, the application and runtime are installed at `/usr/local/lib/command-bridge`. From 5.0.0, verified migration completely removes `/opt/command-bridge` and `/opt/command-bridge-mcp-server`, including compatibility links left by 4.6.x; failure restores the original deployment. Configuration remains under `/etc`, work/state under `/var/lib`; the Token and existing Audit logs are preserved. Uninstalling first is unnecessary.
+
+Run the one-command installer or `sudo command-bridge update` from an administrator terminal for the first migration from an actual `/opt` deployment. Old-path scripts need updating; legacy MCP workers cannot perform this migration, while subsequent MCP updates remain supported. Reinstall downloads the CI-published source, so a newer `main` version is installable only after all release gates succeed. See [migration and location checks](docs/linux-systemd.md#checking-the-physical-program-location).
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 

@@ -132,7 +132,7 @@ npm start
 - 安裝者帳號模式不應自動新增一般 sudo 授權；只有 `--unrestricted` 明確啟用時才允許自由 Shell 指令，需用 `sudo -n` 依主機既有免密政策執行。預設 allowlist、Bearer Token 驗證與 Audit 先寫入後執行的規則保持不變。模式切換失敗須回復舊設定、服務及 Audit reader；卸載與 purge 不得刪除登入者帳號或其 home。
 - 2.2.1 起，`--run-as-installer` 不建立專用 `command-bridge` 使用者，只保留政策讀取群組。新服務通過真實 MCP／Audit 並完成切換後，偵測舊版本留下的本機系統帳號，驗證 UID、home、nologin Shell、群組與無活動程序後才移除。不得強制殺程序、刪除同名一般登入帳號、使用 `userdel -r` 或遞迴變更工作資料所有權。保留群組原 GID；清理失敗須回報且保留已驗證的新服務，切換驗證失敗則保留舊帳號供回復。預設專用帳號模式仍建立所需使用者；測試須涵蓋兩種模式。
 - 縮短名稱只涵蓋 Linux 服務與主機上的安裝配置；GitHub 倉庫及固定 bootstrap 網址、npm 套件名稱、Windows 的 `CommandBridgeMCP` 服務與路徑，以及三個 MCP 工具名稱維持原樣，不應為了統一字面名稱而連帶改動。
-- 從 1.x 升級時，安裝器須先驗證舊設定，再切換服務；保留 Bearer Token、政策與工作資料，只調整既有設定中由安裝器管理的 `COMMAND_BRIDGE_POLICY_FILE` 與 `COMMAND_BRIDGE_ALLOWED_ROOTS` 路徑。成功後舊目錄名稱保留為指向新目錄的相容連結，舊 systemd 單元移除；失敗則恢復原目錄、設定、版本與舊服務。不能把相容連結誤認為仍有舊服務在執行。
+- 從 1.x 升級時，安裝器須先驗證舊設定，再切換服務；保留 Bearer Token、政策與工作資料，只調整既有設定中由安裝器管理的 `COMMAND_BRIDGE_POLICY_FILE` 與 `COMMAND_BRIDGE_ALLOWED_ROOTS` 路徑。5.0.0 起成功後完全移除 `/opt` 舊程式目錄及連結，只保留 `/etc`、`/var/lib` 的設定／資料相容連結；舊 systemd 單元移除。失敗則恢復原目錄、設定、版本與舊服務。
 - 以後修改 Linux 安裝／卸載或路徑時，須檢查新安裝、1.x 遷移、失敗回復、資料與 Token 保留、真實 MCP／Audit 驗證，以及一般解除安裝和 `--purge`。僅驗證 systemd 啟用與服務重啟時，不宣稱已完成實際主機重開機測試。
 - 2.0.2 起，Linux 部署不得保留 `/tmp` 的 SELinux context；須依主機政策修復並驗證新建及重用的 Runtime／程式、設定、服務與 Audit 資產標籤。2.0.3 起需相容 Oracle Linux 8.10 不支援 `restorecon -x` 的情況，以 `find -P -xdev` 控制遍歷範圍。Enforcing／Permissive 缺工具或驗證失敗時停止啟用，回復後也須驗證才重啟。不得關閉 SELinux、自動放寬政策或遞迴重標使用者工作資料；WSL Disabled 與模擬測試不代表 Oracle Linux Enforcing 驗證通過。
 
@@ -172,8 +172,9 @@ npm start
 ## Linux 程式位置遷移（4.6.0 起）
 
 - 新安裝預設使用 `/usr/local/lib/command-bridge`；固定 bootstrap 與一行指令維持不變。安裝須辨識 `/opt/command-bridge`、`/opt/command-bridge-mcp-server` 的實體部署與相容連結，先檢查所有權、寫入權限、完整來源身分、活動指標與掛載。多份獨立部署不能猜測合併。
-- 遷移採目的檔案系統暫存複製，舊程式保留到新服務通過 readiness、真實 MCP／Audit、診斷與 CLI 驗證。失敗回復原程式、設定、單元、CLI 與更新／診斷資產後才重啟。成功只將原先存在的舊程式根目錄轉為新位置的連結；新裝不得建立 `/opt` 別名。設定、Token、工作資料與帳號模式沿用既有規則。
+- 遷移採目的檔案系統暫存複製，舊程式保留到新服務通過 readiness、真實 MCP／Audit、診斷與 CLI 驗證。失敗回復原程式、設定、單元、CLI 與更新／診斷資產後才重啟。5.0.0 起成功必須完全移除兩個 `/opt` 舊程式根目錄、受管理備份及 4.6.x 留下的連結，不建立相容別名；清理失敗不得宣稱安裝完成。設定、Token、log、工作資料與帳號模式沿用既有規則。
 - 卸載須在停止服務前檢查全部三個固定根目錄及受管理 `.migration-backup`，清除所有可驗證的程式殘留與相容連結；未知、可由非管理員修改或越界的內容不得刪除。4.6.2 起，缺少完整位置預檢的舊本機卸載器不得先執行移除，須直接交給同一 CI SHA 的完整後備卸載器；後備仍太舊時保留原部署並拒絕移除。一般卸載保留資料，purge 不得刪除登入帳號。
-- 固定更新與診斷讀取器必須跟隨新部署；不得增加可由 MCP 選擇的任意程式路徑。更新驗證須涵蓋舊獨立 worker 遷移後的最終 SHA／狀態，以及兩種服務帳號模式。發布須另通過 Linux layout service gate，不以單元測試、WSL Disabled 或服務重啟代替 Oracle Enforcing／實際重開機驗證。
+- 固定更新與診斷讀取器必須跟隨新部署；不得增加可由 MCP 選擇的任意程式路徑。5.0.0 起，實體 `/opt` 部署由管理員終端完成一次搬遷；舊 MCP worker 因快取舊路徑，須在部署變更前拒絕搬遷並保存原 SHA／服務。兩帳號模式都須驗證該拒絕、終端成功搬遷、後續 MCP 更新最終 SHA／狀態及舊別名清理。發布須另通過 Linux layout service gate，不以單元測試、WSL Disabled 或服務重啟代替 Oracle Enforcing／實際重開機驗證。
 - 4.6.1 起，拋棄式 Linux 測試共用受環境限制的父目錄準備，涵蓋 `/opt`、`/usr/local`、`/usr/local/bin`、`/usr/local/lib`；不得為了 CI 放寬正式部署的所有權或寫入檢查。三個固定程式根目錄的 `.migration-backup` 也納入直接自改攔截，不以任意前綴匹配擴大保護範圍。新版本機卸載器缺少 `layout.sh` 時使用已驗證 SHA 後備，包含 help／dry-run；既有 helper、連結或父目錄不安全時仍須拒絕，不可把不安全當成缺失後略過檢查。
 - 4.6.2 起，相容連結須先檢查原路徑父目錄，不能只檢查解析後目標。bootstrap 也須檢查原路徑祖先與實際目標，執行已驗證的實際腳本／Runtime 路徑；卸載前檢查全部既有根目錄／備份的父目錄。舊版缺少完整預檢或 channel／下載／新版 helper 失敗時不得先停掉舊服務，須有兩帳號模式的真實服務保留及 MCP／Audit 驗證。
+- 5.0.0 起，Linux layout service 驗證須涵蓋一般具 sudo 權限的 CI 執行者；受保護的服務／測試帳號工作目錄使用固定 `sudo test` 檢查，不放寬正式目錄權限。失敗只輸出固定模式／階段與行號，不輸出原始指令、設定或 Token。重裝來源以已驗證 channel 為準；成功後兩個舊程式路徑必須不存在，不能把留下相容連結當作完成。

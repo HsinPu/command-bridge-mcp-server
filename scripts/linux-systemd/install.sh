@@ -975,7 +975,7 @@ migrate_legacy_layout() {
       systemctl stop "${LEGACY_SERVICE_NAME}.service"
     fi
   fi
-  log "Migrating the Linux service and paths to ${SERVICE_NAME}; preserving legacy path aliases."
+  log "Migrating the Linux service and paths to ${SERVICE_NAME}; preserving legacy configuration/data aliases."
   move_legacy_tree "${LEGACY_CONFIG_DIR}" "${CONFIG_DIR}"
   move_legacy_tree "${LEGACY_STATE_DIR}" "${STATE_DIR}"
 
@@ -1479,8 +1479,8 @@ finish_legacy_migration() {
   else
     systemctl enable "${SERVICE_NAME}.service" >/dev/null
   fi
-  # The old paths remain as exact aliases for existing configuration and local
-  # scripts, but the obsolete privileged Audit helper must not remain enabled.
+  # Only configuration/data aliases remain. Obsolete program paths and the
+  # privileged Audit helper must not remain after successful migration.
   if [[ -f "${LEGACY_AUDIT_SUDOERS_FILE}" && ! -L "${LEGACY_AUDIT_SUDOERS_FILE}" ]]; then
     rm -f -- "${LEGACY_AUDIT_SUDOERS_FILE}" || log "WARNING: Old audit sudoers rule could not be removed."
   fi
@@ -1604,6 +1604,7 @@ main() {
   chmod 0600 "${LOCK_DIR}/install.lock"
   flock -n 9 || fail "Another CommandBridge installation is already running."
   inspect_application_layout
+  assert_application_migration_driver
   prepare_update
   select_service_identity
   assert_new_installation_paths

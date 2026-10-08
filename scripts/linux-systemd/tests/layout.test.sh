@@ -109,17 +109,30 @@ rollback_application_layout
 [[ "$(readlink "$LEGACY_INSTALL_ROOT")" == "$PREVIOUS_INSTALL_ROOT" ]]
 
 reset_migration; inspect_application_layout; prepare_application_migration; commit_application_layout
-[[ -L "$PREVIOUS_INSTALL_ROOT" && -d "$PREVIOUS_INSTALL_ROOT.migration-backup" ]]
-[[ "$(readlink "$LEGACY_INSTALL_ROOT")" == "$INSTALL_ROOT" ]]
+[[ ! -e "$PREVIOUS_INSTALL_ROOT" && ! -L "$PREVIOUS_INSTALL_ROOT" && -d "$PREVIOUS_INSTALL_ROOT.migration-backup" ]]
+[[ ! -e "$LEGACY_INSTALL_ROOT" && ! -L "$LEGACY_INSTALL_ROOT" ]]
 rollback_application_layout
 [[ -d "$PREVIOUS_INSTALL_ROOT" && ! -L "$PREVIOUS_INSTALL_ROOT" && ! -e "$INSTALL_ROOT" ]]
 [[ "$(readlink "$LEGACY_INSTALL_ROOT")" == "$PREVIOUS_INSTALL_ROOT" ]]
 
 reset_migration; inspect_application_layout; prepare_application_migration; commit_application_layout
-INSTALL_SUCCEEDED=1; ACTIVATION_STARTED=0; finish_application_migration
-[[ ! -e "$PREVIOUS_INSTALL_ROOT.migration-backup" && -L "$PREVIOUS_INSTALL_ROOT" ]]
+INSTALL_SUCCEEDED=0; ACTIVATION_STARTED=1; expect_failure finish_application_migration
+[[ -f "$APP_BACKUP_PATH${APP_ORIGINAL_RELEASE#"$APP_ORIGINAL_ROOT"}/preserved" && -f "$INSTALL_ROOT/current/preserved" ]]
+INSTALL_SUCCEEDED=1; ACTIVATION_STARTED=0
+cleanup_failure() {
+  rm() { return 9; }
+  finish_application_migration
+}
+expect_failure cleanup_failure
+[[ -d "$PREVIOUS_INSTALL_ROOT.migration-backup" && -f "$INSTALL_ROOT/current/preserved" ]]
+finish_application_migration
+for root in "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"; do [[ ! -e "$root" && ! -L "$root" && ! -e "$root.migration-backup" ]]; done
+[[ -f "$INSTALL_ROOT/current/preserved" && "$(readlink -f "$INSTALL_ROOT/runtime/current")" == "$INSTALL_ROOT/runtime/node" ]]
 inspect_application_layout; [[ "$EXISTING_APP_ROOT" == "$INSTALL_ROOT" ]]
-# Migrated aliases must still protect their original parent, even though their
+# Model aliases created by 4.6.x, including the two-level 1.x alias chain.
+ln -s "$INSTALL_ROOT" "$PREVIOUS_INSTALL_ROOT"
+ln -s "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
+# Existing aliases must still protect their original parent, even though their
 # canonical target lives under the safe new parent. Both installation and the
 # actual uninstaller's pre-stop validator must refuse before changing files.
 source <(sed -n '/^validate_all_program_removals()/,/^}/p' scripts/linux-systemd/uninstall.sh)
@@ -136,14 +149,33 @@ for alias in "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"; do
   expect_failure validate_all_program_removals; BAD_OWNER_PATH=
   inspect_application_layout; validate_all_program_removals
 done
+# Reinstall at the new physical root removes aliases without copying/deleting it.
+# A partial unlink failure must restore all original aliases on rollback.
+partial_alias_failure() {
+  reset_migration
+  trap rollback_application_layout EXIT
+  unlink() { [[ "$1" != "$LEGACY_INSTALL_ROOT" ]] || return 9; command unlink "$@"; }
+  commit_application_layout
+}
+expect_failure partial_alias_failure
+[[ "$(readlink "$PREVIOUS_INSTALL_ROOT")" == "$INSTALL_ROOT" && "$(readlink "$LEGACY_INSTALL_ROOT")" == "$PREVIOUS_INSTALL_ROOT" ]]
+reset_migration; inspect_application_layout; prepare_application_migration
+[[ "$APP_MIGRATION_STARTED" == 0 ]]
+commit_application_layout
+[[ ! -e "$PREVIOUS_INSTALL_ROOT" && ! -L "$PREVIOUS_INSTALL_ROOT" && ! -e "$LEGACY_INSTALL_ROOT" && ! -L "$LEGACY_INSTALL_ROOT" ]]
+rollback_application_layout
+[[ "$(readlink "$PREVIOUS_INSTALL_ROOT")" == "$INSTALL_ROOT" && "$(readlink "$LEGACY_INSTALL_ROOT")" == "$PREVIOUS_INSTALL_ROOT" ]]
+reset_migration; inspect_application_layout; commit_application_layout; finish_application_migration
+for root in "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"; do [[ ! -e "$root" && ! -L "$root" ]]; done
+[[ -f "$INSTALL_ROOT/current/preserved" ]]
 # Two real deployments are ambiguous for installation, but verified leftovers
 # at all roots must be removable together by the uninstaller.
-unlink "$PREVIOUS_INSTALL_ROOT"; make_app "$PREVIOUS_INSTALL_ROOT"
+make_app "$PREVIOUS_INSTALL_ROOT"
 expect_failure inspect_application_layout
 mv "$PREVIOUS_INSTALL_ROOT" "$PREVIOUS_INSTALL_ROOT.migration-backup"
 expect_failure inspect_application_layout
 make_app "$PREVIOUS_INSTALL_ROOT"
-unlink "$LEGACY_INSTALL_ROOT"; make_app "$LEGACY_INSTALL_ROOT"
+make_app "$LEGACY_INSTALL_ROOT"
 sed -e "s|/usr/local/lib/command-bridge|$INSTALL_ROOT|g" \
   -e "s|/opt/command-bridge|$PREVIOUS_INSTALL_ROOT|g" \
   -e '/^main "\$@"$/d' scripts/linux-systemd/uninstall.sh > "$work/uninstall.sh"
@@ -172,4 +204,4 @@ ln -s "$work/outside" "$PREVIOUS_INSTALL_ROOT"
 expect_failure inspect_application_layout
 expect_failure bash "$work/remove.sh" "$work"
 [[ -f "$work/outside/keep" ]]
-echo 'Layout migration, intact originals, aliases, rollback, space/ownership rejection and complete uninstall passed.'
+echo 'Layout migration, intact originals, old-path removal, alias rollback, space/ownership rejection and complete uninstall passed.'

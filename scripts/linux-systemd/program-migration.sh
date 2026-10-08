@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 # Keep the original program intact until the new service has passed verification.
+assert_application_migration_driver() {
+  [[ -n "$EXISTING_APP_ROOT" && "$EXISTING_APP_ROOT" != "$INSTALL_ROOT" ]] || return 0
+  local state
+  state=$(systemctl show command-bridge-update.service --property=ActiveState --value) || fail "Cannot determine legacy update worker state; no deployment changes were made."
+  case "$state" in
+    inactive|failed) ;;
+    active|activating|deactivating)
+      fail "Legacy MCP update cannot remove its own program path; use the administrator terminal installer or sudo command-bridge update after this task finishes."
+      ;;
+    *) fail "Unexpected legacy update worker state; no deployment changes were made." ;;
+  esac
+}
+
 prepare_application_migration() {
   [[ -n "$EXISTING_APP_ROOT" && "$EXISTING_APP_ROOT" != "$INSTALL_ROOT" ]] || return 0
   APP_MIGRATION_STARTED=1
@@ -31,15 +44,17 @@ cleanup_application_staging() {
 }
 
 rollback_application_layout() {
-  [[ "${APP_MIGRATION_STARTED:-0}" == 1 ]] || return 0
   local i
-  if [[ -d "$APP_BACKUP_PATH" && ! -L "$APP_BACKUP_PATH" ]]; then
-    [[ -L "$APP_ORIGINAL_ROOT" && "$(readlink "$APP_ORIGINAL_ROOT")" == "$INSTALL_ROOT" ]] || return 1
-    unlink "$APP_ORIGINAL_ROOT" || return 1
+  if [[ "${APP_MIGRATION_STARTED:-0}" == 1 && -d "$APP_BACKUP_PATH" && ! -L "$APP_BACKUP_PATH" ]]; then
+    [[ ! -e "$APP_ORIGINAL_ROOT" && ! -L "$APP_ORIGINAL_ROOT" ]] || return 1
     mv -T -- "$APP_BACKUP_PATH" "$APP_ORIGINAL_ROOT" || return 1
   fi
   for (( i=0; i<${#APP_ALIAS_NAMES[@]}; i++ )); do
-    ln -sfnT "${APP_ALIAS_TARGETS[i]}" "${APP_ALIAS_NAMES[i]}" || return 1
+    if [[ ! -e "${APP_ALIAS_NAMES[i]}" && ! -L "${APP_ALIAS_NAMES[i]}" ]]; then
+      ln -sT "${APP_ALIAS_TARGETS[i]}" "${APP_ALIAS_NAMES[i]}" || return 1
+    elif [[ ! -L "${APP_ALIAS_NAMES[i]}" || "$(readlink "${APP_ALIAS_NAMES[i]}")" != "${APP_ALIAS_TARGETS[i]}" ]]; then
+      return 1
+    fi
   done
   if [[ "${APP_MIGRATION_PREPARED:-0}" == 1 ]]; then
     assert_admin_path "$INSTALL_ROOT"
@@ -49,36 +64,44 @@ rollback_application_layout() {
   cleanup_application_staging || return 1
   APP_MIGRATION_STARTED=0
   APP_MIGRATION_PREPARED=0
+  APP_ALIAS_NAMES=(); APP_ALIAS_TARGETS=()
 }
 
 commit_application_layout() {
-  [[ "${APP_MIGRATION_STARTED:-0}" == 1 ]] || return 0
   local alias
-  [[ "$(readlink -f "$APP_ORIGINAL_ROOT/current")" == "$APP_ORIGINAL_RELEASE" &&
-     "$(readlink -f "$APP_ORIGINAL_ROOT/runtime/current")" == "$APP_ORIGINAL_RUNTIME" ]] || fail "Original deployment changed during migration."
-  # Remember the previous 1.x -> /opt alias as well, so failures can restore it.
+  if [[ "${APP_MIGRATION_STARTED:-0}" == 1 ]]; then
+    [[ "$(readlink -f "$APP_ORIGINAL_ROOT/current")" == "$APP_ORIGINAL_RELEASE" &&
+       "$(readlink -f "$APP_ORIGINAL_ROOT/runtime/current")" == "$APP_ORIGINAL_RUNTIME" ]] || fail "Original deployment changed during migration."
+  fi
+  # Include aliases left by 4.6.x when the physical deployment is already new.
+  # Validate every alias before renaming or unlinking any program path.
   while IFS= read -r alias; do
-    if [[ -L "$alias" && "$alias" != "$APP_ORIGINAL_ROOT" ]]; then
+    if [[ "$alias" != "$INSTALL_ROOT" && -L "$alias" ]]; then
       assert_layout_alias "$alias"
       APP_ALIAS_NAMES+=("$alias"); APP_ALIAS_TARGETS+=("$(readlink "$alias")")
     fi
   done < <(layout_roots)
-  [[ ! -e "$APP_BACKUP_PATH" && ! -L "$APP_BACKUP_PATH" ]] || fail "Migration backup path already exists."
-  mv -T -- "$APP_ORIGINAL_ROOT" "$APP_BACKUP_PATH"
-  # If alias creation fails, restore the directory immediately before normal rollback.
-  if ! ln -sT "$INSTALL_ROOT" "$APP_ORIGINAL_ROOT"; then
-    mv -T -- "$APP_BACKUP_PATH" "$APP_ORIGINAL_ROOT" || true
-    fail "Cannot create the compatibility alias."
+  if [[ "${APP_MIGRATION_STARTED:-0}" == 1 ]]; then
+    [[ ! -e "$APP_BACKUP_PATH" && ! -L "$APP_BACKUP_PATH" ]] || fail "Migration backup path already exists."
+    mv -T -- "$APP_ORIGINAL_ROOT" "$APP_BACKUP_PATH"
   fi
-  for alias in "${APP_ALIAS_NAMES[@]}"; do ln -sfnT "$INSTALL_ROOT" "$alias"; done
-  restore_selinux_path "$APP_ORIGINAL_ROOT" || fail "Cannot label the compatibility alias."
+  for alias in "${APP_ALIAS_NAMES[@]}"; do unlink "$alias" || fail "Cannot remove the old program alias."; done
 }
 
 finish_application_migration() {
-  [[ "${APP_MIGRATION_STARTED:-0}" == 1 ]] || return 0
-  [[ "$INSTALL_SUCCEEDED" == 1 && "$ACTIVATION_STARTED" == 0 && "$APP_BACKUP_PATH" == "$APP_ORIGINAL_ROOT.migration-backup" ]] || fail "Refusing cleanup before migration commitment."
-  assert_managed_program_tree "$APP_BACKUP_PATH"
-  rm -rf --one-file-system -- "$APP_BACKUP_PATH" || fail "The new service is verified, but migration backup cleanup failed."
+  local root
+  [[ "$INSTALL_SUCCEEDED" == 1 && "$ACTIVATION_STARTED" == 0 ]] || fail "Refusing cleanup before migration commitment."
+  if [[ "${APP_MIGRATION_STARTED:-0}" == 1 ]]; then
+    [[ "$APP_BACKUP_PATH" == "$APP_ORIGINAL_ROOT.migration-backup" ]] || fail "Unexpected migration backup path."
+    assert_managed_program_tree "$APP_BACKUP_PATH"
+    rm -rf --one-file-system -- "$APP_BACKUP_PATH" || fail "The new service is verified, but migration backup cleanup failed."
+  fi
+  while IFS= read -r root; do
+    [[ "$root" != "$INSTALL_ROOT" ]] || continue
+    [[ ! -e "$root" && ! -L "$root" && ! -e "$root.migration-backup" && ! -L "$root.migration-backup" ]] || fail "The new service is verified, but an old program path remains."
+  done < <(layout_roots)
   APP_MIGRATION_STARTED=0
-  log "Migration complete; the old program was removed and its path is a compatibility alias."
+  APP_MIGRATION_PREPARED=0
+  APP_ALIAS_NAMES=(); APP_ALIAS_TARGETS=()
+  log "Program layout verified; old program paths were removed without compatibility aliases."
 }

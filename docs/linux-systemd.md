@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 4.6.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 5.0.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 The Linux installer is intended for a regular glibc-based server where systemd is PID 1. It installs a private runtime and does not modify the system Node.js installation.
 
@@ -113,7 +113,7 @@ sudo sed -i 's/^COMMAND_BRIDGE_MAX_TIMEOUT_MS=.*/COMMAND_BRIDGE_MAX_TIMEOUT_MS=3
 
 If the key is absent or the configuration path is customized, add/update it in the actual service configuration before restarting. This does not change the default timeout or execution mode.
 
-## Program relocation from /opt (4.6.0)
+## Program relocation from /opt (5.0.0)
 
 The fixed default application/runtime root is `/usr/local/lib/command-bridge`. Use the same bootstrap install and uninstall commands; no directory option or prior uninstall is required. Configuration, policy, work data, installer-account Audit and update records keep their existing locations. The service remains `command-bridge.service`; Windows paths are unchanged.
 
@@ -121,7 +121,22 @@ Before modifying services, the installer inspects the new root and both `/opt/co
 
 The old program is copied into staging on the destination filesystem, so crossing filesystems is supported without destroying the original. Only managed active release/runtime pointers are rewritten; installed release contents are preserved. After service switching, authenticated readiness, real MCP `hostname`, matching Audit lifecycle, fixed diagnostics and CLI version must succeed. Updater/diagnostic assets, the unit, configuration and CLI pointer are restored on failure before restarting the original program. SELinux labels are restored and verified under the host policy without disabling SELinux or adding broad rules.
 
-Successful migration replaces only existing old program roots with exact links to the new root, then removes the old physical program backup. Fresh installations create no `/opt` aliases. CLI and MCP updates preserve the existing service account, mode, network, token and policy; ordinary reinstall still selects mode from its arguments (the README explicitly selects guarded). The old independent update worker can finish its migration through the compatibility alias and record the resulting SHA.
+Successful migration removes both old program paths completely, including managed backups and any compatibility links created by 4.6.x. No `/opt` program alias is retained or created. Configuration, Token, logs and work data remain in their existing locations; the historical 1.x configuration/data aliases under `/etc` and `/var/lib` are retained. CLI/MCP updates preserve account, mode, network, token and policy; ordinary reinstall still selects mode from its arguments (the README selects guarded).
+
+This is a breaking path change. Update scripts that reference `/opt/command-bridge` or `/opt/command-bridge-mcp-server` to use `/usr/local/lib/command-bridge`, preferably the managed `command-bridge` CLI where applicable. For a deployment physically under `/opt`, run the one-command installer or `sudo command-bridge update` from the host administrator terminal. A legacy MCP worker keeps its old program path in memory and would fail to record the resulting SHA after removal: migration refuses its active task before any deployment changes, returning a failed task with the original SHA/service/configuration intact. Wait for that task to finish before terminal migration. After moving to the new physical root, MCP updates continue normally and clean up any 4.6.x aliases.
+
+### Checking the physical program location
+
+The bootstrap downloads the currently verified channel SHA. Reinstalling before CI publishes 5.0.0 may still install the older layout; a `main` push alone does not change the public installation source. A completed 5.0.0 install requires both old program paths to be absent, including symlinks.
+
+Run this read-only check from an administrator terminal:
+
+```bash
+sudo ls -ld -- /opt/command-bridge /opt/command-bridge-mcp-server /usr/local/lib/command-bridge
+sudo systemctl show command-bridge --property=ExecStart
+```
+
+The first command should report both `/opt` paths missing and show a real directory at `/usr/local/lib/command-bridge`; its nonzero status for missing old paths is expected. The service executable and entry point must use the new root. An old directory or symlink indicates an older selected version, a failed/rolled-back migration or incomplete cleanup; check the installed version, channel and installer output before deleting anything manually. Cleanup failure is reported as failure, never as a completed install. Ordinary uninstall removes program trees, Runtime and leftover aliases while retaining configuration, Token and work/Audit/update data; `--purge` additionally deletes the managed data.
 
 An interrupted `.migration-backup` is rejected by installation for administrator recovery instead of guessing which deployment is active. Uninstall validates and removes managed backups as well as every verified new/old program root, including independent leftover trees. Unknown directories, unsafe permissions, escaping links and mounted deployment paths stop cleanup before service removal. Default uninstall preserves configuration, token and work/Audit/update records; only `--purge` removes data. It never deletes the installer login account.
 
@@ -135,8 +150,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v4.6.2-<source-sha>
-├── releases/v4.6.2-<source-sha>/
+├── current -> releases/v5.0.0-<source-sha>
+├── releases/v5.0.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/

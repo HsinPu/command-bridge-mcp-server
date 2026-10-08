@@ -10,7 +10,7 @@ legacy="$work/old/command-bridge-mcp-server"
 mkdir -p "$work/bin" "$work/source/scripts/linux-systemd" "$work/data"
 printf 'keep-token-and-work\n' > "$work/data/keep"
 sha=dddddddddddddddddddddddddddddddddddddddd
-printf '%s\n4.6.2\n' "$sha" > "$work/channel"
+printf '%s\n5.0.0\n' "$sha" > "$work/channel"
 cp scripts/linux-systemd/layout.sh "$work/source/scripts/linux-systemd/layout.sh"
 # Use the real uninstaller's pre-stop validation, with a harmless stop marker.
 cat > "$work/modern.sh" <<'SH'

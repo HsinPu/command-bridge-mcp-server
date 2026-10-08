@@ -65,6 +65,8 @@ function diagnostics(reply) {
 }
 const targetSha = process.argv[3];
 if (!/^[a-f0-9]{40}$/.test(targetSha)) throw Error('Expected fixture SHA required');
+const expectMigrationRejection = process.argv[4] === '--expect-layout-migration-rejection';
+if (expectMigrationRejection && (process.platform !== 'linux' || process.env.GITHUB_ACTIONS !== 'true')) throw Error('Disposable Linux migration fixture required');
 async function call(name, args = {}) {
   const client = new Client({ name: 'managed-update-verifier', version: '1.0.0' });
   try {
@@ -101,38 +103,49 @@ try {
   const duplicate = await call('command_bridge_update');
   if (duplicate.isError || duplicate.structuredContent.jobId !== first.jobId) throw Error('Concurrent request created another job');
   const done = await terminal(first.jobId);
-  if (done.state !== 'succeeded' || done.after.sourceSha !== targetSha || done.before.sourceSha === done.after.sourceSha) { await idle(); diagnostics(); throw Error('Update did not activate the candidate SHA'); }
-  await idle();
+  if (expectMigrationRejection) {
+    if (done.state !== 'failed' || done.errorCode !== 'UPDATE_INSTALL_FAILED' || done.after.sourceSha !== done.before.sourceSha || done.after.sourceSha === targetSha) throw Error('Legacy migration request did not preserve deployment');
+    await idle();
+    const log = readFileSync('/var/lib/command-bridge-update/diagnostics/' + first.jobId + '.log', 'utf8');
+    if (!log.includes('Legacy MCP update cannot remove its own program path')) throw Error('Migration failed before the required preflight rejection');
+  } else {
+    if (done.state !== 'succeeded' || done.after.sourceSha !== targetSha || done.before.sourceSha === done.after.sourceSha) { await idle(); diagnostics(); throw Error('Update did not activate the candidate SHA'); }
+    await idle();
+  }
   const hostname = await call('command_bridge_run_command', {command:'hostname'});
   if (hostname.isError || !hostname.structuredContent.ok || hostname.structuredContent.exitCode !== 0) throw Error('Updated service failed real command execution');
   if (!beforeConfig.equals(readFileSync(process.argv[2]))) throw Error('Update changed configuration or Token');
   const events = await call('command_bridge_list_audit_events', { limit:100 });
   if (events.isError || !events.structuredContent.events.some(e => e.phase === 'completed' && e.command.includes(first.jobId))) throw Error('Accepted update Audit not queryable');
-  if (process.env.GITHUB_ACTIONS !== 'true') throw Error('Disposable runner required for injected failure');
-  const bootstrap = process.platform === 'win32' ? process.env.ProgramFiles + '/CommandBridgeMCP/bootstrap.ps1' : '/usr/local/lib/command-bridge/current/bootstrap.sh';
-  const originalBootstrap = readFileSync(bootstrap);
-  try {
-    writeFileSync(bootstrap, process.platform === 'win32' ? 'exit 17\r\n' : '#!/bin/bash\nexit 17\n');
-    const failedRequest = await call('command_bridge_update');
-    if (failedRequest.isError) throw Error('Failure fixture was not accepted');
-    const failedJob = await terminal(failedRequest.structuredContent.jobId);
-    if (failedJob.state !== 'failed' || failedJob.before.sourceSha !== targetSha || failedJob.after.sourceSha !== targetSha) throw Error('Failed update did not preserve deployment');
-    await idle();
-    const stillRunning = await call('command_bridge_run_command', {command:'hostname'});
-    if (stillRunning.isError || !stillRunning.structuredContent.ok) throw Error('Failed update damaged the running service');
-  } finally { writeFileSync(bootstrap, originalBootstrap); }
-  const previousLatest = await call('command_bridge_get_update_status');
-  // The service still has its startup setting. The privileged backend must
-  // independently honor a saved disable setting, without a service restart.
-  const text = beforeConfig.toString('utf8');
-  const disabled = /^COMMAND_BRIDGE_MCP_UPDATE_ENABLED=/m.test(text) ? text.replace(/^COMMAND_BRIDGE_MCP_UPDATE_ENABLED=.*$/m,'COMMAND_BRIDGE_MCP_UPDATE_ENABLED=false') : text + '\nCOMMAND_BRIDGE_MCP_UPDATE_ENABLED=false\n';
-  try {
-    writeFileSync(process.argv[2], disabled);
-    const rejected = await call('command_bridge_update');
-    if (!rejected.isError) throw Error('Saved disable setting was ignored');
-    const latest = await call('command_bridge_get_update_status');
-    if (latest.isError || latest.structuredContent.jobId !== previousLatest.structuredContent.jobId) throw Error('Disabled request created a new job');
-    await idle();
-  } finally { writeFileSync(process.argv[2], beforeConfig); }
-  console.log('Managed MCP update activated a different SHA, survived service restart, retained configuration/Audit, and enforced saved disable.');
+  if (expectMigrationRejection) {
+    console.log('Legacy MCP migration was rejected before deployment changes; the original service, SHA, configuration and Audit remain available.');
+  } else {
+    if (process.env.GITHUB_ACTIONS !== 'true') throw Error('Disposable runner required for injected failure');
+    const bootstrap = process.platform === 'win32' ? process.env.ProgramFiles + '/CommandBridgeMCP/bootstrap.ps1' : '/usr/local/lib/command-bridge/current/bootstrap.sh';
+    const originalBootstrap = readFileSync(bootstrap);
+    try {
+      writeFileSync(bootstrap, process.platform === 'win32' ? 'exit 17\r\n' : '#!/bin/bash\nexit 17\n');
+      const failedRequest = await call('command_bridge_update');
+      if (failedRequest.isError) throw Error('Failure fixture was not accepted');
+      const failedJob = await terminal(failedRequest.structuredContent.jobId);
+      if (failedJob.state !== 'failed' || failedJob.before.sourceSha !== targetSha || failedJob.after.sourceSha !== targetSha) throw Error('Failed update did not preserve deployment');
+      await idle();
+      const stillRunning = await call('command_bridge_run_command', {command:'hostname'});
+      if (stillRunning.isError || !stillRunning.structuredContent.ok) throw Error('Failed update damaged the running service');
+    } finally { writeFileSync(bootstrap, originalBootstrap); }
+    const previousLatest = await call('command_bridge_get_update_status');
+    // The service still has its startup setting. The privileged backend must
+    // independently honor a saved disable setting, without a service restart.
+    const text = beforeConfig.toString('utf8');
+    const disabled = /^COMMAND_BRIDGE_MCP_UPDATE_ENABLED=/m.test(text) ? text.replace(/^COMMAND_BRIDGE_MCP_UPDATE_ENABLED=.*$/m,'COMMAND_BRIDGE_MCP_UPDATE_ENABLED=false') : text + '\nCOMMAND_BRIDGE_MCP_UPDATE_ENABLED=false\n';
+    try {
+      writeFileSync(process.argv[2], disabled);
+      const rejected = await call('command_bridge_update');
+      if (!rejected.isError) throw Error('Saved disable setting was ignored');
+      const latest = await call('command_bridge_get_update_status');
+      if (latest.isError || latest.structuredContent.jobId !== previousLatest.structuredContent.jobId) throw Error('Disabled request created a new job');
+      await idle();
+    } finally { writeFileSync(process.argv[2], beforeConfig); }
+    console.log('Managed MCP update activated a different SHA, survived service restart, retained configuration/Audit, and enforced saved disable.');
+  }
 } finally { clearTimeout(timer); }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 5.0.0 — 2026-10-08
+
+MAJOR: remove historical Linux program paths completely after verified migration, without compatibility symlinks. Scripts that reference `/opt/command-bridge` or `/opt/command-bridge-mcp-server` must use `/usr/local/lib/command-bridge` or the managed `command-bridge` CLI.
+
+- Inspect protected service/fixture work directories with the existing `sudo test` permission instead of mistaking a traversal denial for a missing directory.
+- Report fixed mode/stage and line-number context on layout-smoke failures without command text, configuration or tokens.
+- Remove both old program roots, their managed migration backups and aliases left by 4.6.x after successful verification. Keep the original deployment until activation succeeds; restore the original directories and alias targets on failure. Configuration, Token, work and Audit/update data are retained.
+- Require one administrator-terminal migration for deployments physically under `/opt`. A legacy MCP worker caches the old path, so reject its relocation before host changes and record a failed job with the original SHA/service intact. Once migrated, MCP updates continue normally and also remove leftover 4.6.x aliases.
+- Verify real services in both account modes, with an ordinary sudo caller, legacy-worker rejection, terminal migration, subsequent MCP update, rollback and complete uninstall. Require old program paths to be absent; retain all CI/channel publication gates.
+- Synchronize version examples, project guidance and validation evidence; retain every cross-platform service/layout publication gate.
+
 ## 4.6.2 — 2026-10-08
 
 PATCH: fix Linux alias-parent validation and uninstall preflight ordering; preserve valid managed deployments, MCP interfaces and fixed installation entry points.
