@@ -101,6 +101,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.0.0 起，以 UTF-8 為主要文件格式，`command_bridge_run_command` 的選用 `outputEncoding` 可指定 utf8／utf16le／big5／gbk／gb18030；不得猜測編碼或自動轉換檔案。stdout／stderr 使用各自嚴格串流解碼器，正常結束的非法或不完整輸出不回傳，記錄唯一 failed Audit 並釋放名額；逾時／截斷不補入替代字元。Windows cmd 使用固定 UTF-8 主控台包裝程式及原始串流轉送，原生 allowlist 仍直接傳 argv。Windows PowerShell 5.1 的 stdout 編碼不代表文件編碼，檔案操作須明確指定，不能以亂碼或截斷輸出覆寫全文。設定與政策 UTF-8 預檢、Windows 原始位元組備份／回復、兩平台 BOM／換行保留與檔案傳輸雜湊都須有行為驗證。正式 PS1 保持 ASCII，含非 ASCII 時需 UTF-8 BOM；不全面轉碼工作資料、不宣稱任意外部程式寫檔可自動防護。詳見 docs/text-encoding.md。
+
 - 5.0.1 起，Linux 備份完成複製、內容與 metadata 驗證後才發布可用狀態；原本存在、完整備份與實際修改須分開記錄，不得以備份缺失推定應刪除原檔。回復需逐項檢查檔案、權限、SELinux、CLI／layout 與 systemd 結果，Bash 條件呼叫不可吞掉失敗。回復不完整時不得重啟，保留 root 私有的必要資料於 `/var/lib/command-bridge-recovery`，後續安裝拒絕略過未完成回復。一般卸載保留、完整安全預檢後 purge 才移除；舊卸載器缺少 recovery 預檢時使用同一 CI SHA 的完整後備。暫存清理與更新 worker 不得刪掉必要回復資料。
 - 5.0.1 起，指令 stdout／stderr 及固定 helper 使用獨立 UTF-8 串流解碼器，維持字元／原始位元組限制、逾時及 Audit 終結規則。Windows cmd 的 verbatim 引數只適用於 Shell 模式，不得套用到原生 allowlist argv。Host 設定與安裝探測共用正規化，hostname 比對忽略選用 port；保留 Bearer／Host 拒絕行為，不將 Host 政策宣稱為來源 IP 防火牆。
 

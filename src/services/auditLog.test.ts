@@ -283,7 +283,9 @@ test("fixed Windows reader requests 1,001 provider records and emits only Audit 
  const fs=await import("node:fs/promises"),os=await import("node:os"),path=await import("node:path"),child=await import("node:child_process");
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),"cb-reader-cap-"));
  try {
-  await fs.writeFile(path.join(directory,"records.json"),JSON.stringify(recentAuditEvents(1001).map(serializeAuditEvent)));
+  const events = recentAuditEvents(1001);
+  events[0]!.command = "echo 中文🙂"; events[0]!.cwd = "C:\\中文工作目錄";
+  await fs.writeFile(path.join(directory,"records.json"),JSON.stringify(events.map(serializeAuditEvent)));
   await fs.copyFile("scripts/windows/audit/read-audit-events.ps1",path.join(directory,"reader.ps1"));
   await fs.writeFile(path.join(directory,"probe.ps1"),`function Get-WinEvent {
  param($FilterHashtable, [int]$MaxEvents, $ErrorAction)
@@ -298,6 +300,8 @@ test("fixed Windows reader requests 1,001 provider records and emits only Audit 
   const result=child.spawnSync(path.join(systemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-File",path.join(directory,"probe.ps1")],{encoding:"utf8",windowsHide:true,timeout:15000,maxBuffer:4*1024*1024,env:buildWindowsAuditEnvironment(systemRoot)});
   assert.equal(result.status,0,result.stderr);
   assert.equal(parseWindowsEventLogLines(result.stdout).length,1001);
+  assert.equal(parseWindowsEventLogLines(result.stdout)[0]!.command, events[0]!.command);
+  assert.equal(parseWindowsEventLogLines(result.stdout)[0]!.cwd, events[0]!.cwd);
  } finally {
   if (!path.resolve(directory).startsWith(path.resolve(os.tmpdir())+path.sep+"cb-reader-cap-")) throw Error("Unsafe reader fixture cleanup");
   await fs.rm(directory,{recursive:true,force:true});

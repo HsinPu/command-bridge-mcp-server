@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { StringDecoder } from "node:string_decoder";
 import { access, open, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
@@ -14,6 +13,7 @@ import { RecentDiagnosticRequests, type RecentDiagnosticRequest } from "./diagno
 import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { assertNoSelfModification } from "./selfProtection.js";
 import { assertGuardedCommand } from "./guardedPolicy.js";
+import { assertOutputEncoding, createOutputDecoder, outputDecodingError, type OutputEncoding } from "./textEncoding.js";
 import {
   assertCommandAllowed,
   resolveWorkingDirectory,
@@ -33,6 +33,7 @@ export interface CommandRequest {
   shell?: ShellKind;
   cwd?: string;
   timeoutMs?: number;
+  outputEncoding?: OutputEncoding;
 }
 
 export interface CommandResult {
@@ -62,6 +63,7 @@ const defaultEnvironmentKeys = [
   "SHELL",
   "LANG",
   "LC_ALL",
+  "LC_CTYPE",
   "USERPROFILE",
   "TEMP",
   "TMP",
@@ -217,6 +219,7 @@ export class CommandExecutor {
       }
 
       shell = requestedShell;
+      assertOutputEncoding(request.outputEncoding ?? "utf8");
       assertCommandAllowed(this.config, shell, request.command);
       cwd = resolveWorkingDirectory(this.config.allowedRoots, request.cwd);
       assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile });
@@ -240,7 +243,7 @@ export class CommandExecutor {
     this.activeCommands += 1;
     try {
       let result: CommandResult;
-      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal); }
+      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8"); }
       finally { this.activeCommands -= 1; }
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "completed", {
@@ -343,7 +346,8 @@ export class CommandExecutor {
     command: string,
     cwd: string,
     timeoutMs: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    outputEncoding: OutputEncoding = "utf8"
   ): Promise<CommandResult> {
     let invocation: ShellInvocation;
     const environment = buildChildEnvironment(this.config.passthroughEnv);
@@ -360,7 +364,14 @@ export class CommandExecutor {
         invocation.args = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", fileURLToPath(new URL("../../scripts/windows/run-cmdlet.ps1", import.meta.url))];
         environment.COMMAND_BRIDGE_CMDLET_REQUEST = Buffer.from(JSON.stringify({ name: profile.cmdlet, args })).toString("base64");
       }
-    } else invocation = buildShellInvocation(shell, command);
+    } else {
+      invocation = buildShellInvocation(shell, command);
+      if (shell === "cmd" && process.platform === "win32") {
+        environment.COMMAND_BRIDGE_CMD_REQUEST = command;
+        for (const key of Object.keys(environment)) if (key.toLowerCase() === "psmodulepath") delete environment[key];
+        environment.PSModulePath = join(dirname(invocation.executable), "Modules");
+      }
+    }
     const startedAt = Date.now();
 
     return new Promise((resolve, reject) => {
@@ -375,8 +386,9 @@ export class CommandExecutor {
 
       let stdout = "";
       let stderr = "";
-      const stdoutDecoder = new StringDecoder("utf8");
-      const stderrDecoder = new StringDecoder("utf8");
+      const stdoutDecoder = createOutputDecoder(outputEncoding);
+      const stderrDecoder = createOutputDecoder(outputEncoding);
+      let outputFailure: AppError | undefined;
       let timedOut = false;
       let truncated = false;
       let settled = false;
@@ -441,14 +453,22 @@ export class CommandExecutor {
         return current + text;
       };
 
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout = appendOutput(stdout, stdoutDecoder.write(chunk));
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr = appendOutput(stderr, stderrDecoder.write(chunk));
-      });
-      child.stdout.once("end", () => { stdout = appendOutput(stdout, stdoutDecoder.end()); });
-      child.stderr.once("end", () => { stderr = appendOutput(stderr, stderrDecoder.end()); });
+      const decode = (decoder: TextDecoder, chunk?: Buffer) => {
+        if (outputFailure || settled || (chunk === undefined && (timedOut || truncated || cancellation))) return "";
+        try { return decoder.decode(chunk, { stream: chunk !== undefined }); }
+        catch {
+          outputFailure = outputDecodingError();
+          // EOF can precede the process close callback. An incomplete final
+          // character needs no additional taskkill; the normal deadline still
+          // bounds a process that closes its pipes without exiting.
+          if (chunk !== undefined) terminate();
+          return "";
+        }
+      };
+      child.stdout.on("data", (chunk: Buffer) => { stdout = appendOutput(stdout, decode(stdoutDecoder, chunk)); });
+      child.stderr.on("data", (chunk: Buffer) => { stderr = appendOutput(stderr, decode(stderrDecoder, chunk)); });
+      child.stdout.once("end", () => { stdout = appendOutput(stdout, decode(stdoutDecoder)); });
+      child.stderr.once("end", () => { stderr = appendOutput(stderr, decode(stderrDecoder)); });
 
       child.once("error", (error) => {
         if (settled) {
@@ -475,6 +495,7 @@ export class CommandExecutor {
         settled = true;
         cleanup();
         if (cancellation) { reject(new AppError("COMMAND_CANCELLED", "The command was cancelled.")); return; }
+        if (outputFailure) { reject(outputFailure); return; }
         resolve({
           ok: exitCode === 0 && !timedOut && !truncated,
           shell,
@@ -528,14 +549,17 @@ function buildShellInvocation(shell: ShellKind, command: string): ShellInvocatio
           "-NonInteractive",
           "-Command",
           "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); " +
+            "[Console]::InputEncoding = [Console]::OutputEncoding; " +
             "$OutputEncoding = [Console]::OutputEncoding; " +
             command
         ]
       };
     case "cmd":
-      // /s removes exactly the outer quotes. CRT argument escaping would instead
-      // introduce backslashes that cmd treats as literal command characters.
-      return { executable: "cmd.exe", args: ["/d", "/s", "/c", `"${command}"`], windowsVerbatimArguments: process.platform === "win32" };
+      if (process.platform === "win32") return {
+        executable: join(process.env.SystemRoot ?? "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe"),
+        args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", fileURLToPath(new URL("../../scripts/windows/run-cmd.ps1", import.meta.url))]
+      };
+      return { executable: "cmd.exe", args: ["/d", "/s", "/c", `"${command}"`] };
   }
 }
 
@@ -604,7 +628,14 @@ export async function terminateProcessTree(child: ChildProcess): Promise<void> {
       const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
       killer.once("error", error => done(error));
       killer.once("close", code => {
-        if (code !== 0) { done(new Error("taskkill failed.")); return; }
+        if (code !== 0) {
+          // A process can exit naturally between the request and taskkill. Only
+          // accept that race after exit AND both captured streams have ended.
+          if ((child.exitCode !== null || child.signalCode !== null) &&
+              child.stdout?.readableEnded !== false && child.stderr?.readableEnded !== false) done();
+          else done(new Error("taskkill failed."));
+          return;
+        }
         if (child.exitCode !== null || child.signalCode !== null) done();
         else child.once("close", () => done());
       });

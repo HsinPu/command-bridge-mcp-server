@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param([switch]$Update, [switch]$Check, [switch]$Uninstall, [switch]$Yes, [switch]$Purge, [switch]$DryRun, [switch]$PrintCodexSetup, [string]$CodexUrl, [string]$CodexName, [switch]$RefreshNetwork, [switch]$EnableFileTransfer, [switch]$EnableUpload, [switch]$EnableDownload, [ValidateSet('allowlist', 'guarded', 'unrestricted')][string]$ExecutionMode)
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 Set-StrictMode -Version Latest
 $arguments = @{}
 if ($Check -and -not $Update) { throw 'Check applies only to update.' }

@@ -1,5 +1,5 @@
 import {spawn} from "node:child_process";
-import {StringDecoder} from "node:string_decoder";
+import {createOutputDecoder} from "./textEncoding.js";
 import {constants} from "node:fs";
 import {open,lstat,statfs} from "node:fs/promises";
 import {join} from "node:path";
@@ -18,7 +18,7 @@ export function startDiagnosticProcess(executable:string,args:string[],env:NodeJ
     const systemRoot=process.env.SystemRoot??"C:\\Windows";
     const child=spawn(executable,args,{env,windowsHide:true,detached:!windows,stdio:["ignore","pipe","ignore"]});
     let output="",fault:string|null=null,ended=false,killing=false;
-    let outputBytes=0; const decoder=new StringDecoder("utf8");
+    let outputBytes=0; const decoder=createOutputDecoder("utf8");
     const cancel=()=>{
       if(ended||killing) return;killing=true;fault??="DIAGNOSTIC_HELPER_TIMEOUT";
       if(!child.pid) return;
@@ -31,9 +31,9 @@ export function startDiagnosticProcess(executable:string,args:string[],env:NodeJ
     };
     const timer=setTimeout(cancel,timeoutMs);
     const result=new Promise<unknown>((resolve,reject)=>{
-      child.stdout.on("data",(data:Buffer)=>{if(fault||ended)return;outputBytes+=data.length;if(outputBytes>32*1024){fault="DIAGNOSTIC_OUTPUT_LIMIT";cancel();return;}output+=decoder.write(data);});
+      child.stdout.on("data",(data:Buffer)=>{if(fault||ended)return;outputBytes+=data.length;if(outputBytes>32*1024){fault="DIAGNOSTIC_OUTPUT_LIMIT";cancel();return;}try{output+=decoder.decode(data,{stream:true});}catch{fault="DIAGNOSTIC_READER_FAILED";cancel();}});
       child.once("error",error=>{ended=true;clearTimeout(timer);reject(error);});
-      child.once("close",code=>{ended=true;clearTimeout(timer);if(fault||code!==0){reject(new AppError(fault??"DIAGNOSTIC_READER_FAILED","Diagnostic reader unavailable."));return;}output+=decoder.end();try{resolve(JSON.parse(output));}catch{reject(new AppError("DIAGNOSTIC_READER_FAILED","Invalid diagnostic record."));}});
+      child.once("close",code=>{ended=true;clearTimeout(timer);if(fault||code!==0){reject(new AppError(fault??"DIAGNOSTIC_READER_FAILED","Diagnostic reader unavailable."));return;}try{output+=decoder.decode();resolve(JSON.parse(output));}catch{reject(new AppError("DIAGNOSTIC_READER_FAILED","Invalid diagnostic record."));}});
     });
     return {result,cancel};
 }

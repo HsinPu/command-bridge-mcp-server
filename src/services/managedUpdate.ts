@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { StringDecoder } from "node:string_decoder";
+import { createOutputDecoder, decodeUtf8File } from "./textEncoding.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -23,7 +23,7 @@ export function runUpdateControl(executable: string, args: string[], deadlineMs 
     const child = spawn(executable, args, { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "ignore"],
       env: process.platform === "win32" ? { ...buildWindowsAuditEnvironment(process.env.SystemRoot ?? "C:\\Windows"), ProgramFiles: process.env.ProgramFiles ?? "C:\\Program Files", ProgramData: process.env.ProgramData ?? "C:\\ProgramData" } : { PATH: "/usr/sbin:/usr/bin:/sbin:/bin" } });
     let output = "", settled = false;
-    const decoder = new StringDecoder("utf8");
+    const decoder = createOutputDecoder("utf8");
     const finish = (error?: Error) => { if (settled) return; settled = true; clearTimeout(timer); error ? reject(error) : resolve(output); };
     const failure = () => {
       let location = "";
@@ -34,9 +34,18 @@ export function runUpdateControl(executable: string, args: string[], deadlineMs 
       return new AppError("UPDATE_CONTROL_FAILED", "Update control did not acknowledge the request." + location, "Query update status before retrying; an independent job may already have started.");
     };
     const timer = setTimeout(() => { child.kill(); finish(failure()); }, deadlineMs);
-    child.stdout.on("data", chunk => { if (settled) return; output += decoder.write(chunk); if (output.length > 8192) { child.kill(); finish(failure()); } });
+    child.stdout.on("data", chunk => {
+      if (settled) return;
+      try { output += decoder.decode(chunk, { stream: true }); }
+      catch { child.kill(); finish(failure()); return; }
+      if (output.length > 8192) { child.kill(); finish(failure()); }
+    });
     child.once("error", () => finish(failure()));
-    child.once("close", code => { if (settled) return; output += decoder.end(); finish(code === 0 && output.length <= 8192 ? undefined : failure()); });
+    child.once("close", code => {
+      if (settled) return;
+      try { output += decoder.decode(); } catch { finish(failure()); return; }
+      finish(code === 0 && output.length <= 8192 ? undefined : failure());
+    });
   });
 }
 
@@ -50,7 +59,7 @@ export function nativeUpdateAdapter(): UpdateAdapter {
         const ps = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         return updateJobSchema.parse(JSON.parse(await runUpdateControl(ps, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeUpdate", "status.ps1"), ...(id ? ["-JobId", id] : [])])));
       }
-      const job = updateJobSchema.parse(JSON.parse(await readFile(join(stateRoot, id ? id + ".json" : "latest.json"), "utf8")));
+      const job = updateJobSchema.parse(JSON.parse(decodeUtf8File(await readFile(join(stateRoot, id ? id + ".json" : "latest.json")))));
       if (["accepted", "running"].includes(job.state)) {
         const active = await runUpdateControl("/usr/bin/systemctl", ["show", "command-bridge-update.service", "--property=ActiveState", "--value"]);
         if (!["active", "activating", "deactivating"].includes(active.trim())) return { ...job, state: "interrupted", errorCode: "UPDATE_INTERRUPTED" };

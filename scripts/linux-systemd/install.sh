@@ -934,6 +934,28 @@ restore_legacy_tree() {
   fi
 }
 
+rewrite_legacy_configuration() {
+  awk -v old_config="${LEGACY_CONFIG_DIR}" -v new_config="${CONFIG_DIR}" \
+      -v old_state="${LEGACY_STATE_DIR}" -v new_state="${STATE_DIR}" '
+    BEGIN { RS="\0"; ORS="" }
+    function literal_replace(value,from,to, position,result) {
+      result=""
+      while ((position=index(value,from))>0) { result=result substr(value,1,position-1) to; value=substr(value,position+length(from)) }
+      return result value
+    }
+    {
+      bom=""; if (sub(/^\357\273\277/,"")) bom="\357\273\277"
+      count=split($0,lines,"\n"); printf "%s",bom
+      for (i=1;i<=count;i++) {
+        line=lines[i]
+        if (line ~ /^COMMAND_BRIDGE_POLICY_FILE=/) line=literal_replace(line,old_config,new_config)
+        if (line ~ /^COMMAND_BRIDGE_ALLOWED_ROOTS=/) line=literal_replace(line,old_state,new_state)
+        printf "%s%s",line,(i<count ? "\n" : "")
+      }
+    }
+  ' "${CONFIG_FILE}"
+}
+
 migrate_legacy_layout() {
   local old new
   if [[ ! -e "${LEGACY_UNIT_FILE}" && ! -L "${LEGACY_UNIT_FILE}" && \
@@ -989,12 +1011,7 @@ migrate_legacy_layout() {
   if [[ -f "${CONFIG_FILE}" ]]; then
     save_file_backup "${CONFIG_FILE}" "${TEMP_DIR}/recovery/legacy-config.env" || fail "Legacy configuration backup failed; the original configuration was preserved."
     LEGACY_CONFIG_BACKUP="${TEMP_DIR}/recovery/legacy-config.env"
-    awk -v old_config="${LEGACY_CONFIG_DIR}" -v new_config="${CONFIG_DIR}" \
-        -v old_state="${LEGACY_STATE_DIR}" -v new_state="${STATE_DIR}" '
-      /^COMMAND_BRIDGE_POLICY_FILE=/ { gsub(old_config, new_config) }
-      /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ { gsub(old_state, new_state) }
-      { print }
-    ' "${CONFIG_FILE}" > "${TEMP_DIR}/migrated-config.env"
+    rewrite_legacy_configuration > "${TEMP_DIR}/migrated-config.env" || fail "Legacy UTF-8 configuration rewrite failed; the original backup was preserved."
     CONFIG_CHANGED=1
     install -m 0600 -o root -g root "${TEMP_DIR}/migrated-config.env" "${CONFIG_FILE}"
   fi
@@ -1258,22 +1275,35 @@ install_configuration() {
       allowed_roots="${INSTALLER_HOME}:/"
     fi
     awk -v host="${host:-}" -v roots="${allowed_roots:-}" -v mode="${execution_mode}" -v upload="${ENABLE_UPLOAD}" -v download="${ENABLE_DOWNLOAD}" -v transfer="${transfer_root}" '
-      /^COMMAND_BRIDGE_UPLOAD_ENABLED=/ && upload == "1" { print "COMMAND_BRIDGE_UPLOAD_ENABLED=true"; upload_seen=1; next }
-      /^COMMAND_BRIDGE_DOWNLOAD_ENABLED=/ && download == "1" { print "COMMAND_BRIDGE_DOWNLOAD_ENABLED=true"; download_seen=1; next }
-      /^COMMAND_BRIDGE_TRANSFER_ROOT=/ { transfer_seen=1 }
-      /^COMMAND_BRIDGE_HTTP_HOST=/ && host != "" { print "COMMAND_BRIDGE_HTTP_HOST=" host; next }
-      /^COMMAND_BRIDGE_ALLOWED_HOSTS=/ && host != "" { print "COMMAND_BRIDGE_ALLOWED_HOSTS=" host; next }
-      /^COMMAND_BRIDGE_AUDIT_BACKEND=/ && roots != "" { print "COMMAND_BRIDGE_AUDIT_BACKEND=file"; audit_seen=1; next }
-      /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ && roots != "" { print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots; roots_seen=1; next }
-      /^[[:space:]]*(export[[:space:]]+)?COMMAND_BRIDGE_EXECUTION_MODE[[:space:]]*=/ { print "COMMAND_BRIDGE_EXECUTION_MODE=" mode; mode_seen=1; next }
-      { print }
-      END {
-        if (upload == "1" && !upload_seen) print "COMMAND_BRIDGE_UPLOAD_ENABLED=true"
-        if (download == "1" && !download_seen) print "COMMAND_BRIDGE_DOWNLOAD_ENABLED=true"
-        if ((upload == "1" || download == "1") && !transfer_seen) print "COMMAND_BRIDGE_TRANSFER_ROOT=" transfer
-        if (roots != "" && !audit_seen) print "COMMAND_BRIDGE_AUDIT_BACKEND=file"
-        if (roots != "" && !roots_seen) print "COMMAND_BRIDGE_ALLOWED_ROOTS=" roots
-        if (!mode_seen) print "COMMAND_BRIDGE_EXECUTION_MODE=" mode
+      # Read one record and retain its separators, BOM and final-newline state.
+      BEGIN { RS="\0"; ORS="" }
+      function append(value) {
+        if (length(result) && substr(result,length(result),1) != "\n") result=result newline
+        result=result value newline
+      }
+      {
+        bom=""; if (sub(/^\357\273\277/, "")) bom="\357\273\277"
+        newline=index($0,"\r\n") ? "\r\n" : "\n"
+        count=split($0,lines,"\n")
+        for (i=1;i<=count;i++) {
+          line=lines[i]; cr=sub(/\r$/, "", line) ? "\r" : ""
+          if (line ~ /^COMMAND_BRIDGE_UPLOAD_ENABLED=/ && upload == "1") { line="COMMAND_BRIDGE_UPLOAD_ENABLED=true"; upload_seen=1 }
+          else if (line ~ /^COMMAND_BRIDGE_DOWNLOAD_ENABLED=/ && download == "1") { line="COMMAND_BRIDGE_DOWNLOAD_ENABLED=true"; download_seen=1 }
+          else if (line ~ /^COMMAND_BRIDGE_TRANSFER_ROOT=/) transfer_seen=1
+          else if (line ~ /^COMMAND_BRIDGE_HTTP_HOST=/ && host != "") line="COMMAND_BRIDGE_HTTP_HOST=" host
+          else if (line ~ /^COMMAND_BRIDGE_ALLOWED_HOSTS=/ && host != "") line="COMMAND_BRIDGE_ALLOWED_HOSTS=" host
+          else if (line ~ /^COMMAND_BRIDGE_AUDIT_BACKEND=/ && roots != "") { line="COMMAND_BRIDGE_AUDIT_BACKEND=file"; audit_seen=1 }
+          else if (line ~ /^COMMAND_BRIDGE_ALLOWED_ROOTS=/ && roots != "") { line="COMMAND_BRIDGE_ALLOWED_ROOTS=" roots; roots_seen=1 }
+          else if (line ~ /^[[:space:]]*(export[[:space:]]+)?COMMAND_BRIDGE_EXECUTION_MODE[[:space:]]*=/) { line="COMMAND_BRIDGE_EXECUTION_MODE=" mode; mode_seen=1 }
+          result=result line cr (i<count ? "\n" : "")
+        }
+        if (upload == "1" && !upload_seen) append("COMMAND_BRIDGE_UPLOAD_ENABLED=true")
+        if (download == "1" && !download_seen) append("COMMAND_BRIDGE_DOWNLOAD_ENABLED=true")
+        if ((upload == "1" || download == "1") && !transfer_seen) append("COMMAND_BRIDGE_TRANSFER_ROOT=" transfer)
+        if (roots != "" && !audit_seen) append("COMMAND_BRIDGE_AUDIT_BACKEND=file")
+        if (roots != "" && !roots_seen) append("COMMAND_BRIDGE_ALLOWED_ROOTS=" roots)
+        if (!mode_seen) append("COMMAND_BRIDGE_EXECUTION_MODE=" mode)
+        printf "%s%s",bom,result
       }
     ' "${CONFIG_FILE}" > "${CONFIG_FILE}.new"
     chmod 0600 "${CONFIG_FILE}.new"
@@ -1325,7 +1355,7 @@ install_configuration() {
 
 read_config_value() {
   local key=$1
-  awk -v key="${key}" 'index($0, key "=") == 1 { sub(/^[^=]*=/, ""); print; exit }' "${CONFIG_FILE}"
+  awk -v key="${key}" 'NR==1 { sub(/^\357\273\277/, "") } { sub(/\r$/, "") } index($0, key "=") == 1 { sub(/^[^=]*=/, ""); print; exit }' "${CONFIG_FILE}"
 }
 
 restore_configuration() {

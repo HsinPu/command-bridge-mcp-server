@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-5.0.1-blue)
+![Version](https://img.shields.io/badge/version-6.0.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -166,6 +166,10 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 受管理的 Linux／Windows 安裝**預設開啟 MCP 服務更新**。持有 Bearer Token 的用戶端可請求更新，過程會短暫中斷服務。root／SYSTEM 獨立程序只接受固定更新操作，不接受自訂來源、指令或安裝參數；沿用已驗證 CI channel、驗證與失敗回復。可在服務設定檔加入 `COMMAND_BRIDGE_MCP_UPDATE_ENABLED=false` 停用。既有安裝須先透過 CLI／一鍵安裝更新一次才有新工具；npm／stdio 安裝不會建立提權更新程序。詳見 [MCP 更新指南](docs/mcp-update.md)。
 
 檔案傳輸預設關閉，授權獨立於指令執行模式。Linux 安裝參數加上 `--enable-file-transfer`，Windows 加上 `-EnableFileTransfer`，才啟用兩個工具。每檔最多 5 MiB，只接受傳輸目錄內的安全單層檔名；不接受子目錄、連結、網址下載或自動執行。分別啟用上傳／下載、儲存位置、Audit 與失敗處理，請看 [檔案傳輸指南](docs/file-transfer.md)。
+
+指令輸出預設為 UTF-8。6.0.0 新增選用的 `outputEncoding`（`utf8`、`utf16le`、`big5`、`gbk`、`gb18030`），可指定舊程式實際使用的編碼；無法解碼時會隱藏輸出並回報明確錯誤。Windows cmd 使用固定 UTF-8 主控台包裝程式，原生 allowlist 仍直接傳遞 argv。檔案編碼須另外指定：Windows PowerShell 5.1 讀寫 UTF-8 檔案應明確設定編碼，不能用亂碼或截斷的指令輸出重建整份文件。Base64 傳輸保留原始位元組、BOM 與 SHA-256，不自動轉碼。詳見 [中文與 UTF-8 操作指南](docs/text-encoding.md)。
+
+升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
 例如，你可以請已連線的用戶端：
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm, writeFile, symlink, link, chmod, rename, unlink, realpath } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile, readFile, symlink, link, chmod, rename, unlink, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -101,9 +101,11 @@ test("Windows directory lease permits exclusive file publication and prevents di
   let lease;
   try {
     lease = await lockWindowsRoot(root);
-    await writeFile(join(root, "temporary.bin"), "contents");
+    const bytes = Buffer.from("\uFEFF中文檔案🙂\r\n完整第二行\r\n");
+    await writeFile(join(root, "temporary.bin"), bytes);
     await link(join(root, "temporary.bin"), join(root, "published.bin"));
     await unlink(join(root, "temporary.bin"));
+    assert.deepEqual(await readFile(join(root, "published.bin")), bytes);
     await assert.rejects(rename(root, root + "-moved"));
     assert.deepEqual(await readdir(root), ["published.bin"]);
     await lease.release(); lease = undefined;
@@ -182,5 +184,18 @@ test("Linux HTTP MCP file transfer authenticates before parsing large bodies and
     assert.equal((downloaded.structuredContent as Record<string, unknown>).contentBase64, request.contentBase64);
     const events = await client.callTool({ name: "command_bridge_list_audit_events", arguments: {} });
     assert.equal(((events.structuredContent as Record<string, unknown>).events as CommandAuditEvent[]).filter(e => e.fileTransfer?.sha256 === request.sha256).length, 2);
+    for (const [name, bytes] of [
+      ["utf8.txt", Buffer.from("中文完整文件🙂\r\n第二行\r\n")],
+      ["bom.txt", Buffer.concat([Buffer.from([239,187,191]), Buffer.from("中文 BOM\n")])],
+      ["utf16.txt", Buffer.concat([Buffer.from([255,254]), Buffer.from("中文🙂\r\n", "utf16le")])],
+      ["big5.txt", Buffer.from("a4a4a4e50d0a", "hex")]
+    ] as const) {
+      const upload = payload(bytes, name);
+      assert.equal((await client.callTool({ name: "command_bridge_upload_file", arguments: upload })).isError, false);
+      const download = await client.callTool({ name: "command_bridge_download_file", arguments: { path: name } });
+      assert.equal(download.isError, false);
+      const body = download.structuredContent as any;
+      assert.equal(body.sha256, upload.sha256); assert.deepEqual(Buffer.from(body.contentBase64, "base64"), bytes);
+    }
   } finally { await client.close(); await executor.shutdown(); await new Promise<void>(done => server.close(() => done())); await rm(root, { recursive: true, force: true }); }
 });

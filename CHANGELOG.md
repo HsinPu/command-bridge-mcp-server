@@ -1,5 +1,18 @@
 # Changelog
 
+## 6.0.0 — 2026-10-08
+
+MAJOR: stop silently substituting invalid command output. Existing non-UTF-8 program calls now need `outputEncoding` set to their actual encoding, and incomplete/invalid text no longer returns a successful result containing replacement characters. cmd Shell execution now uses a UTF-8 console; cmd text redirection can therefore differ from legacy code pages. Tool names, existing fields, result schema and policies remain intact; valid UTF-8 calls require no changes.
+
+Migration: update clients and service together; select `big5`, `gbk`, `gb18030` or `utf16le` for known legacy program output. Do not append cmd UTF-8 text to existing files in another encoding. Use explicitly configured file encodings, validated candidates and original-byte backups; repair invalid managed UTF-8 configuration/Audit data rather than guessing or overwriting it. The selector only decodes output and does not set file encoding. See `docs/text-encoding.md`.
+
+- Add `outputEncoding=utf8|utf16le|big5|gbk|gb18030`, with independent streaming decoders for stdout/stderr. Reject invalid or incomplete output, withhold both streams, record one failed Audit and release the process slot; retain deadlines, truncation and Audit gating. Do not guess encodings or transcode file contents.
+- Host Windows cmd Shell execution in a fixed UTF-8 PowerShell console and forward both raw byte streams, preserving cmd quoting, arguments and exit codes. Native allowlist programs still spawn directly. Handle a taskkill/natural-exit race only when process exit and captured stream completion are confirmed.
+- Read Windows configuration strictly as UTF-8, preserve optional BOM and original line endings during targeted changes, snapshot/restore raw bytes, and treat path replacement values literally. Reject invalid managed UTF-8 before dotenv/policy parsing or installer rewrites; support BOM in installation probes. Retain explicitly configured legacy dotenv encodings.
+- Preserve Linux configuration BOM, Chinese comments/paths, CRLF/LF and final-newline state during reinstall; teach saved-value readers to handle BOM/CRLF. Keep verified binary rollback snapshots.
+- Emit Windows Audit/helper/installer output as UTF-8, read update JSON explicitly as UTF-8, reject invalid fixed-helper/file Audit text, and retain both platforms' update-log tails at UTF-8 character boundaries.
+- Add real Windows command/file/configuration/Audit-reader regressions, cross-platform MCP command tests, Linux full-file configuration/transfer round trips, legacy-codec byte-boundary cases and source encoding checks. Add bilingual README guidance and a detailed UTF-8/file-integrity guide; no blanket file conversion, new privileges or weakened CI/channel gates.
+
 ## 5.0.1 — 2026-10-08
 
 PATCH: repair confirmed Linux backup/rollback failures, UTF-8 stream decoding, Windows cmd quoting and accepted Host configuration. Existing MCP tools, policies, defaults and deployment paths are unchanged.

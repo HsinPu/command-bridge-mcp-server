@@ -5,6 +5,12 @@ import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
+export function utf8LogTail(data, limit = 1024 * 1024) {
+  if (!Number.isInteger(limit) || limit < 4) throw Error('Invalid log tail limit');
+  let start = Math.max(0, data.length - limit);
+  while (start < data.length && (data[start] & 0xc0) === 0x80) start++;
+  return data.subarray(start);
+}
 
 const root = '/var/lib/command-bridge-update';
 const unit = 'command-bridge-update.service';
@@ -109,7 +115,7 @@ export async function main(action) {
     const diagnosticRoot = join(root, 'diagnostics');
     fs.mkdirSync(diagnosticRoot, { recursive: true, mode: 0o700 });
     const data = fs.readFileSync(join(work, 'install.log'));
-    fs.writeFileSync(join(diagnosticRoot, job.jobId + '.log'), data.subarray(Math.max(0, data.length - 1024 * 1024)), { mode: 0o600 });
+    fs.writeFileSync(join(diagnosticRoot, job.jobId + '.log'), utf8LogTail(data), { mode: 0o600 });
     const logs = fs.readdirSync(diagnosticRoot).filter(name => /^[a-f0-9-]{36}\.log$/.test(name)).sort((a,b) => fs.statSync(join(diagnosticRoot,b)).mtimeMs - fs.statSync(join(diagnosticRoot,a)).mtimeMs);
     for (const name of logs.slice(20)) fs.unlinkSync(join(diagnosticRoot,name));
     fs.rmSync(work, { recursive: true, force: true });

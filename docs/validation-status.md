@@ -1,6 +1,20 @@
 # Architecture implementation validation
 
-The current package is 5.0.1, repairing Linux snapshot/rollback reliability, UTF-8 output, Windows cmd quoting and Host normalization. The 5.0.0 Linux program-path migration rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.0.0, adding an optional output encoding selector and repairing Chinese text, managed UTF-8 file/configuration handling and byte-exact rollback. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+
+## 6.0.0 validation (2026-10-08)
+
+MAJOR: invalid output is withheld rather than replaced with corrupted text. Known non-UTF-8 program calls need the new optional `outputEncoding`; cmd text redirection now follows its UTF-8 console. Existing tool names, input fields, result shape and policies remain, and valid UTF-8 calls need no changes. Arbitrary programs still control their own file encoding and side effects. Migration is documented in `text-encoding.md`.
+
+The final native Windows `npm test` passed **152/183**, with **31 platform/elevation skips**, using supported Node.js 20.15.1. A private WSL Ubuntu snapshot under `nobody`, with checksum-verified CI Node.js 24.18.0 and locked dependencies, passed **162/183**, with **21 platform skips**. Both reported zero failures. The first Linux run lacked `/usr/sbin` in its private test PATH, so its recovery-uninstall case could not find `groupdel`; the corrected environment passed the original assertions without changing production prerequisites.
+
+Native Windows tests exercise UTF-8 cmd echo/type, Chinese/emoji filenames, quoted paths/arguments, explicit PowerShell 5.1 UTF-8 reads and complete-file edits, exit codes, cancellation/truncation, malformed-output termination and slot reuse, configuration BOM/LF/CRLF preservation, byte-exact rollback and invalid-input preservation. The real fixed Event Log reader is exercised with a controlled provider returning Chinese command/cwd values; this does not claim a live service-account Event Log write/read test. The native directory lease preserves complete UTF-8 BOM/Chinese file bytes; protected service-account transfer ACL validation remains skipped locally without elevation.
+
+Both platforms perform real HTTP and stdio MCP command/Audit round trips, strict incremental UTF-8/UTF-16LE/Big5/GBK/GB18030 boundary checks, invalid-helper/Audit data rejection and UTF-8 log-tail boundaries. Linux tests compare complete reinstall and legacy-path rewrite files, including BOM, CRLF/LF, final-newline state and Chinese comments/paths under `C` and `C.UTF-8`. Linux MCP file transfers preserve exact UTF-8/BOM/UTF-16LE/Big5 bytes and SHA-256. Source text validity and PowerShell 5.1 non-ASCII/BOM requirements are checked.
+
+All **24 Bash scripts and four fixed Linux launchers**, **22 native PowerShell script parses** and **WinSW XML** passed syntax checks. Package/lockfile/build versions match; third-party versions and the four bilingual bootstrap one-line commands are unchanged. Relative documentation links and `git diff --check` passed.
+
+Hosted CI, disposable Windows/Linux service deployment/update/recovery validation, Oracle Linux 8.10 SELinux Enforcing and actual host reboot have **not** run for this batch. The version has not been pushed or published; existing channel gates remain required. Local process/MCP/fixture evidence does not substitute for those service or platform checks.
 
 ## 5.0.1 validation (2026-10-08)
 

@@ -14,6 +14,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 
 $ServiceName = "CommandBridgeMCP"
 $EventSource = "CommandBridgeMCP"
@@ -229,6 +231,34 @@ function Get-AutomaticCodexUrl {
   return "http://{0}:{1}/mcp" -f $httpHost, $port
 }
 
+function Read-Utf8Configuration {
+  $bytes = [IO.File]::ReadAllBytes($ConfigFile)
+  $offset = if ($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191) { 3 } else { 0 }
+  try {
+    $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes, $offset, $bytes.Length - $offset)
+    if ($text.Contains([char]0)) { throw 'NUL is forbidden in configuration.' }
+    return $text
+  }
+  catch { throw 'Configuration must be valid UTF-8 (optional UTF-8 BOM). No encoding conversion was performed; restore or convert a backup explicitly.' }
+}
+
+function Write-Utf8Configuration([string]$Text) {
+  # Capture bytes before the first mutation; rollback must retain BOM and newlines.
+  $bytes = [IO.File]::ReadAllBytes($ConfigFile)
+  if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = $bytes }
+  $bom = $bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191
+  [IO.File]::WriteAllText($ConfigFile, $Text, [Text.UTF8Encoding]::new($bom, $true))
+}
+
+function Set-ConfigurationTextValue([string]$Text, [string]$Pattern, [string]$Value) {
+  # Paths may contain dollar signs; replacement-string expansion must not alter them.
+  return [regex]::Replace($Text, $Pattern, [Text.RegularExpressions.MatchEvaluator]{ param($Match) return $Value })
+}
+
+function Restore-ConfigurationBytes {
+  if ($null -ne $script:ConfigBackup) { [IO.File]::WriteAllBytes($ConfigFile, $script:ConfigBackup) }
+}
+
 function New-SecureConfiguration {
   $newLine = [Environment]::NewLine
   New-Item -ItemType Directory -Path $ConfigRoot -Force | Out-Null
@@ -236,13 +266,13 @@ function New-SecureConfiguration {
   New-Item -ItemType Directory -Path $LogsDirectory -Force | Out-Null
 
   if (Test-Path -LiteralPath $ConfigFile) {
+    $text = Read-Utf8Configuration
     Write-Log "Preserving existing configuration and bearer token at $ConfigFile."
     if ($RefreshNetwork) {
-      if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = [IO.File]::ReadAllText($ConfigFile) }
       $httpHost = Get-AutomaticHttpHost
-      $updated = [regex]::Replace([IO.File]::ReadAllText($ConfigFile), '(?m)^COMMAND_BRIDGE_HTTP_HOST=.*$', "COMMAND_BRIDGE_HTTP_HOST=$httpHost")
-      $updated = [regex]::Replace($updated, '(?m)^COMMAND_BRIDGE_ALLOWED_HOSTS=.*$', "COMMAND_BRIDGE_ALLOWED_HOSTS=$httpHost")
-      [IO.File]::WriteAllText($ConfigFile, $updated, (New-Object System.Text.UTF8Encoding($false)))
+      $updated = Set-ConfigurationTextValue $text '(?m)^COMMAND_BRIDGE_HTTP_HOST=[^\r\n]*' "COMMAND_BRIDGE_HTTP_HOST=$httpHost"
+      $updated = Set-ConfigurationTextValue $updated '(?m)^COMMAND_BRIDGE_ALLOWED_HOSTS=[^\r\n]*' "COMMAND_BRIDGE_ALLOWED_HOSTS=$httpHost"
+      Write-Utf8Configuration $updated
     }
     Set-ExecutionModeConfiguration
     Set-TransferConfiguration
@@ -304,34 +334,40 @@ function New-SecureConfiguration {
 
 function Set-ExecutionModeConfiguration {
   if (-not $ExecutionMode) { return }
-  $text = [IO.File]::ReadAllText($ConfigFile)
-  if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = $text }
+  $text = Read-Utf8Configuration
   $pattern = '(?m)^[ \t]*(?:export[ \t]+)?COMMAND_BRIDGE_EXECUTION_MODE[ \t]*=[^\r\n]*'
-  if ([regex]::IsMatch($text, $pattern)) { $text = [regex]::Replace($text, $pattern, "COMMAND_BRIDGE_EXECUTION_MODE=$ExecutionMode") }
-  else { $text = $text.TrimEnd("`r", "`n") + [Environment]::NewLine + "COMMAND_BRIDGE_EXECUTION_MODE=$ExecutionMode" + [Environment]::NewLine }
-  [IO.File]::WriteAllText($ConfigFile, $text, (New-Object System.Text.UTF8Encoding($false)))
+  if ([regex]::IsMatch($text, $pattern)) { $text = Set-ConfigurationTextValue $text $pattern "COMMAND_BRIDGE_EXECUTION_MODE=$ExecutionMode" }
+  else {
+    $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+    if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $text += $newline }
+    $text += "COMMAND_BRIDGE_EXECUTION_MODE=$ExecutionMode$newline"
+  }
+  Write-Utf8Configuration $text
 }
 
 function Set-TransferConfiguration {
   if (-not $EnableFileTransfer -and -not $EnableUpload -and -not $EnableDownload) { return }
+  $text = Read-Utf8Configuration
   $root = Join-Path $ConfigRoot 'transfers'
   if ((Test-Path -LiteralPath $root) -and ((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unsafe transfer directory.' }
   if (-not (Test-Path -LiteralPath $root)) {
     New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
     $script:TransferDirectoryCreated = $true
   }
-  $text = [IO.File]::ReadAllText($ConfigFile)
-  if ($null -eq $script:ConfigBackup) { $script:ConfigBackup = $text }
   $values = @{}
   if ($text -notmatch '(?m)^COMMAND_BRIDGE_TRANSFER_ROOT=') { $values.COMMAND_BRIDGE_TRANSFER_ROOT=$root }
   if ($text -notmatch '(?m)^COMMAND_BRIDGE_TRANSFER_MAX_BYTES=') { $values.COMMAND_BRIDGE_TRANSFER_MAX_BYTES='5242880' }
   if ($EnableFileTransfer -or $EnableUpload) { $values.COMMAND_BRIDGE_UPLOAD_ENABLED='true' }
   if ($EnableFileTransfer -or $EnableDownload) { $values.COMMAND_BRIDGE_DOWNLOAD_ENABLED='true' }
   foreach ($key in $values.Keys) {
-    if ($text -match "(?m)^$key=") { $text = [regex]::Replace($text, "(?m)^$key=.*$", "$key=$($values[$key])") }
-    else { $text += "`r`n$key=$($values[$key])`r`n" }
+    if ($text -match "(?m)^$key=") { $text = Set-ConfigurationTextValue $text "(?m)^$key=[^\r\n]*" "$key=$($values[$key])" }
+    else {
+      $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+      if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $text += $newline }
+      $text += "$key=$($values[$key])$newline"
+    }
   }
-  [IO.File]::WriteAllText($ConfigFile, $text, (New-Object System.Text.UTF8Encoding($false)))
+  Write-Utf8Configuration $text
 }
 
 function Copy-ApplicationPayload {
@@ -357,6 +393,7 @@ function Copy-ApplicationPayload {
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-install.mjs') -Destination (Join-Path $Destination 'scripts\verify-install.mjs')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-file-transfer.mjs') -Destination (Join-Path $Destination 'scripts\verify-file-transfer.mjs')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmdlet.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmdlet.ps1')
+  Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmd.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmd.ps1')
   [IO.File]::WriteAllText((Join-Path $Destination 'install-info.json'), (@{ version = $PackageVersion; sourceSha = $SourceRef; runtimeVersion = $NodeVersion } | ConvertTo-Json))
 }
 
@@ -409,7 +446,7 @@ function Assert-ManagedServicePath {
 
 function Get-ConfigValue {
   param([string]$Name)
-  $line = Get-Content -LiteralPath $ConfigFile | Where-Object { $_.StartsWith("$Name=") } | Select-Object -First 1
+  $line = (Read-Utf8Configuration) -split '\r?\n' | Where-Object { $_.StartsWith("$Name=") } | Select-Object -First 1
   if ($null -eq $line) {
     throw "Configuration is missing $Name."
   }
@@ -435,7 +472,7 @@ function Write-ServiceStartupDiagnostics {
     Write-Log "Startup log files found: $($files.Count)"
     foreach ($file in $files) {
       Write-Log "Startup log: $($file.Name) ($($file.Length) bytes)"
-      foreach ($line in @(Get-Content -LiteralPath $file.FullName -Tail 80 -ErrorAction SilentlyContinue)) {
+      foreach ($line in @(Get-Content -LiteralPath $file.FullName -Encoding UTF8 -Tail 80 -ErrorAction SilentlyContinue)) {
         $safeLine = Protect-StartupDiagnosticLine -Line $line -Token $token
         if ($safeLine) { Write-Log $safeLine }
         if ($line.Contains('CommandBridge MCP listening on http://')) { Write-Log 'HTTP listener startup was logged.' }
@@ -615,7 +652,7 @@ function Print-CodexSetup {
 
 function Rollback-Installation {
   try {
-    if ($null -ne $ConfigBackup) { [IO.File]::WriteAllText($ConfigFile, $ConfigBackup, (New-Object System.Text.UTF8Encoding($false))) }
+    Restore-ConfigurationBytes
     if ($ServicePreviouslyInstalled -and -not $PreviousMoved) {
       # Activation has not replaced the old files. Restore registration if uninstall succeeded.
       if (-not (Get-ManagedService)) { Invoke-External (Join-Path $InstallRoot $ServiceExeName) @('install') }
@@ -741,7 +778,7 @@ try {
   } elseif ($InstallCommitted -or $ServicePreviouslyInstalled) {
     Rollback-Installation
   } else {
-    if ($null -ne $ConfigBackup) { [IO.File]::WriteAllText($ConfigFile, $ConfigBackup, (New-Object System.Text.UTF8Encoding($false))) }
+    Restore-ConfigurationBytes
     if ($EventSourceCreated) { Remove-EventLog -Source $EventSource }
   }
   throw

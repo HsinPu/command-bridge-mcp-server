@@ -30,6 +30,8 @@ export interface DiagnosticOperation { result:Promise<unknown>; cancel():void }
 export interface DiagnosticProvider { start():DiagnosticOperation }
 export const safeCommandErrors=new Set(["COMMAND_NOT_ALLOWED","COMMAND_POLICY_MISSING","COMMAND_ARGUMENTS_NOT_ALLOWED","SHELL_NOT_ALLOWED","SHELL_SYNTAX_BLOCKED","WORKING_DIRECTORY_NOT_ALLOWED","WORKING_DIRECTORY_UNAVAILABLE","COMMAND_CANCELLED","COMMAND_CONCURRENCY_LIMIT","NO_SHELL_CONFIGURED","COMMAND_BLOCKED","COMMAND_EXECUTION_FAILED","COMMAND_START_FAILED","COMMAND_TERMINATION_FAILED","COMMAND_TIMEOUT","COMMAND_OUTPUT_TRUNCATED","COMMAND_EXIT_NON_ZERO","SELF_MODIFICATION_BLOCKED","DELETE_OPERATION_BLOCKED","SYSTEM_MODIFICATION_BLOCKED","GUARDED_SYNTAX_UNSUPPORTED","AUDIT_LOG_WRITE_FAILED","AUDIT_LOG_READ_FAILED"]);
 export interface RecentDiagnosticRequest {auditId:string;startedAt:string;phase:"attempted"|"running"|"completed"|"blocked"|"failed"|"auditUnavailable";durationMs:number|null;exitCode:number|null;timedOut:boolean;errorCode:string|null}
+safeCommandErrors.add("OUTPUT_ENCODING_INVALID");
+safeCommandErrors.add("COMMAND_OUTPUT_ENCODING_INVALID");
 export class RecentDiagnosticRequests {
   private readonly records=new Map<string,RecentDiagnosticRequest>();
   record(event:RecentDiagnosticRequest):void {

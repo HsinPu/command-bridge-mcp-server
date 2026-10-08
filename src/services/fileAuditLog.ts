@@ -2,6 +2,7 @@ import { mkdir, chmod, lstat, open, rename, rm } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { decodeUtf8File } from "./textEncoding.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { normalizeAuditEventLimit, serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent, type AuditEventList } from "./auditLog.js";
@@ -77,7 +78,7 @@ export class FileAuditLog implements AuditLog {
           const stat = await lstat(path);
           if (!stat.isFile() || stat.isSymbolicLink() || stat.size > this.maxBytes) throw new Error("Unsafe audit file.");
           const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-          try { events.push(...parseWindowsEventLogLines(await handle.readFile("utf8")).reverse()); }
+          try { events.push(...parseWindowsEventLogLines(decodeUtf8File(await handle.readFile())).reverse()); }
           finally { await handle.close(); }
         } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         if (events.length > count) break;

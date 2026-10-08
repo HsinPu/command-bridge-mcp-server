@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { normalizeAllowedHosts } from '../dist/config/allowedHosts.js';
+import { decodeUtf8File } from '../dist/services/textEncoding.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
+const config = Object.fromEntries(decodeUtf8File(readFileSync(process.argv[2])).split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
 const verificationCommand = process.argv[3] ?? 'hostname';
 const expectedStdout = process.argv[4];
 const expectedError = expectedStdout?.startsWith('error:') ? expectedStdout.slice(6) : undefined;

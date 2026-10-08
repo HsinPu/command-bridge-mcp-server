@@ -47,7 +47,7 @@ test("installer verifies real MCP and audit through the configured virtual host"
   const directory = await mkdtemp(join(process.cwd(), ".command-bridge-verifier-"));
   try {
     const path = join(directory, "service.env");
-    await writeFile(path, `COMMAND_BRIDGE_HTTP_HOST=127.0.0.1\nCOMMAND_BRIDGE_HTTP_PORT=${(server.address() as { port: number }).port}\nCOMMAND_BRIDGE_ALLOWED_HOSTS=bridge.internal\nCOMMAND_BRIDGE_BEARER_TOKEN=${cfg.bearerToken}\n`);
+    await writeFile(path, `\uFEFFCOMMAND_BRIDGE_HTTP_HOST=127.0.0.1\r\nCOMMAND_BRIDGE_HTTP_PORT=${(server.address() as { port: number }).port}\r\nCOMMAND_BRIDGE_ALLOWED_HOSTS=bridge.internal\r\nCOMMAND_BRIDGE_BEARER_TOKEN=${cfg.bearerToken}\r\n# 中文設定🙂\r\n`);
     const result = await promisify(execFile)(process.execPath, [join(process.cwd(), "scripts/verify-install.mjs"), path], { timeout: 20_000 });
     assert.match(result.stdout, /verification passed/);
     // Exercise the real MCP error response and matching blocked Audit, not just a policy unit test.
@@ -81,6 +81,19 @@ test("file audit rotates five files, redacts secrets and reads newest events", a
     assert.equal(result.hasMore, true);
     assert.ok(!JSON.stringify(result).includes("secret"));
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("file Audit preserves Chinese and refuses invalid UTF-8 instead of returning substituted records", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-audit-encoding-"));
+  try {
+    const audit = new FileAuditLog(root);
+    await audit.write(createAuditEvent({ auditId: "unicode-record", command: "echo 中文🙂", cwd: join(root,"中文"), phase: "completed", executionMode: "allowlist", source: "stdio" }));
+    assert.equal((await audit.list(1)).events[0]!.command, "echo 中文🙂");
+    const file = join(root, "events.jsonl"), bytes = await readFile(file);
+    const offset = bytes.indexOf(Buffer.from("中文")); assert.ok(offset >= 0);
+    bytes[offset] = 255; await writeFile(file, bytes);
+    await assert.rejects(audit.list(1), /valid UTF-8/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("HTTP authenticates readiness and completes actual MCP execution and audit", async () => {
   const cfg = config(); const audit = new MemoryAudit();

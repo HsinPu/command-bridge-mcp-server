@@ -2,6 +2,7 @@ import { closeSync, existsSync, openSync, readFileSync, readSync, realpathSync, 
 import { basename, isAbsolute, join } from "node:path";
 import { z } from "zod";
 import type { ShellKind } from "./commandPolicy.js";
+import { decodeUtf8File } from "./textEncoding.js";
 
 export interface CommandProfile {
   name: string;
@@ -53,7 +54,7 @@ export function loadCommandProfiles(file?: string): Map<string, CommandProfile> 
   }
   if (file) {
     if (!isAbsolute(file)) throw new Error("COMMAND_BRIDGE_POLICY_FILE must be absolute.");
-    const document = schema.parse(JSON.parse(readFileSync(file, "utf8")));
+    const document = schema.parse(JSON.parse(decodeUtf8File(readFileSync(file))));
     const seen = new Set<string>();
     for (const item of document.commands) {
       if (seen.has(item.name) || profiles.has(item.name)) throw new Error(`Duplicate or reserved policy name: ${item.name}`);

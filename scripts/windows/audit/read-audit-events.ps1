@@ -3,6 +3,8 @@ param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 $PSModuleAutoLoadingPreference = 'None'
 $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
 Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')) -ErrorAction Stop

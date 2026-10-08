@@ -6,6 +6,7 @@ import { diagnosticInputSchema } from "../services/diagnosticsService.js";
 import { DEFAULT_AUDIT_EVENT_LIMIT, MAX_AUDIT_EVENT_LIMIT } from "../services/auditLog.js";
 import { CommandExecutor } from "../services/commandExecutor.js";
 import { getSystemInfo } from "../services/systemInfoService.js";
+import { outputEncodings } from "../services/textEncoding.js";
 
 const shellSchema = z.enum(["bash", "sh", "powershell", "cmd"]);
 const auditEventSchema = z.object({
@@ -47,13 +48,13 @@ export function registerCommandBridgeTools(
   }, async ({ jobId }) => { try { return toToolResult(await executor.updates.status(jobId)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
   server.registerTool("command_bridge_upload_file", {
     title: "Upload file to transfer directory",
-    description: "Upload a Base64 file into the dedicated transfer directory. Independently disabled by default. Single filenames only, at most 5 MiB, no overwrite, no execution or extraction.",
+    description: "Upload original file bytes as Base64 into the dedicated transfer directory without encoding conversion. Independently disabled by default. Single filenames only, at most 5 MiB, no overwrite, no execution or extraction.",
     inputSchema: { path: z.string().max(120), contentBase64: z.string().max(6990508), sha256: z.string().regex(/^[a-f0-9]{64}$/), overwrite: z.boolean().optional(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/).optional() },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
   }, async (request, extra) => { try { return toToolResult(await executor.files.upload(request, extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
   server.registerTool("command_bridge_download_file", {
     title: "Download file from transfer directory",
-    description: "Read a regular file from the dedicated transfer directory as Base64 with SHA-256. Independently disabled by default. Single filenames only and at most 5 MiB; no arbitrary host paths.",
+    description: "Read original file bytes from the dedicated transfer directory as Base64 with SHA-256, preserving encoding and BOM. Independently disabled by default. Single filenames only and at most 5 MiB; no arbitrary host paths.",
     inputSchema: { path: z.string().max(120) },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   }, async ({ path }, extra) => { try { return toToolResult(await executor.files.download(path, extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
@@ -101,12 +102,13 @@ export function registerCommandBridgeTools(
     {
       title: "Run Host Command",
       description:
-        "Run one command on this Linux or Windows host. Allowlist mode blocks shell control syntax and unconfigured commands. Guarded mode rejects recognizable deletion and system modification; arbitrary programs can still change host state.",
+        "Run one command on this Linux or Windows host. Output defaults to UTF-8; select outputEncoding for legacy programs. File encoding is separate: on Windows PowerShell 5.1 read UTF-8 files with explicit -Encoding UTF8; use explicit file encoding when writing and preserve BOM/newlines. Never rewrite a file from garbled or truncated command output; verified Base64 file transfer preserves bytes. Allowlist mode blocks shell control syntax and unconfigured commands. Guarded mode rejects recognizable deletion and system modification; arbitrary programs can still change host state.",
       inputSchema: {
         command: z.string().min(1).max(20_000).describe("Command text to execute."),
         shell: shellSchema.optional().describe("Shell to use. Defaults to the first allowed shell."),
         cwd: z.string().min(1).optional().describe("Working directory under an allowed root."),
-        timeoutMs: z.number().int().min(1_000).optional().describe("Requested timeout in milliseconds.")
+        timeoutMs: z.number().int().min(1_000).optional().describe("Requested timeout in milliseconds."),
+        outputEncoding: z.enum(outputEncodings).optional().describe("Actual encoding of stdout and stderr: utf8 (default), utf16le, big5, gbk or gb18030. Does not convert file contents or guess encoding.")
       },
       outputSchema: {
         ok: z.boolean(),
@@ -127,9 +129,9 @@ export function registerCommandBridgeTools(
         openWorldHint: true
       }
     },
-    async ({ command, shell, cwd, timeoutMs }, extra) => {
+    async ({ command, shell, cwd, timeoutMs, outputEncoding }, extra) => {
       try {
-        return toToolResult(await executor.execute({ command, shell, cwd, timeoutMs }, extra.signal));
+        return toToolResult(await executor.execute({ command, shell, cwd, timeoutMs, outputEncoding }, extra.signal));
       } catch (error) {
         return toToolResult(toErrorPayload(error), true);
       }

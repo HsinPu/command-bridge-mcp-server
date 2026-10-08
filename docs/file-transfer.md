@@ -2,6 +2,8 @@
 
 CommandBridge adds `command_bridge_upload_file` and `command_bridge_download_file`. Both are **disabled by default**, independently of command allowlist/guarded/unrestricted mode. They transfer bytes through MCP; they never execute, extract, fetch a URL, or invoke sudo. Clients must separately support reading/writing their own local files. These tools cannot directly access a path on the client's computer.
 
+Transfer preserves original bytes, including Chinese UTF-8, optional BOM, CRLF/LF, UTF-16LE, Big5 and binary data. Base64 and SHA-256 do not decode or transcode content. 指令輸出編碼不影響傳輸內容；不要以截斷或亂碼的 stdout 重建整份文件。詳見 [中文與 UTF-8 指南](text-encoding.md)。
+
 ## Enable explicitly / 明確啟用
 
 Append `--enable-file-transfer` to the Linux bootstrap installation arguments, or `-EnableFileTransfer` on Windows. Upload-only/download-only options are `--enable-upload` / `--enable-download`, and `-EnableUpload` / `-EnableDownload`. Reinstallation preserves transfer settings when these options are omitted. To disable an operation, set its environment value to `false` and restart the service.

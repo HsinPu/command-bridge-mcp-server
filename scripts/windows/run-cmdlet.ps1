@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = [Console]::OutputEncoding
 $OutputEncoding = [Console]::OutputEncoding
 $PSModuleAutoLoadingPreference = 'None'
 $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')

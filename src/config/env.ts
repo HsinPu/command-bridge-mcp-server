@@ -1,3 +1,4 @@
+import "./validateEnvEncoding.js";
 import "dotenv/config";
 import { delimiter, resolve, isAbsolute } from "node:path";
 import { z } from "zod";

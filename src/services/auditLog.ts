@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { StringDecoder } from "node:string_decoder";
+import { createOutputDecoder } from "./textEncoding.js";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -559,7 +559,7 @@ export function runFixedProcess(
   return new Promise((resolvePromise, reject) => {
     let output = "";
     let outputBytes = 0;
-    const decoder = new StringDecoder("utf8");
+    const decoder = createOutputDecoder("utf8");
     let settled = false;
     const child = spawn(executable, args, {
       env: environment,
@@ -603,7 +603,8 @@ export function runFixedProcess(
         fail(new AppError("AUDIT_READER_OUTPUT_LIMIT", "Fixed audit helper output exceeded its safe limit."));
         return;
       }
-      output += decoder.write(chunk);
+      try { output += decoder.decode(chunk, { stream: true }); }
+      catch { stopHelper(); fail(new AppError("AUDIT_READER_FAILED", "Fixed audit helper output is not valid UTF-8.")); }
     });
     child.once("close", (code) => {
       if (settled) {
@@ -613,9 +614,10 @@ export function runFixedProcess(
         fail(new AppError("AUDIT_READER_FAILED", "Fixed audit helper exited unsuccessfully."));
         return;
       }
+      try { output += decoder.decode(); }
+      catch { fail(new AppError("AUDIT_READER_FAILED", "Fixed audit helper output is not valid UTF-8.")); return; }
       settled = true;
       clearTimeout(timeout);
-      output += decoder.end();
       resolvePromise(output);
     });
   });

@@ -1,5 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
 $PSModuleAutoLoadingPreference = 'None'
 $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
 Import-Module ([IO.Path]::Combine($PSHOME, 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')) -ErrorAction Stop
@@ -8,7 +10,16 @@ $UpdateRoot = Join-Path $env:ProgramData 'CommandBridgeUpdate'
 function Read-UpdateRecord([string]$Id) {
   if ($Id -and $Id -cnotmatch '^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$') { throw 'Invalid job ID.' }
   $name = if ($Id) { "$Id.json" } else { 'latest.json' }
-  return (Get-Content -LiteralPath (Join-Path $UpdateRoot $name) -Raw | ConvertFrom-Json)
+  return (Get-Content -LiteralPath (Join-Path $UpdateRoot $name) -Raw -Encoding UTF8 | ConvertFrom-Json)
+}
+function Get-Utf8LogTail([byte[]]$Bytes, [int]$Limit = 1MB) {
+  if ($Limit -lt 4) { throw 'Log tail limit must be at least four bytes.' }
+  if ($Bytes.Length -le $Limit) { return ,$Bytes }
+  $start = $Bytes.Length - $Limit
+  # Never start a retained UTF-8 log with the continuation of a removed character.
+  while ($start -lt $Bytes.Length -and ($Bytes[$start] -band 192) -eq 128) { $start++ }
+  if ($start -eq $Bytes.Length) { return ,([byte[]]@()) }
+  return ,([byte[]]$Bytes[$start..($Bytes.Length - 1)])
 }
 function Get-UpdateTask {
   $scheduler = New-Object -ComObject Schedule.Service
@@ -32,7 +43,7 @@ function Write-UpdateRecord($Job) {
   }
 }
 function Read-InstalledIdentity {
-  $info = Get-Content -LiteralPath (Join-Path $env:ProgramFiles 'CommandBridgeMCP\install-info.json') -Raw | ConvertFrom-Json
+  $info = Get-Content -LiteralPath (Join-Path $env:ProgramFiles 'CommandBridgeMCP\install-info.json') -Raw -Encoding UTF8 | ConvertFrom-Json
   if ($info.sourceSha -cnotmatch '^[a-f0-9]{40}$' -or $info.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid installation identity.' }
   return @{ version=$info.version; sourceSha=$info.sourceSha }
 }

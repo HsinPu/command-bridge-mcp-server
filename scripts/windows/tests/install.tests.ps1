@@ -127,13 +127,13 @@ try {
   Set-ExecutionModeConfiguration
   $guardedText = [IO.File]::ReadAllText($ConfigFile)
   Assert-True ($guardedText -match '(?m)^COMMAND_BRIDGE_EXECUTION_MODE=guarded\r?$') 'Guarded mode not selected.'
-  Assert-True ($ConfigBackup -ceq $transferText) 'Mode switch did not save complete rollback configuration.'
+  Assert-True ([Text.UTF8Encoding]::new($false).GetString($ConfigBackup) -ceq $transferText) 'Mode switch did not save complete rollback configuration.'
   $ExecutionMode = ''
   Set-ExecutionModeConfiguration
   Assert-True ([IO.File]::ReadAllText($ConfigFile) -ceq $guardedText) 'Omitted mode changed saved settings.'
   $ExecutionMode = 'allowlist'
   Set-ExecutionModeConfiguration
-  Assert-True ($ConfigBackup -ceq $transferText) 'Subsequent edits replaced rollback backup.'
+  Assert-True ([Text.UTF8Encoding]::new($false).GetString($ConfigBackup) -ceq $transferText) 'Subsequent edits replaced rollback backup.'
   Assert-True ([IO.File]::ReadAllText($ConfigFile) -ceq $transferText) 'Round-trip mode switch changed other settings.'
   $ExecutionMode = ''
 } finally {
@@ -209,7 +209,7 @@ function Get-Service { param($Name, $ErrorAction) return [pscustomobject]@{ Stat
 function Get-ChildItem { param($LiteralPath, $Filter, $ErrorAction) return [pscustomobject]@{ FullName = 'fixture.log'; Name = 'fixture.log'; Length = 100 } }
 function Get-ConfigValue { param($Name) return 'actual-bearer-value' }
 function Get-Content {
-  param($LiteralPath, $Tail, $ErrorAction)
+  param($LiteralPath, $Tail, $ErrorAction, $Encoding)
   return @('secret=must-never-print actual-bearer-value', 'Startup dependency checks failed: audit, policyReadOnly', 'Error: EACCES secret=must-never-print', '{"event":"command_bridge.audit","command":"private-command"}')
 }
 Write-ServiceStartupDiagnostics

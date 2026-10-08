@@ -37,7 +37,7 @@ try {
     if (-not $resolved.StartsWith([IO.Path]::GetFullPath($UpdateRoot).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe update cleanup path.' }
     if (Test-Path -LiteralPath (Join-Path $work 'install.log')) {
       $bytes = [IO.File]::ReadAllBytes((Join-Path $work 'install.log'))
-      if ($bytes.Length -gt 1MB) { [IO.File]::WriteAllBytes((Join-Path $work 'install.log'), $bytes[($bytes.Length-1MB)..($bytes.Length-1)]) }
+      if ($bytes.Length -gt 1MB) { [IO.File]::WriteAllBytes((Join-Path $work 'install.log'), (Get-Utf8LogTail $bytes)) }
       [IO.File]::Move((Join-Path $work 'install.log'), (Join-Path $UpdateRoot ('diagnostics\' + $job.jobId + '.log')))
     }
     Remove-Item -LiteralPath $resolved -Recurse -Force

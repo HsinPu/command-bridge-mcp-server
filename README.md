@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-5.0.1-blue)
+![Version](https://img.shields.io/badge/version-6.0.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -166,6 +166,10 @@ Windows: run `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update -
 MCP service updates are **enabled by default** on managed Linux/Windows installations. A Bearer Token holder can request an update, causing a brief service interruption. The root/SYSTEM worker accepts no custom source, command or installer arguments; it uses the verified CI channel and existing validation/rollback. Set `COMMAND_BRIDGE_MCP_UPDATE_ENABLED=false` in the saved service configuration to disable requests. Existing installations need one CLI/bootstrap update before these tools are available. npm/stdio installations do not provision a privileged updater. See the [MCP update guide](docs/mcp-update.md).
 
 File transfer is disabled by default, independently of command execution mode. Append `--enable-file-transfer` to Linux installation arguments or `-EnableFileTransfer` on Windows to enable both tools. Each file is limited to 5 MiB; only safe filenames directly inside the managed transfer directory are accepted. No subdirectories, links, URL fetching or automatic execution. See the [file transfer guide](docs/file-transfer.md) for separate permissions, storage, Audit and failure handling.
+
+Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (`utf8`, `utf16le`, `big5`, `gbk`, `gb18030`) for programs that emit another encoding; undecodable output is withheld with a clear error. Windows cmd uses a fixed UTF-8 console host, while native allowlist programs keep direct argv execution. File encoding is separate: use explicit UTF-8 file reads/writes in Windows PowerShell 5.1, and never reconstruct a document from garbled or truncated command output. Base64 transfers preserve original bytes, BOM and SHA-256 without transcoding. See the [Chinese text and UTF-8 guide](docs/text-encoding.md).
+
+Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
 Example requests for a connected client:
 
