@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertNoSelfModification } from "./selfProtection.js";
+import { assertNoSelfModification, assertNoLocalAdminCommand } from "./selfProtection.js";
 import { CommandExecutor } from "./commandExecutor.js";
 import type { AppConfig } from "../config/env.js";
 test("Linux managed version entry is protected from direct writes", () => {
@@ -11,6 +11,28 @@ test("Linux managed version entry is protected from direct writes", () => {
   assert.doesNotThrow(() => assertNoSelfModification("command-bridge --version", "/tmp", { platform: "linux" }));
 });
 import type { AuditLog, CommandAuditEvent } from "./auditLog.js";
+
+test("local CLI queries reject literal wrappers and helpers without matching echoed descriptions", () => {
+  for (const platform of ["linux", "win32"] as const) {
+    const commands = platform === "linux" ? [
+      "command-bridge info", "sudo -u root -n /usr/local/bin/command-bridge setup --show-token",
+      "env LANG=C command-bridge info --json", "bash -c 'command-bridge setup --codex-name cb_other'",
+      "bash -c -- 'command-bridge setup --show-token'",
+      "node dist/cli/clientSetupInstaller.js print config client show", "node dist/index.js info",
+      "sudo -r unconfined_r command-bridge 2>/dev/null setup --show-token", ">/tmp/fake-copy command-bridge info --json"
+    ] : [
+      '"C:\\Program Files\\CommandBridgeMCP\\command-bridge.cmd" setup --show-token',
+      'cmd /c call command-bridge.cmd info --json',
+      'powershell -NoProfile -Command "& command-bridge.cmd setup"',
+      'powershell -File "C:\\Program Files\\CommandBridgeMCP\\scripts\\windows\\read-installation-status.ps1"',
+      'powershell -EncodedCommand ' + Buffer.from('command-bridge.cmd setup', 'utf16le').toString('base64')
+    ];
+    for (const command of commands) assert.throws(() => assertNoLocalAdminCommand(command, platform, platform === "linux" ? "/usr/local/lib/command-bridge/current" : process.cwd()), { code: "LOCAL_ADMIN_COMMAND_BLOCKED" }, command);
+    for (const command of ["echo 'command-bridge setup --show-token'", "command-bridge --version", "command-bridge update --check", "node unrelated.js management.js", "node /tmp/unrelated/dist/cli/management.js info", "echo clientSetupInstaller.js"])
+      assert.doesNotThrow(() => assertNoLocalAdminCommand(command, platform), command);
+  }
+  assert.throws(() => assertNoLocalAdminCommand("node management.js setup", "linux", "/usr/local/lib/command-bridge/current/dist/cli"), { code: "LOCAL_ADMIN_COMMAND_BLOCKED" });
+});
 
 test("Linux default program root and both legacy roots remain protected", () => {
   for (const root of ["/usr/local/lib/command-bridge", "/opt/command-bridge", "/opt/command-bridge-mcp-server"]) {

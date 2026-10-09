@@ -18,7 +18,9 @@ function Run-FailingInstaller([string]$Log, [string[]]$Extra = @(), [string]$Pat
   return $LASTEXITCODE
 }
 try {
-  Run-Installer (Join-Path $root 'scripts\windows\install.ps1')
+  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-CodexName', 'cb_saved', '-CodexUrl', 'https://saved.example/mcp') | Out-Null
+  $description = Join-Path $env:ProgramData 'CommandBridgeMCP\client-setup.json'
+  $descriptionBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($description))
   if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Service is not running.' }
   if ((Get-CimInstance Win32_Service -Filter "Name='CommandBridgeMCP'").StartMode -ne 'Auto') { throw 'Service is not automatic.' }
   # Keep the verifier executable outside the deployment being replaced.
@@ -48,6 +50,7 @@ try {
   [IO.File]::WriteAllText($preserved, 'keep')
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1')
   if ([IO.File]::ReadAllText($config) -ne $before) { throw 'Reinstallation changed configuration.' }
+  if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($description)) -cne $descriptionBefore) { throw 'Reinstallation changed client setup.' }
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-RefreshNetwork') | Out-Null
   Restart-Service CommandBridgeMCP
   $xmlBefore = [IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml'))
@@ -75,6 +78,7 @@ try {
   $helper = Join-Path $root 'scripts\tests\rollback-fixture.mjs'
   function Assert-Restored {
     if ([IO.File]::ReadAllText($config) -ne $beforeRefresh) { throw 'Rollback changed configuration.' }
+    if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($description)) -cne $descriptionBefore) { throw 'Rollback changed client setup.' }
     if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Rollback did not recover service.' }
     if ([IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml')) -ne $xmlBefore) { throw 'Rollback changed release.' }
     if ([IO.File]::ReadAllText((Join-Path $release 'install-info.json')) -ne $infoBefore) { throw 'Rollback changed source identity.' }
@@ -88,7 +92,7 @@ try {
   Get-ChildItem -LiteralPath $root -Force | Where-Object { $_.Name -notin @('.git', 'node_modules', 'dist') } | Copy-Item -Destination $fixture -Recurse
   & $node $helper prepare $fixture verify ('1' * 40) $verifyMarker $newHost
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed.' }
-  if ((Run-FailingInstaller (Join-Path $fixture 'verify.log') @('-RefreshNetwork')) -eq 0) { throw 'Expected verification failure.' }
+  if ((Run-FailingInstaller (Join-Path $fixture 'verify.log') @('-RefreshNetwork', '-CodexName', 'cb_failed', '-CodexUrl', 'https://failed.example/mcp')) -eq 0) { throw 'Expected verification failure.' }
   if (-not (Select-String -LiteralPath (Join-Path $fixture 'verify.log') -Pattern 'INJECTED_POST_ACTIVATION_FAILURE' -Quiet)) { throw 'Wrong failure stage.' }
   & $node $helper assert $verifyMarker ('1' * 40) verified
   if ($LASTEXITCODE -ne 0) { throw 'Activation evidence missing.' }
@@ -109,6 +113,7 @@ try {
   if (Get-ScheduledTask -TaskName CommandBridgeUpdate -ErrorAction SilentlyContinue) { throw 'Uninstall left updater task.' }
   if (-not (Test-Path -LiteralPath (Join-Path $env:ProgramData 'CommandBridgeUpdate\latest.json'))) { throw 'Uninstall removed update records.' }
   if (-not (Test-Path -LiteralPath $config) -or -not (Test-Path -LiteralPath $preserved)) { throw 'Uninstall deleted preserved data.' }
+  if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($description)) -cne $descriptionBefore) { throw 'Uninstall deleted client setup.' }
   Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-EnableFileTransfer')
   [xml]$activeDefinition = [IO.File]::ReadAllText((Join-Path $install 'CommandBridgeMCP.xml'))
   $activeRelease = Split-Path -Parent (Split-Path -Parent (([string]$activeDefinition.service.arguments).Trim('"').Replace('%BASE%', $install)))
@@ -116,6 +121,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Service file transfer/Audit verification failed.' }
   Run-Installer (Join-Path $install 'uninstall.ps1') @('-Purge', '-Yes')
   if (Test-Path -LiteralPath $config) { throw 'Purge left configuration.' }
+  if (Test-Path -LiteralPath $description) { throw 'Purge left client setup.' }
   if (Test-Path -LiteralPath (Join-Path $env:ProgramData 'CommandBridgeUpdate')) { throw 'Purge left update records.' }
 } finally {
   if ($updateFixture) {

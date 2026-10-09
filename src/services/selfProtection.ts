@@ -37,7 +37,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
     const data = join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeMCP");
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeUpdate"), join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeUpdate"));
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeMCP"),
-      join(data, "command-bridge.env"), join(data, "policy.json"));
+      join(data, "command-bridge.env"), join(data, "policy.json"), join(data, "client-setup.json"));
   }
   return paths;
 }
@@ -133,6 +133,84 @@ export function assertNoSelfModification(command: string, cwd: string, options: 
       } else if (token !== "<" && token !== "<<") segment.push(token);
     }
     inspect();
+  };
+  scan(command, 0);
+}
+
+/** Local CLI queries are intentionally separate from the sanitized MCP diagnostics tool. */
+export function assertNoLocalAdminCommand(command: string, platform: NodeJS.Platform = process.platform, cwd = process.cwd()): void {
+  const paths = platform === "win32" ? win32 : posix;
+  const applicationRoots = [fileURLToPath(new URL("../../", import.meta.url)), ...(platform === "linux" ?
+    ["/usr/local/lib/command-bridge", "/opt/command-bridge", "/opt/command-bridge-mcp-server"] :
+    [join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeMCP")])];
+  const ownFile = (file: string) => {
+    const normalize = (value: string) => platform === "win32" ? paths.resolve(value).toLowerCase() : paths.resolve(value);
+    return applicationRoots.some(root => contains(normalize(root), normalize(paths.resolve(cwd, file)), paths));
+  };
+  const reject = () => {
+    const error = new AppError("LOCAL_ADMIN_COMMAND_BLOCKED", "CommandBridge info/setup are local terminal commands and cannot be called through MCP.", "Use a host terminal for these commands, or command_bridge_get_diagnostics for MCP diagnostics.");
+    error.rule = "local-admin-only";
+    throw error;
+  };
+  const inspect = (tokens: string[], depth: number): void => {
+    if (depth > 8) return; // Bounded literal wrappers, never arbitrary script evaluation.
+    let head = 0;
+    const basename = (value: string) => paths.basename(value).replace(/\.exe$/i, "").toLowerCase();
+    while (head < tokens.length) {
+      const name = basename(tokens[head]!);
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[head]!)) { head++; continue; }
+      if (!wrappers.test(name) && name !== "call") break;
+      head++;
+      while (tokens[head]?.startsWith("-")) {
+        const flag = tokens[head++]!;
+        if (flag === "--") break;
+        if (["-u", "-g", "--user", "--group", "-C", "-D", "--chdir", "--unset", "-a", "-r", "-t", "--role", "--type"].includes(flag) || (flag === "-n" && name === "nice")) head++;
+      }
+    }
+    const name = basename(tokens[head] ?? "");
+    const args = tokens.slice(head + 1);
+    if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/.test(name) && /^(info|setup)$/i.test(args[0] ?? "")) reject();
+    if (/^(node|nodejs|tsx|ts-node|bash|sh|powershell|pwsh)$/.test(name)) {
+      const fileOption = args.findIndex(arg => /^-file$/i.test(arg));
+      const sourceOption = args.findIndex(arg => /^(?:-e|--eval|-p|--print|-[a-z]*c|-command|-encodedcommand|-enc|-ec)$/i.test(arg));
+      const script = fileOption >= 0 ? fileOption + 1 : sourceOption >= 0 ? -1 : args.findIndex(arg => !arg.startsWith("-"));
+      if (script >= 0 && args[script]) {
+        const i = script;
+        const file = basename(args[i]!);
+        if (ownFile(args[i]!) && (/^(clientsetupinstaller|management|verifyqueries)\.(js|ts)$/.test(file) || file === "read-installation-status.ps1")) reject();
+        if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/.test(file) && /^(info|setup)$/i.test(args[i + 1] ?? "")) reject();
+        if (file === "index.js" && ownFile(args[i]!) && /^(info|setup)$/i.test(args[i + 1] ?? "")) reject();
+      }
+    }
+    if (/^(bash|sh|dash|zsh|powershell|pwsh|cmd)$/.test(name)) {
+      const option = args.findIndex(arg => /^(?:-[a-z]*c|\/c|-command|-commandwithargs)$/i.test(arg));
+      const source = option + (args[option + 1] === "--" ? 2 : 1);
+      if (option >= 0 && args[source]) {
+        inspect(args.slice(source), depth + 1);
+        scan(args[source]!, depth + 1);
+      }
+      const encoded = args.findIndex(arg => /^(?:-encodedcommand|-enc|-ec)$/i.test(arg));
+      if (encoded >= 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(args[encoded + 1] ?? "")) {
+        try { scan(new TextDecoder("utf-16le", { fatal: true }).decode(Buffer.from(args[encoded + 1]!, "base64")), depth + 1); }
+        catch (error) { if (error instanceof AppError) throw error; }
+      }
+    }
+  };
+  const scan = (text: string, depth: number): void => {
+    let segment: string[] = [];
+    const tokens = tokenize(text, platform);
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i]!;
+      if ([">", ">>", "<", "<<"].includes(token)) {
+        if (/^\d+$/.test(segment[segment.length - 1] ?? "")) segment.pop();
+        if (tokens[i + 1] === "&") i++;
+        i++; // A literal redirection operand is not a command argument.
+        continue;
+      }
+      if ([";", "|", "&", "\n"].includes(token)) { inspect(segment, depth); segment = []; }
+      else segment.push(token);
+    }
+    inspect(segment, depth);
   };
   scan(command, 0);
 }

@@ -540,6 +540,10 @@ main() {
 
   assert_tree_is_not_mounted "${INSTALL_ROOT}"
   if [[ "${PURGE}" == "1" ]]; then
+    if [[ -e "${CONFIG_DIR}/client-setup.json" || -L "${CONFIG_DIR}/client-setup.json" ]]; then
+      assert_admin_path "${CONFIG_DIR}/client-setup.json"
+      [[ -f "${CONFIG_DIR}/client-setup.json" && ! -L "${CONFIG_DIR}/client-setup.json" ]] || fail "Unsafe client description; no files were removed."
+    fi
     assert_tree_is_not_mounted "${CONFIG_DIR}"
     assert_tree_is_not_mounted "${STATE_DIR}"
     assert_tree_is_not_mounted "${INSTALLER_STATE_DIR}"

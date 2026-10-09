@@ -11,7 +11,7 @@ import { FileTransferService } from "./fileTransferService.js";
 import { DiagnosticsService } from "./diagnosticsService.js";
 import { RecentDiagnosticRequests, type RecentDiagnosticRequest } from "./diagnosticTypes.js";
 import { BoundedAuditLog } from "./boundedAuditLog.js";
-import { assertNoSelfModification } from "./selfProtection.js";
+import { assertNoSelfModification, assertNoLocalAdminCommand } from "./selfProtection.js";
 import { assertGuardedCommand } from "./guardedPolicy.js";
 import { assertOutputEncoding, createOutputDecoder, outputDecodingError, type OutputEncoding } from "./textEncoding.js";
 import {
@@ -220,6 +220,7 @@ export class CommandExecutor {
 
       shell = requestedShell;
       assertOutputEncoding(request.outputEncoding ?? "utf8");
+      assertNoLocalAdminCommand(request.command, process.platform, requestedCwd ?? process.cwd());
       assertCommandAllowed(this.config, shell, request.command);
       cwd = resolveWorkingDirectory(this.config.allowedRoots, request.cwd);
       assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile });

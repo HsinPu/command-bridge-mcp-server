@@ -14,6 +14,7 @@ CommandBridge MCP 是跨平台的 MCP Server，讓 MCP 用戶端透過本機 std
 
 | 路徑 | 用途 |
 | --- | --- |
+| src/cli/ | 6.1.0 本機 info/setup、連線描述與固定服務狀態查詢；不載入 MCP/Audit |
 | src/index.ts | 啟動入口與傳輸方式選擇 |
 | src/server.ts | 建立 MCP Server |
 | src/config/env.ts | 環境變數驗證、預設值與設定載入 |
@@ -100,6 +101,10 @@ npm start
 - 純介紹或排版修改時，仍須升 PATCH 並更新 CHANGELOG；確認四個一行指令沒有意外變動、相對文件連結有效、中英文內容一致，並執行 git diff --check。不需為排版新增程式測試。
 
 ## 修改時應維持的行為
+
+- 6.1.0 起，受管理服務的 `info [--json]`／`setup` 僅供主機終端使用，透過固定位置與內附 Runtime 查詢，不啟動 MCP、依賴 Audit、連 GitHub 或寫入設定。一般輸出不得含 Token；`setup --show-token` 須明確要求並核對有效 root／提升後管理員身分，不自動提權。名稱／HTTPS 查詢覆寫只影響輸出；一般帳號不可讀設定時提供固定 schema 的部分摘要與權限問題，不把缺權限當成資料不存在。
+- `client-setup.json` 為 schemaVersion 1、無 Token、服務帳號唯讀的受保護描述；安裝器及 CLI 共用解析與 formatter。重裝／更新保留既有名稱及 HTTPS URL，僅明確安裝參數更新；wildcard 提供位址只在安裝／明確刷新時選擇。缺失舊描述須提示不能回復先前自訂值，格式錯誤不能默默重設。切換前完成備份、失敗驗證位元組／權限／SELinux 回復；不完整回復保留私有資料並拒絕重啟。一般卸載保留，purge 先完成安全預檢。
+- MCP 所有模式須在 attempted Audit 後、一般政策／子程序前，拒絕可辨識的直接 info/setup、常見字面 sudo／Shell 包裝及固定管理 helper，回傳 `LOCAL_ADMIN_COMMAND_BLOCKED`、規則及 Audit ID。不以此宣稱任意腳本隔離；既有 version、update check 及固定 MCP 更新工具維持原行為。查詢總上限 5 秒／64 KiB，原生服務探測須限時；偵測部署切換後要求重試，安裝成功前以真實 CLI 驗證摘要與隱藏設定，捕捉輸出留在私有交易目錄。
 
 - 6.0.5 起，Windows 安裝器原生程序 helper 須相容更新 worker 重導向串流；stderr 診斷不得自動等同失敗，仍須保留日誌及核對真正退出碼。僅在原生呼叫期間調整錯誤偏好並於 finally 還原，以 global LASTEXITCODE 避免區域遮蔽及沿用舊成功值；啟動失敗、非零退出及其他 PowerShell／MCP／Audit 驗證仍拒絕。需用私有實際巢狀程序測試 .exe／.cmd、診斷輸出、真失敗與缺失程式，不延長正式時限。
 

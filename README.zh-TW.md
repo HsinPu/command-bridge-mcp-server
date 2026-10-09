@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.0.5-blue)
+![Version](https://img.shields.io/badge/version-6.1.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -29,6 +29,7 @@ CommandBridge 是部署在目標主機上的 [Model Context Protocol（MCP）](h
 
 - **一行部署**：不需預先安裝 Git 或 Node.js，從 GitHub 下載原始碼後自動建置。
 - **自動連線設定**：新安裝可偵測區網／Tailscale IPv4，同步設定監聽位址與允許的 Host，輸出含主機專屬 Codex 連線名稱和 Token 環境變數的設定區塊。
+- **本機安裝查詢：** 在主機終端取得儲存的安裝摘要及 Codex 設定；顯示 Token 須由管理員明確要求。
 - **執行政策**：預設使用指令白名單，另可限制 Shell、工作目錄、逾時、輸出量、環境變數與同時執行數。
 - **操作稽核**：記錄執行前後的 Audit 事件；初始稽核寫入失敗時不啟動指令。
 - **低權限服務**：Linux 使用專用 `command-bridge` 帳號；Windows 使用 `LocalService`。
@@ -134,6 +135,18 @@ Windows PowerShell：
 
 也支援 `-V`。查詢使用內附 Runtime，顯示本機目前選用的安裝版本；不啟動 MCP／Audit、不檢查服務健康，也不連 GitHub。舊版安裝需先升級。npm 使用者可執行短名稱，或保留原本的 `command-bridge-mcp-server --version`。
 
+## 再次查看安裝與 Codex 連線資訊
+
+6.1.0 起，可在主機終端執行：
+
+```bash
+command-bridge info --json
+command-bridge setup
+sudo command-bridge setup --show-token
+```
+
+Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` 加相同參數；顯示 Token 須使用已提升權限的 PowerShell。一般查詢隱藏 Token，不寫設定，也不依賴 Audit。設定不可讀時，使用 `sudo command-bridge setup`（仍隱藏 Token）或管理員 PowerShell；`info` 可提供部分摘要。儲存的連線名稱／HTTPS 網址在重裝與更新後保留。`setup --codex-name cb_other --codex-url https://private.example/mcp` 只改本次輸出。所有模式都會攔截 MCP 直接呼叫這些命令；遠端偵錯使用 MCP 診斷工具。詳見[本機命令、權限與連線描述](docs/local-administration.md)。
+
 ## 更新已安裝的服務
 
 4.3.0 起，可先檢查已通過 CI 的更新來源，不修改主機：
@@ -171,7 +184,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.0.5 保留 Windows／dotenv 與 Linux 回復修正，避免 Windows MCP 自我更新把原生程式的正常診斷輸出誤判為安裝失敗。真正的退出錯誤與 MCP／Audit 驗證失敗仍會停止部署。既有指令、Audit 與停機時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
+6.1.0 新增本機安裝摘要及可再次輸出的 Codex 設定，使用不含 Token 的受保護連線描述檔。也保留 Windows／dotenv、Linux 回復及更新程序的原生診斷輸出修正。真正的退出錯誤與 MCP／Audit 驗證失敗仍會停止部署。既有指令、Audit 與停機時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
 
 例如，你可以請已連線的用戶端：
 

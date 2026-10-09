@@ -33,7 +33,12 @@ $EnableUpload = $false
 $EnableDownload = $false
 $ExecutionMode = ''
 $ConfigBackup = $null
+$ConfigAclBackup = $null
+$ClientSetupRecoveryFailed = $false
+$InstallCommitted = $false
 $HostFixture = Join-Path $env:TEMP ("command bridge host " + [guid]::NewGuid())
+$ClientSetupFile = Join-Path $HostFixture 'client-setup.json'
+$ClientSetupChanged = $false
 $InstallRoot = $HostFixture
 $ApplicationRelativePath = 'current'
 [void][IO.Directory]::CreateDirectory((Join-Path $HostFixture 'runtime'))
@@ -42,6 +47,18 @@ $ApplicationRelativePath = 'current'
 $hostSource = Join-Path (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path 'dist\config\allowedHosts.js'
 [IO.File]::Copy($hostSource, (Join-Path $HostFixture 'current\dist\config\allowedHosts.js'))
 [IO.File]::WriteAllText((Join-Path $HostFixture 'current\package.json'), '{"type":"module"}')
+$projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+Copy-Item -Path (Join-Path $projectRoot 'dist\*') -Destination (Join-Path $HostFixture 'current\dist') -Recurse -Force
+[void][IO.Directory]::CreateDirectory((Join-Path $HostFixture 'current\node_modules'))
+Copy-Item -LiteralPath (Join-Path $projectRoot 'node_modules\dotenv') -Destination (Join-Path $HostFixture 'current\node_modules') -Recurse
+function Prepare-TestClientSetup {
+  $candidate = Join-Path $HostFixture 'client-setup.new'
+  $nameArgument = if ($CodexName) { $CodexName } else { '-' }
+  $urlArgument = if ($CodexUrl) { $CodexUrl } else { '-' }
+  & $env:COMMAND_BRIDGE_TEST_NODE (Join-Path $projectRoot 'dist\cli\clientSetupInstaller.js') prepare $ConfigFile $ClientSetupFile $candidate $nameArgument $urlArgument -
+  if ($LASTEXITCODE -ne 0) { throw 'Private shared client preparation failed.' }
+  Move-Item -LiteralPath $candidate -Destination $ClientSetupFile -Force
+}
 $script:addresses = @(
   [pscustomobject]@{ IPAddress = '8.8.8.8'; InterfaceIndex = 1; SkipAsSource = $false },
   [pscustomobject]@{ IPAddress = '10.0.0.2'; InterfaceIndex = 2; SkipAsSource = $false },
@@ -89,6 +106,7 @@ try {
       Assert-True ($_.Exception.Message -like 'CodexName must be*') 'Invalid CodexName did not fail validation.'
     }
   }
+  Prepare-TestClientSetup
   $setup = (Print-CodexSetup) -join "`n"
   Assert-True ($setup.Contains('[mcp_servers.cb_oracle_prod]')) 'Custom Codex TOML section missing.'
   Assert-True ($setup.Contains('bearer_token_env_var = "CB_ORACLE_PROD_TOKEN"')) 'Per-host token variable missing.'
@@ -104,6 +122,7 @@ try {
   $CodexUrl = 'https://mcp.example.com/mcp'
   New-SecureConfiguration
   Assert-True ((Get-AutomaticCodexUrl) -eq 'http://127.0.0.1:8800/mcp') "HTTPS setup should default to loopback."
+  Prepare-TestClientSetup
   Assert-True (((Print-CodexSetup) -join "`n") -match 'url = "https://mcp.example.com/mcp"') "Explicit URL was overridden."
   $CodexUrl = ''
   $env:COMMAND_BRIDGE_HTTP_HOST = '10.20.30.40'

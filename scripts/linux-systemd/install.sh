@@ -17,6 +17,7 @@ CLI_PREVIOUS_TARGET=""
 readonly RUNTIME_LINK="${RUNTIME_DIR}/current"
 readonly CONFIG_DIR="/etc/command-bridge"
 readonly CONFIG_FILE="${CONFIG_DIR}/command-bridge.env"
+readonly CLIENT_SETUP_FILE="${CONFIG_DIR}/client-setup.json"
 readonly UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 readonly STATE_DIR="/var/lib/command-bridge"
 readonly INSTALLER_STATE_DIR="/var/lib/command-bridge-installer"
@@ -47,6 +48,7 @@ readonly BUILD_GROUP="${BUILD_USER}"
 TEMP_DIR=""
 RUNTIME_STAGING=""
 RELEASE_STAGING=""
+CLIENT_SETUP_STAGING=""
 PREVIOUS_RELEASE=""
 PREVIOUS_RUNTIME=""
 ACTIVATION_STARTED=0
@@ -339,6 +341,9 @@ cleanup() {
   fi
   if declare -F cleanup_application_staging >/dev/null; then cleanup_application_staging || true; fi
   cleanup_staging
+  if [[ -n "$CLIENT_SETUP_STAGING" && "$CLIENT_SETUP_STAGING" == "${CONFIG_DIR}/.client-setup."* && ! -L "$CLIENT_SETUP_STAGING" ]]; then
+    rm -f -- "$CLIENT_SETUP_STAGING" || log "WARNING: Could not remove the client-description staging file."
+  fi
   if [[ "${INSTALL_SUCCEEDED}" == 0 && "${LEGACY_ROLLBACK_DONE}" == 0 && "$RECOVERY_FAILED" == 0 ]]; then
     restore_configuration || RECOVERY_FAILED=1
   fi
@@ -470,7 +475,7 @@ restore_selinux_layout() {
   restore_selinux_path "${app}" 1 || failed=1
   # Only managed files/directories: never recursively relabel user work data or
   # administrator-selected policy paths outside the installation.
-  for path in "${config}" "${config}/command-bridge.env" "${config}/policy.json" \
+  for path in "${config}" "${config}/command-bridge.env" "${config}/policy.json" "${config}/client-setup.json" \
       "${state}" "${state}/work" "${SERVICE_HOME}" "${unit}" \
       "${reader}" "${reader}/audit-reader" "${sudoers}"; do
     restore_selinux_path "${path}" || failed=1
@@ -1361,11 +1366,45 @@ read_config_value() {
 }
 
 restore_configuration() {
+  if [[ -f "${TEMP_DIR}/recovery/client-setup/complete" ]]; then
+    restore_asset_group "${TEMP_DIR}/recovery/client-setup" "${CLIENT_SETUP_FILE}" || return 1
+  fi
   [[ "$CONFIG_CHANGED" == 1 ]] || return 0
   local backup=${LEGACY_CONFIG_BACKUP:-$CONFIG_BACKUP}
   if [[ -n "$backup" ]]; then restore_file_backup "$backup" "$CONFIG_FILE" || return 1; fi
   CONFIG_CHANGED=0
 }
+
+preflight_client_setup() {
+  assert_admin_path "${CLIENT_SETUP_FILE}"
+  if [[ -e "${CLIENT_SETUP_FILE}" || -L "${CLIENT_SETUP_FILE}" ]]; then
+    "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/cli/clientSetupInstaller.js" validate "${CLIENT_SETUP_FILE}"
+  fi
+  backup_asset_group "${TEMP_DIR}/recovery/client-setup" "${CLIENT_SETUP_FILE}" || fail "Client setup backup failed; no client description was changed."
+}
+
+install_client_setup() {
+  local host advertised='' candidate="${TEMP_DIR}/client-setup.new"
+  host=$(read_config_value COMMAND_BRIDGE_HTTP_HOST)
+  # Save an advertised address once for a wildcard listener; queries never select IPs.
+  if [[ "$host" == '0.0.0.0' && ( ! -f "$CLIENT_SETUP_FILE" || "$REFRESH_NETWORK" == 1 ) ]]; then advertised=$(detect_private_ipv4); fi
+  "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/cli/clientSetupInstaller.js" prepare \
+    "${CONFIG_FILE}" "${CLIENT_SETUP_FILE}" "$candidate" "$CODEX_SETUP_NAME" "$CODEX_SETUP_URL" "$advertised"
+  if [[ -f "$CLIENT_SETUP_FILE" ]] && cmp -s -- "$candidate" "$CLIENT_SETUP_FILE"; then return 0; fi
+  CLIENT_SETUP_STAGING=$(mktemp "${CONFIG_DIR}/.client-setup.XXXXXX")
+  install -m 0640 -o root -g "${SERVICE_GROUP}" -- "$candidate" "$CLIENT_SETUP_STAGING"
+  mark_asset_change "${TEMP_DIR}/recovery/client-setup" "${CLIENT_SETUP_FILE}" || fail "Client setup change was not backed up."
+  mv -Tf -- "$CLIENT_SETUP_STAGING" "$CLIENT_SETUP_FILE"
+  CLIENT_SETUP_STAGING=''
+  restore_selinux_path "$CLIENT_SETUP_FILE" || fail "Could not label the client description."
+}
+
+verify_cli_queries() (
+  umask 077
+  "${CLI_LINK}" info --json > "${TEMP_DIR}/cli-info.json"
+  "${CLI_LINK}" setup > "${TEMP_DIR}/cli-setup.txt"
+  "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/dist/cli/verifyQueries.js" "${CONFIG_FILE}" "${TEMP_DIR}/cli-info.json" "${TEMP_DIR}/cli-setup.txt" "${SOURCE_REF}"
+)
 
 health_url() {
   local host port
@@ -1575,67 +1614,8 @@ print_summary() {
 }
 
 print_codex_setup() {
-  local token connection_name token_env
-
   [[ "${PRINT_CODEX_SETUP}" == "1" ]] || return 0
-  if [[ -z "${CODEX_SETUP_URL}" ]]; then
-    CODEX_SETUP_URL=$(automatic_codex_url)
-  fi
-  token=$(read_config_value COMMAND_BRIDGE_BEARER_TOKEN)
-  if [[ ! "${token}" =~ ^[A-Za-z0-9._~-]{32,}$ ]]; then
-    printf '[CommandBridge] WARNING: The bearer token is missing or unsafe to print; the Codex setup block was not printed.\n' >&2
-    return
-  fi
-  connection_name=$(codex_connection_name)
-  token_env="${connection_name^^}_TOKEN"
-
-  printf '\n'
-  printf '%s\n' \
-    'SECURITY WARNING: The block below contains a bearer token.' \
-    'Copy it only into a trusted Codex task. Delete copied notes after setup.' \
-    '' \
-    '========== BEGIN COPY FOR CODEX ==========' \
-    "Configure a user-scoped MCP connection named ${connection_name} on this Codex client." \
-    '' \
-    'Connection details:' \
-    "MCP URL: ${CODEX_SETUP_URL}" \
-    "Codex connection name: ${connection_name}" \
-    "Token environment variable: ${token_env}" \
-    "Bearer token (secret): ${token}" \
-    ''
-
-  if [[ "${CODEX_SETUP_URL}" == http://* ]]; then
-    printf '%s\n' \
-      'This HTTP URL comes from the saved listener configuration; it does not provide TLS.' \
-      'Use it only over a trusted LAN or VPN. Firewall rules are not changed automatically.' \
-      'Loopback addresses work only on this host. Existing configuration is preserved.' \
-      'If DHCP changes this IP, update the listener, allowed hosts and client URL.' \
-      ''
-  fi
-
-  printf '%s\n' \
-    'Complete these steps:' \
-    '1. Inspect the existing user-level ~/.codex/config.toml and user environment.' \
-    '   If this connection name or token variable already belongs to a different' \
-    '   host, choose an unused connection name and its uppercase NAME_TOKEN variable.' \
-    '   Never overwrite the existing connection or its token. Keep the URL and' \
-    '   token variable below together when choosing a new name.' \
-    '2. Detect the client operating system. Persist this bearer token in the user' \
-    "   environment variable ${token_env}. Do not store it in the repository or TOML." \
-    '3. Add this user-level Codex configuration in ~/.codex/config.toml:' \
-    '' \
-    "[mcp_servers.${connection_name}]" \
-    'enabled = true' \
-    "url = \"${CODEX_SETUP_URL}\"" \
-    "bearer_token_env_var = \"${token_env}\"" \
-    'startup_timeout_sec = 20.0' \
-    'tool_timeout_sec = 360.0' \
-    '' \
-    '4. Preserve every unrelated Codex setting. Tell me exactly what changed and' \
-    '   whether Codex must be restarted for the new environment variable.' \
-    "5. After restart, use /mcp to verify that ${connection_name} is connected." \
-    '6. Do not repeat the bearer token in your final response.' \
-    '========== END COPY FOR CODEX =========='
+  "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/dist/cli/clientSetupInstaller.js" print "${CONFIG_FILE}" "${CLIENT_SETUP_FILE}" show
 }
 
 main() {
@@ -1677,6 +1657,7 @@ main() {
   prepare_node_runtime "${node_arch}"
   prepare_source
   build_source
+  preflight_client_setup
   if [[ -f "${CONFIG_FILE}" ]]; then
     DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   elif [[ -f "${LEGACY_CONFIG_DIR}/command-bridge.env" ]]; then
@@ -1687,6 +1668,7 @@ main() {
   ensure_service_account
   ensure_installer_state
   install_configuration
+  install_client_setup
   DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   install_runtime_and_release "${node_arch}"
   if [[ "${RUN_AS_INSTALLER}" == 0 ]]; then install_audit_access; fi
@@ -1696,6 +1678,7 @@ main() {
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/scripts/verify-install.mjs" "${CONFIG_FILE}"
   install_cli_entry
   [[ "$("${CLI_LINK}" --version)" == "${BUILT_PACKAGE_VERSION}" ]] || fail "Installed CLI version verification failed."
+  verify_cli_queries
   if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then remove_audit_access_for_installer; fi
   install_managed_update
   commit_application_layout

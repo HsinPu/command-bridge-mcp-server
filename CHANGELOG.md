@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.1.0 — 2026-10-09
+
+MINOR: add compatible local administration queries for service installations. Existing MCP tools, version/update commands and production deadlines remain unchanged.
+
+- Add terminal-only `command-bridge info [--json]` and `setup` with hidden Token by default. `setup --show-token` requires an administrator terminal; output-only name/HTTPS overrides never change deployment settings.
+- Save a protected, Token-free `client-setup.json` using schemaVersion 1. Preserve aliases, explicit HTTPS URLs and wildcard advertised addresses through reinstall/update; validate old records before mutation and restore bytes/permissions on failed activation. Ordinary uninstall preserves the record; safe purge removes it.
+- Share saved connection parsing and Codex output between both installers and CLI. Use bundled runtimes, fixed managed paths and bounded read-only service probes without loading MCP/Audit or contacting GitHub. Report partial permissions, missing old descriptions and deployment changes explicitly.
+- Reject recognizable direct info/setup calls and fixed helper entry points through MCP in every execution mode, before child startup, with `LOCAL_ADMIN_COMMAND_BLOCKED` and attempted/blocked Audit events. This remains an accidental-operation guard, not an arbitrary-script sandbox.
+- Add behavior tests for queries, Token exclusion, metadata preservation/recovery and local-only guards, extend disposable service gates, and document local commands separately from sanitized MCP diagnostics.
+
 ## 6.0.5 — 2026-10-08
 
 PATCH: fix Windows installer false failures when running inside the managed-update worker with redirected native streams. Command policies, Audit enforcement, deployment verification and production deadlines are unchanged.

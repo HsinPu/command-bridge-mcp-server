@@ -24,6 +24,7 @@ $PackageVersion = ""
 $SourceRef = ""
 $ApplicationRelativePath = "app"
 $ConfigBackup = $null
+$ConfigAclBackup = $null
 $NodeVersion = "24.18.0"
 $WinSwVersion = "2.12.0"
 $WinSwUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
@@ -33,6 +34,12 @@ $NodeArchiveName = "node-v$NodeVersion-win-x64.zip"
 $InstallRoot = Join-Path $env:ProgramFiles "CommandBridgeMCP"
 $ConfigRoot = Join-Path $env:ProgramData "CommandBridgeMCP"
 $ConfigFile = Join-Path $ConfigRoot "command-bridge.env"
+$ClientSetupFile = Join-Path $ConfigRoot 'client-setup.json'
+$ClientSetupBackup = $null
+$ClientSetupAcl = $null
+$ClientSetupExisted = $false
+$ClientSetupChanged = $false
+$ClientSetupRecoveryFailed = $false
 $WorkDirectory = Join-Path $ConfigRoot "work"
 $LogsDirectory = Join-Path $ConfigRoot "logs"
 $ServiceExeName = "CommandBridgeMCP.exe"
@@ -266,7 +273,105 @@ function Set-ConfigurationTextValue([string]$Text, [string]$Pattern, [string]$Va
 }
 
 function Restore-ConfigurationBytes {
-  if ($null -ne $script:ConfigBackup) { [IO.File]::WriteAllBytes($ConfigFile, $script:ConfigBackup) }
+  try {
+    Restore-ClientSetup
+    if ($null -ne $script:ConfigBackup) {
+      [IO.File]::WriteAllBytes($ConfigFile, $script:ConfigBackup)
+      if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ConfigFile)) -cne [Convert]::ToBase64String($script:ConfigBackup)) { throw 'Configuration byte restoration failed.' }
+    }
+    if ($null -ne $script:ConfigAclBackup) {
+      [IO.File]::SetAccessControl($ConfigFile, $script:ConfigAclBackup)
+      if ([IO.File]::GetAccessControl($ConfigFile).Sddl -cne $script:ConfigAclBackup.Sddl) { throw 'Configuration ACL restoration failed.' }
+    }
+  } catch { $script:ClientSetupRecoveryFailed = $true; throw }
+}
+
+function Backup-ClientSetup([string]$NodeRoot, [string]$SourceRoot) {
+  . (Join-Path $SourceRoot 'scripts\windows\installation-paths.ps1')
+  if ([IO.Directory]::Exists($ConfigRoot) -and (Test-ProtectedPath $ConfigRoot $ConfigRoot) -ne $true) { throw 'Unsafe client-description parent; no settings were changed.' }
+  if ([IO.File]::Exists($ConfigFile)) {
+    if (([IO.File]::GetAttributes($ConfigFile) -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or [IO.FileInfo]::new($ConfigFile).Length -gt 1048576) { throw 'Unsafe configuration snapshot source.' }
+    $script:ConfigBackup = [IO.File]::ReadAllBytes($ConfigFile)
+    $script:ConfigAclBackup = [IO.File]::GetAccessControl($ConfigFile)
+    [IO.File]::WriteAllBytes((Join-Path $TempRoot 'previous-config.env'), $script:ConfigBackup)
+    [IO.File]::WriteAllText((Join-Path $TempRoot 'previous-config.acl'), $script:ConfigAclBackup.Sddl)
+  }
+  if (Test-Path -LiteralPath $ClientSetupFile) {
+    if ((Test-ProtectedPath $ClientSetupFile $ConfigRoot) -ne $true) { throw 'Unsafe saved client description; no settings were changed.' }
+    Invoke-External (Join-Path $NodeRoot 'node.exe') @((Join-Path $SourceRoot 'dist\cli\clientSetupInstaller.js'), 'validate', $ClientSetupFile)
+    $script:ClientSetupBackup = [IO.File]::ReadAllBytes($ClientSetupFile)
+    $script:ClientSetupAcl = [IO.File]::GetAccessControl($ClientSetupFile)
+    [IO.File]::WriteAllBytes((Join-Path $TempRoot 'previous-client-setup.json'), $script:ClientSetupBackup)
+    [IO.File]::WriteAllText((Join-Path $TempRoot 'previous-client-setup.acl'), $script:ClientSetupAcl.Sddl)
+    $script:ClientSetupExisted = $true
+  } elseif ((Get-Item -LiteralPath $ClientSetupFile -Force -ErrorAction SilentlyContinue)) { throw 'Unsafe client description link.' }
+}
+
+function Initialize-ClientSetupParent([string]$SourceRoot) {
+  . (Join-Path $SourceRoot 'scripts\windows\installation-paths.ps1')
+  if ([IO.Directory]::Exists($ConfigRoot)) {
+    if ((Test-ProtectedPath $ConfigRoot $ConfigRoot) -ne $true) { throw 'Unsafe client-description parent; no settings were changed.' }
+    return
+  }
+  if ((Test-ProtectedPath ([IO.Path]::GetDirectoryName($ConfigRoot)) $ConfigRoot) -ne $true) { throw 'Unsafe configuration ancestor.' }
+  $acl = [Security.AccessControl.DirectorySecurity]::new()
+  $acl.SetAccessRuleProtection($true, $false)
+  $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+  foreach ($sid in @('S-1-5-18','S-1-5-32-544')) { $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')) }
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-19'), 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+  [void][IO.Directory]::CreateDirectory($ConfigRoot, $acl)
+}
+
+function Install-ClientSetup([string]$NodeRoot, [string]$SourceRoot) {
+  $candidate = Join-Path $TempRoot 'client-setup.new'
+  $advertised = '-'
+  if ((Get-ConfigValue 'COMMAND_BRIDGE_HTTP_HOST') -eq '0.0.0.0' -and (-not $ClientSetupExisted -or $RefreshNetwork)) { $advertised = Get-AutomaticHttpHost }
+  $nameArgument = if ($CodexName) { $CodexName } else { '-' }
+  $urlArgument = if ($CodexUrl) { $CodexUrl } else { '-' }
+  Invoke-External (Join-Path $NodeRoot 'node.exe') @((Join-Path $SourceRoot 'dist\cli\clientSetupInstaller.js'), 'prepare', $ConfigFile, $ClientSetupFile, $candidate, $nameArgument, $urlArgument, $advertised)
+  $bytes = [IO.File]::ReadAllBytes($candidate)
+  if ($ClientSetupExisted -and [Convert]::ToBase64String($bytes) -ceq [Convert]::ToBase64String($ClientSetupBackup)) { return }
+  $script:ClientSetupChanged = $true
+  $acl = [Security.AccessControl.FileSecurity]::new()
+  $acl.SetAccessRuleProtection($true, $false)
+  $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
+  foreach ($sid in @('S-1-5-18','S-1-5-32-544')) { $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'Allow')) }
+  $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-19'), 'Read', 'Allow'))
+  [IO.File]::SetAccessControl($candidate, $acl)
+  # Move on the same configuration filesystem, retaining the protected candidate ACL.
+  $staged = Join-Path $ConfigRoot ('.client-setup-' + [Guid]::NewGuid().ToString('N'))
+  try {
+    [IO.File]::Copy($candidate, $staged, $false)
+    [IO.File]::SetAccessControl($staged, $acl)
+    if ([IO.File]::Exists($ClientSetupFile)) { [IO.File]::Replace($staged, $ClientSetupFile, $null); [IO.File]::SetAccessControl($ClientSetupFile, $acl) }
+    else { [IO.File]::Move($staged, $ClientSetupFile) }
+  } finally { if ([IO.File]::Exists($staged)) { [IO.File]::Delete($staged) } }
+}
+
+function Restore-ClientSetup {
+  if (-not $script:ClientSetupChanged) { return }
+  try {
+    if ($script:ClientSetupExisted) {
+      if ($null -eq $script:ClientSetupBackup -or $null -eq $script:ClientSetupAcl) { throw 'Missing client description snapshot.' }
+      [IO.File]::WriteAllBytes($ClientSetupFile, $script:ClientSetupBackup)
+      [IO.File]::SetAccessControl($ClientSetupFile, $script:ClientSetupAcl)
+      if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ClientSetupFile)) -cne [Convert]::ToBase64String($script:ClientSetupBackup) -or [IO.File]::GetAccessControl($ClientSetupFile).Sddl -cne $script:ClientSetupAcl.Sddl) { throw 'Client description restoration verification failed.' }
+    } elseif ([IO.File]::Exists($ClientSetupFile)) { [IO.File]::Delete($ClientSetupFile) }
+    $script:ClientSetupChanged = $false
+  } catch { $script:ClientSetupRecoveryFailed = $true; throw 'Client description recovery failed. Private snapshots were retained; service restart was withheld.' }
+}
+
+function Test-InstalledQueries {
+  $infoFile = Join-Path $TempRoot 'cli-info.json'
+  $setupFile = Join-Path $TempRoot 'cli-setup.txt'
+  $cli = Join-Path $InstallRoot 'command-bridge.cmd'
+  $info = & $cli info --json
+  if ($LASTEXITCODE -ne 0) { throw 'Installed CLI info verification failed.' }
+  $setup = & $cli setup
+  if ($LASTEXITCODE -ne 0) { throw 'Installed CLI setup verification failed.' }
+  [IO.File]::WriteAllText($infoFile, ($info -join "`n"), [Text.UTF8Encoding]::new($false))
+  [IO.File]::WriteAllText($setupFile, ($setup -join "`n"), [Text.UTF8Encoding]::new($false))
+  Invoke-External (Join-Path $InstallRoot 'runtime\node.exe') @((Join-Path $InstallRoot "$ApplicationRelativePath\dist\cli\verifyQueries.js"), $ConfigFile, $infoFile, $setupFile, $SourceRef)
 }
 
 function New-SecureConfiguration {
@@ -404,6 +509,7 @@ function Copy-ApplicationPayload {
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-file-transfer.mjs') -Destination (Join-Path $Destination 'scripts\verify-file-transfer.mjs')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmdlet.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmdlet.ps1')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmd.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmd.ps1')
+  foreach ($asset in @('read-installation-status.ps1', 'installation-paths.ps1')) { Copy-Item -LiteralPath (Join-Path $SourceRoot "scripts\windows\$asset") -Destination (Join-Path $Destination "scripts\windows\$asset") }
   [IO.File]::WriteAllText((Join-Path $Destination 'install-info.json'), (@{ version = $PackageVersion; sourceSha = $SourceRef; runtimeVersion = $NodeVersion } | ConvertTo-Json))
 }
 
@@ -415,6 +521,8 @@ function Set-RestrictedAcl {
   Invoke-External $icacls @($ConfigRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")
   # The transfer validator requires protected ownership of its managed parent.
   Invoke-External $icacls @($ConfigRoot, '/setowner', '*S-1-5-32-544')
+  Invoke-External $icacls @($StagedInstallRoot, '/setowner', '*S-1-5-32-544', '/T', '/Q')
+  foreach ($file in @($ConfigFile, $ClientSetupFile)) { Invoke-External $icacls @($file, '/setowner', '*S-1-5-32-544') }
   Invoke-External $icacls @($WorkDirectory, "/grant:r", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M")
   Invoke-External $icacls @($LogsDirectory, "/grant:r", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M")
   $transferRoot = Join-Path $ConfigRoot 'transfers'
@@ -617,51 +725,13 @@ function Get-CodexConnectionName {
 }
 
 function Print-CodexSetup {
-  if (-not $PrintCodexSetup -and -not $CodexUrl -and -not $RefreshNetwork -and -not $CodexName) {
-    return
-  }
-  if ([string]::IsNullOrWhiteSpace($CodexUrl)) {
-    $CodexUrl = Get-AutomaticCodexUrl
-  }
-  $token = Get-ConfigValue "COMMAND_BRIDGE_BEARER_TOKEN"
-  $connectionName = Get-CodexConnectionName
-  $tokenEnvironment = $connectionName.ToUpperInvariant() + '_TOKEN'
-  Write-Output ""
-  Write-Output "SECURITY WARNING: The block below contains a bearer token."
-  Write-Output "========== BEGIN COPY FOR CODEX =========="
-  Write-Output "Configure a user-scoped MCP connection named $connectionName on this Codex client."
-  Write-Output "MCP URL: $CodexUrl"
-  Write-Output "Codex connection name: $connectionName"
-  Write-Output "Token environment variable: $tokenEnvironment"
-  if ($CodexUrl.StartsWith("http://")) {
-    Write-Output "This HTTP URL comes from the saved listener configuration; it does not provide TLS."
-    Write-Output "Use it only over a trusted LAN or VPN. Firewall rules are not changed automatically."
-    Write-Output "Loopback addresses work only on this host. Existing configuration is preserved."
-    Write-Output "If DHCP changes this IP, update the listener, allowed hosts and client URL."
-  }
-  Write-Output "Bearer token (secret): $token"
-  Write-Output '1. Inspect the existing user-level ~/.codex/config.toml and user environment.'
-  Write-Output '   If this connection name or token variable already belongs to a different'
-  Write-Output '   host, choose an unused connection name and its uppercase NAME_TOKEN variable.'
-  Write-Output '   Never overwrite the existing connection or its token. Keep the URL and'
-  Write-Output '   token variable below together when choosing a new name.'
-  Write-Output '2. Detect the client operating system. Persist this bearer token in the user'
-  Write-Output "   environment variable $tokenEnvironment. Do not store it in the repository or TOML."
-  Write-Output '3. Add this user-level Codex configuration in ~/.codex/config.toml:'
-  Write-Output "[mcp_servers.$connectionName]"
-  Write-Output "enabled = true"
-  Write-Output ('url = "' + $CodexUrl + '"')
-  Write-Output ('bearer_token_env_var = "' + $tokenEnvironment + '"')
-  Write-Output "startup_timeout_sec = 20.0"
-  Write-Output "tool_timeout_sec = 360.0"
-  Write-Output '4. Preserve every unrelated Codex setting and report whether a restart is needed.'
-  Write-Output "5. After restart, use /mcp to verify that $connectionName is connected."
-  Write-Output '6. Do not repeat the bearer token in your final response.'
-  Write-Output "========== END COPY FOR CODEX =========="
+  if (-not $PrintCodexSetup -and -not $CodexUrl -and -not $RefreshNetwork -and -not $CodexName) { return }
+  Invoke-External (Join-Path $InstallRoot 'runtime\node.exe') @((Join-Path $InstallRoot "$ApplicationRelativePath\dist\cli\clientSetupInstaller.js"), 'print', $ConfigFile, $ClientSetupFile, 'show')
 }
 
 function Rollback-Installation {
   try {
+    if ($InstallCommitted -and (Get-ManagedService)) { Stop-Service -Name $ServiceName -Force -ErrorAction Stop }
     Restore-ConfigurationBytes
     if ($ServicePreviouslyInstalled -and -not $PreviousMoved) {
       # Activation has not replaced the old files. Restore registration if uninstall succeeded.
@@ -690,6 +760,7 @@ function Rollback-Installation {
       Remove-EventLog -Source $EventSource
     }
   } catch {
+    if ($ClientSetupRecoveryFailed) { Write-Warning "Client-description recovery failed; preserve the private recovery directory: $TempRoot" }
     Write-Warning "Rollback could not fully restore the previous installation."
   }
 }
@@ -711,6 +782,7 @@ try {
     throw "CodexUrl must be a private HTTPS URL ending in /mcp."
   }
   New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
+  Invoke-External (Join-Path $env:SystemRoot 'System32\icacls.exe') @($TempRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F')
   $existingService = Get-ManagedService
   Assert-ManagedServicePath $existingService
   if ($Update -and ($null -eq $existingService -or $existingService.StartName -notin @('NT AUTHORITY\LocalService', 'LocalService'))) { throw 'Update requires the managed LocalService service.' }
@@ -722,6 +794,8 @@ try {
   $nodeRoot = Get-NodeRuntime
   $winSw = Get-WinSw
   Build-Source $sourceRoot $nodeRoot
+  Initialize-ClientSetupParent $sourceRoot
+  Backup-ClientSetup $nodeRoot $sourceRoot
   $previousDotenv = $env:DOTENV_CONFIG_PATH
   try {
     if (Test-Path -LiteralPath $ConfigFile) {
@@ -730,6 +804,7 @@ try {
     }
   } finally { $env:DOTENV_CONFIG_PATH = $previousDotenv }
   if (-not $Update) { New-SecureConfiguration }
+  Install-ClientSetup $nodeRoot $sourceRoot
   $policyPath = Join-Path $ConfigRoot 'policy.json'
   if (-not (Test-Path -LiteralPath $policyPath)) { Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\policy.example.json') -Destination $policyPath }
   try {
@@ -744,7 +819,7 @@ try {
   $xmlPath = Join-Path $StagingRoot $XmlName
   [IO.File]::WriteAllText($xmlPath, [IO.File]::ReadAllText($xmlPath).Replace('%BASE%\app', "%BASE%\$ApplicationRelativePath"))
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'scripts\windows\uninstall.ps1') -Destination (Join-Path $StagingRoot 'uninstall.ps1')
-  foreach ($asset in @('update.ps1', 'deployment-lock.ps1')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "scripts\windows\$asset") -Destination (Join-Path $StagingRoot $asset) }
+  foreach ($asset in @('update.ps1', 'deployment-lock.ps1', 'installation-paths.ps1')) { Copy-Item -LiteralPath (Join-Path $sourceRoot "scripts\windows\$asset") -Destination (Join-Path $StagingRoot $asset) }
   Copy-Item -LiteralPath (Join-Path $sourceRoot 'scripts\bootstrap.ps1') -Destination (Join-Path $StagingRoot 'bootstrap.ps1')
   New-Item -ItemType Directory -Path (Join-Path $StagingRoot "runtime") -Force | Out-Null
   Copy-Item -Path (Join-Path $nodeRoot "*") -Destination (Join-Path $StagingRoot "runtime") -Recurse -Force
@@ -773,6 +848,7 @@ try {
   Invoke-External (Join-Path $InstallRoot 'runtime\node.exe') @((Join-Path $InstallRoot "$ApplicationRelativePath\scripts\verify-install.mjs"), $ConfigFile)
 
   Install-ManagedUpdater $sourceRoot
+  Test-InstalledQueries
   $ActivationSucceeded = $true
   if (Test-Path -LiteralPath $PreviousRoot) {
     Remove-Item -LiteralPath $PreviousRoot -Recurse -Force
@@ -793,7 +869,7 @@ try {
   }
   throw
 } finally {
-  if (Test-Path -LiteralPath $TempRoot) {
+  if (-not $ClientSetupRecoveryFailed -and (Test-Path -LiteralPath $TempRoot)) {
     Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
   }
   if (Test-Path -LiteralPath $StagingRoot) {

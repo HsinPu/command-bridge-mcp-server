@@ -82,22 +82,23 @@ read_config_value() {
   esac
 }
 [[ "$(automatic_codex_url)" == 'http://10.20.30.40:9900/mcp' ]]
-PRINT_CODEX_SETUP=1
-setup=$(print_codex_setup)
+# Shared renderer uses private files and a disposable helper target, never host config.
+work=$(mktemp -d /tmp/cb-setup-test.XXXXXX)
+trap 'rm -rf -- "$work"' EXIT
+helper="$PWD/dist/cli/clientSetupInstaller.js"
+printf 'COMMAND_BRIDGE_HTTP_HOST=10.20.30.40\nCOMMAND_BRIDGE_HTTP_PORT=9900\nCOMMAND_BRIDGE_BEARER_TOKEN=%064d\n' 1 > "$work/config.env"
+node "$helper" prepare "$work/config.env" "$work/missing.json" "$work/client.json" cb_oracle_prod - -
+setup=$(node "$helper" print "$work/config.env" "$work/client.json" show)
 [[ "$setup" == *'url = "http://10.20.30.40:9900/mcp"'* ]]
 [[ "$setup" == *'[mcp_servers.cb_oracle_prod]'* ]]
 [[ "$setup" == *'bearer_token_env_var = "CB_ORACLE_PROD_TOKEN"'* ]]
 [[ "$setup" == *'Never overwrite the existing connection or its token.'* ]]
 [[ "$setup" == *'tool_timeout_sec = 360.0'* ]]
-CODEX_SETUP_NAME=''
-setup=$(print_codex_setup)
-[[ "$setup" == *'[mcp_servers.cb_twt_pelplmap06d_example_com]'* ]]
-[[ "$setup" == *'bearer_token_env_var = "CB_TWT_PELPLMAP06D_EXAMPLE_COM_TOKEN"'* ]]
 saved_host=::1
 [[ "$(automatic_codex_url)" == 'http://[::1]:9900/mcp' ]]
 saved_host=127.0.0.1
 [[ "$(automatic_codex_url)" == 'http://127.0.0.1:9900/mcp' ]]
-CODEX_SETUP_URL='https://mcp.example.com/mcp'
-setup=$(print_codex_setup)
+node "$helper" prepare "$work/config.env" "$work/client.json" "$work/https.json" - https://mcp.example.com/mcp -
+setup=$(node "$helper" print "$work/config.env" "$work/https.json" show)
 [[ "$setup" == *'url = "https://mcp.example.com/mcp"'* ]]
 printf 'Linux automatic IP setup checks passed.\n'

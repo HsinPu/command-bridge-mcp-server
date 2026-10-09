@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.0.5-blue)
+![Version](https://img.shields.io/badge/version-6.1.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -29,6 +29,7 @@ Each host runs its own MCP endpoint. The server supports local `stdio` and remot
 
 - **One-command deployment:** downloads and builds GitHub source without a preinstalled Git or Node.js.
 - **Automatic connection setup:** fresh installs can detect a LAN/Tailscale IPv4 address, configure the listener and allowed Host together, and print a host-specific Codex connection name and token environment variable.
+- **Local installation queries:** inspect saved installation information and regenerate Codex setup in a host terminal; Token display requires an explicit administrator request.
 - **Execution policy:** command allowlisting by default, with limits on shells, working directories, timeouts, output, inherited environment variables, and concurrent commands.
 - **Audit trail:** records command lifecycle events; commands do not start if the initial audit write fails.
 - **Low-privilege services:** a dedicated `command-bridge` account on Linux and `LocalService` on Windows.
@@ -134,6 +135,18 @@ Windows PowerShell:
 
 `-V` also works. Queries use the bundled runtime and report the locally selected installed release; they do not start MCP/Audit, check service health, or contact GitHub. Older installations must upgrade first. npm users can use either `command-bridge --version` or the existing `command-bridge-mcp-server --version`.
 
+## Retrieve installation and Codex settings
+
+From 6.1.0, use a host terminal:
+
+```bash
+command-bridge info --json
+command-bridge setup
+sudo command-bridge setup --show-token
+```
+
+Windows uses `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` with the same arguments; `--show-token` requires an elevated PowerShell terminal. Ordinary queries hide the Token and do not write settings or depend on Audit. If protected settings are unreadable, use `sudo command-bridge setup` (still hidden) or an elevated Windows terminal; `info` can return a partial summary. Saved connection names/HTTPS URLs survive reinstall and update. `setup --codex-name cb_other --codex-url https://private.example/mcp` changes only the output. Direct calls through MCP are blocked in every mode; use the MCP diagnostics tool for remote troubleshooting. See [local commands, permissions and metadata](docs/local-administration.md).
+
 ## Update an installed service
 
 From 4.3.0, check the verified CI channel without changing the host:
@@ -171,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.0.5 retains the Windows/dotenv and Linux recovery fixes, and prevents Windows managed updates from mistaking normal native diagnostic output for installation failure. Real exit failures and MCP/Audit validation still stop deployment. Existing command, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
+6.1.0 adds local installation summaries and repeatable Codex setup with protected, Token-free connection metadata. It retains the Windows/dotenv and Linux recovery fixes, including correct native-stderr handling in managed updates. Real exit failures and MCP/Audit validation still stop deployment. Existing command, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
 
 Example requests for a connected client:
 

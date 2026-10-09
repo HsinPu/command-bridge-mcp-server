@@ -88,6 +88,36 @@ case "${1:-}" in
       done
     done
     ;;
+  client-description)
+    prepare
+    bash -c '
+      source "$FIXTURE/common.sh"; trap - EXIT ERR
+      printf "\357\273\277{\"schemaVersion\":1}\r\n" > "$CLIENT_SETUP_FILE"
+      chmod 0640 "$CLIENT_SETUP_FILE"
+      cp "$CLIENT_SETUP_FILE" "$FIXTURE/expected-client.json"
+      backup_asset_group "$TEMP_DIR/recovery/client-setup" "$CLIENT_SETUP_FILE"
+      mark_asset_change "$TEMP_DIR/recovery/client-setup" "$CLIENT_SETUP_FILE"
+      printf candidate > "$CLIENT_SETUP_FILE"
+      restore_configuration
+      cmp -s "$CLIENT_SETUP_FILE" "$FIXTURE/expected-client.json"
+      [[ "$(command stat -c %a "$CLIENT_SETUP_FILE")" == 640 ]]
+      backup_asset_group "$TEMP_DIR/recovery/client-setup" "$CLIENT_SETUP_FILE"
+      mark_asset_change "$TEMP_DIR/recovery/client-setup" "$CLIENT_SETUP_FILE"
+      printf candidate > "$CLIENT_SETUP_FILE"
+      printf damaged >> "$TEMP_DIR/recovery/client-setup/client-setup.json"
+      if restore_configuration; then echo "Corrupt client snapshot accepted"; exit 1; fi
+      [[ "$(cat "$CLIENT_SETUP_FILE")" == candidate ]]
+    '
+    prepare
+    bash -c '
+      source "$FIXTURE/common.sh"; trap - EXIT ERR
+      backup_asset_group "$TEMP_DIR/recovery/client-setup" "$CLIENT_SETUP_FILE"
+      mark_asset_change "$TEMP_DIR/recovery/client-setup" "$CLIENT_SETUP_FILE"
+      printf candidate > "$CLIENT_SETUP_FILE"
+      restore_configuration
+      [[ ! -e "$CLIENT_SETUP_FILE" ]]
+    '
+    ;;
   configuration)
     prepare
     if bash -c '

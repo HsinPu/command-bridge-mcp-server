@@ -20,10 +20,13 @@ try {
   $LogsDirectory = Join-Path $fixture 'logs'
   $application = Join-Path $fixture 'application'
   $transfer = Join-Path $ConfigRoot 'transfers'
+  $ConfigFile = Join-Path $ConfigRoot 'command-bridge.env'; $ClientSetupFile = Join-Path $ConfigRoot 'client-setup.json'
   foreach ($path in @($ConfigRoot, $WorkDirectory, $LogsDirectory, $application, $transfer)) {
     [IO.Directory]::CreateDirectory($path) | Out-Null
   }
   $script:TransferDirectoryCreated = $true
+  [IO.File]::WriteAllText($ConfigFile, 'private-test-config')
+  [IO.File]::WriteAllText($ClientSetupFile, '{}')
   Set-RestrictedAcl -StagedInstallRoot $application
   if ([IO.Directory]::GetAccessControl($ConfigRoot).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne 'S-1-5-32-544') { throw 'Incorrect managed parent owner.' }
   # Read directly through .NET; CI's parent PowerShell 7 module path must not

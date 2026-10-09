@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # CommandBridge managed administration launcher.
 set -euo pipefail
+if [[ "${1:-}" == info || "${1:-}" == setup ]]; then
+  if [[ ! -x "__INSTALL_ROOT__/runtime/current/bin/node" || ! -f "__INSTALL_ROOT__/current/dist/cli/management.js" ]]; then
+    printf 'CommandBridge query: RUNTIME_OR_CLI_MISSING\n' >&2
+    exit 1
+  fi
+  unset NODE_OPTIONS NODE_PATH
+  exec "__INSTALL_ROOT__/runtime/current/bin/node" "__INSTALL_ROOT__/current/dist/cli/management.js" "$@"
+fi
 if [[ "${1:-}" == update ]]; then
   shift
   exec bash "__INSTALL_ROOT__/current/bootstrap.sh" --update "$@"
 fi
 if [[ $# != 1 || ( "$1" != --version && "$1" != -V ) ]]; then
-  printf 'Usage: command-bridge --version | -V | update [--check|--print-codex-setup]\n' >&2
+  printf 'Usage: command-bridge --version | -V | info [--json] | setup [--show-token] [--codex-name NAME] [--codex-url URL] | update [--check|--print-codex-setup]\n' >&2
   exit 2
 fi
 exec "__INSTALL_ROOT__/runtime/current/bin/node" "__INSTALL_ROOT__/current/dist/index.js" "$1"

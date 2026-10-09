@@ -94,6 +94,7 @@ if ($env:CB_UPDATE_FAIL -eq '1') { throw 'Fixture deployment failed' }
   $global:cbUpdate_aclCalls = @()
   function Invoke-External { param([string]$FilePath, [string[]]$Arguments) $global:cbUpdate_aclCalls += ,$Arguments }
   $ConfigRoot = Join-Path $work 'config'; $WorkDirectory = Join-Path $ConfigRoot 'work'; $LogsDirectory = Join-Path $ConfigRoot 'logs'
+  $ConfigFile = Join-Path $ConfigRoot 'command-bridge.env'; $ClientSetupFile = Join-Path $ConfigRoot 'client-setup.json'
   $script:TransferDirectoryCreated = $false
   Set-RestrictedAcl $app
   if ($global:cbUpdate_aclCalls[0] -notcontains '*S-1-5-32-545:(OI)(CI)RX') { throw 'CLI is not readable/executable by ordinary users.' }

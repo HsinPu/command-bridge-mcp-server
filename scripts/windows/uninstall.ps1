@@ -63,6 +63,13 @@ if ($updateTask) {
 if ($updateTask -and $updateTask.State -eq 'Running') { throw 'A managed update is active; wait before uninstalling.' }
 $service = Get-ManagedService
 Assert-ManagedServicePath $service
+if ($Purge) {
+  $description = Join-Path $ConfigRoot 'client-setup.json'
+  if (Get-Item -LiteralPath $description -Force -ErrorAction SilentlyContinue) {
+    . (Join-Path $PSScriptRoot 'installation-paths.ps1')
+    if (-not [IO.File]::Exists($description) -or (Test-ProtectedPath $description $ConfigRoot) -ne $true) { throw 'Unsafe client description; the service and files were preserved.' }
+  }
+}
 
 Write-Log "Planned removal:"
 Write-Host "  Service: $ServiceName"

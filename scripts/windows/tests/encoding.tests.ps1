@@ -10,6 +10,8 @@ $root = Join-Path $env:TEMP ('cb-text-config-' + [guid]::NewGuid())
 $chinese = ([char]0x4e2d).ToString() + [char]0x6587 + [char]::ConvertFromUtf32(0x1f642)
 $ConfigFile = Join-Path $root ($chinese + '.env')
 $ConfigRoot = $root; $WorkDirectory = $root; $LogsDirectory = $root
+$ClientSetupChanged = $false
+$ConfigAclBackup = $null
 $EnableFileTransfer = $false; $EnableUpload = $false; $EnableDownload = $false
 $RefreshNetwork = $true
 function Write-Log($Message) {}

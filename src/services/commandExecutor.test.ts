@@ -75,6 +75,24 @@ function stubRunProcess(
   });
 }
 
+test("all modes block local info/setup before spawn and preserve Audit lifecycle and capacity", async () => {
+  for (const executionMode of ["allowlist", "guarded", "unrestricted"] as const) {
+    const audit = new MemoryAuditLog();
+    const executor = new CommandExecutor(createConfig({ executionMode }), audit);
+    let started = 0;
+    stubRunProcess(executor, async () => { started++; return commandResult(); });
+    try {
+      for (const command of ["command-bridge info --json", "sudo -n command-bridge setup --show-token", "bash -c 'command-bridge setup'", "node dist/cli/management.js info"]) {
+        await assert.rejects(executor.execute({ command }), (error: any) => error.code === "LOCAL_ADMIN_COMMAND_BLOCKED" && error.rule === "local-admin-only" && Boolean(error.auditId));
+        assert.equal((executor as any).activeCommands, 0);
+      }
+      assert.equal(started, 0);
+      assert.deepEqual(audit.events.map(e => e.phase), ["attempted", "blocked", "attempted", "blocked", "attempted", "blocked", "attempted", "blocked"]);
+      assert.ok(audit.events.filter(e => e.phase === "blocked").every(e => e.errorCode === "LOCAL_ADMIN_COMMAND_BLOCKED"));
+    } finally { await executor.shutdown(); }
+  }
+});
+
 test("completed processes release slots before terminal Audit, whose timeout withholds output", async () => {
   let entered!: () => void, release!: () => void;
   const terminal = new Promise<void>(resolve => { entered = resolve; });

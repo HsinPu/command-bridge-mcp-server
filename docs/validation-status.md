@@ -1,6 +1,17 @@
-# Architecture implementation validation
+# Validation status
 
-The current package is 6.0.5, correcting Windows managed-update native stderr handling after the Windows/dotenv, private Linux fixture and CI diagnosis fixes. The 5.0.0 program-path migration and 5.0.1 recovery rules continue to apply. Historical results below retain their tested versions. Existing configuration, Token and logs/work are retained. The v0.4.0 tag is unchanged; public installation availability still requires every cross-platform CI/service/layout gate and an exact channel SHA.
+The current package is 6.1.0, adding compatible local info/setup queries and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.0 validation (2026-10-09)
+
+MINOR: new terminal queries preserve existing MCP interfaces and version/update behavior. Private behavior tests cover saved aliases/HTTPS precedence, wildcard/IPv6 fallback, absent and invalid metadata, Token exclusion and explicit administrator gating, UTF-8 BOM/newlines, read-only file contents, strict metadata field types, bounded records/helper processes and deployment-change detection. Direct MCP calls (including literal sudo/Shell wrappers, redirection and implementation helpers) are rejected in all modes before child startup with attempted/blocked Audit and no consumed execution slot.
+
+Full native Windows `npm test`, using checksum-verified CI Node.js 24.18.0, passed **175/208**, with **33 platform/elevation skips**, zero failures. The private WSL Ubuntu source snapshot under `nobody`, with locked dependencies and the same verified Runtime, passed **178/208**, with **30 platform skips**, zero failures. These runs include private Windows byte/ACL recovery and Linux corrupted/missing metadata snapshot cases; failed recovery does not restart a service. Existing production command, Audit and shutdown deadlines are unchanged.
+
+Native Windows PowerShell 5.1 parsed all **25** scripts, including the new fixed service query and shared ACL checker; WinSW XML passed. All **24 Bash scripts/four fixed Linux launchers**, package/root lock/build versions, dependency identity, unchanged bilingual bootstrap one-liners, relative documentation links and `git diff --check` are checked before commit.
+
+The disposable Windows/Linux service smoke gates now assert metadata preservation through real service updates, overridden-name/HTTPS activation failures and uninstall/purge, plus actual CLI queries before upgrade backups are removed. **These updated hosted service/layout gates have not run for 6.1.0 in this local delivery.** No push or installation-channel publication is claimed. Oracle Linux 8.10 SELinux Enforcing, native elevated Windows ACL/service deployment and actual reboot remain untested locally; WSL/fixture checks and service startup settings do not replace those results.
+
 
 ## 6.0.5 validation (2026-10-08)
 

@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSyn
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-for (const scenario of ["backup", "configuration", "restore", "retain", "uninstall"]) {
+for (const scenario of ["backup", "client-description", "configuration", "restore", "retain", "uninstall"]) {
   test(`Linux installer recovery preserves originals and reports failures: ${scenario}`, { skip: process.platform !== "linux" }, () => {
     const result = spawnSync("bash", ["scripts/linux-systemd/tests/recovery.test.sh", scenario], {
       encoding: "utf8", timeout: 30_000,

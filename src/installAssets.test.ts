@@ -163,31 +163,16 @@ test("Codex setup output requires explicit opt-in and supports a private URL", (
     installer,
     /--codex-url must be a private HTTPS URL ending in \/mcp/
   );
-  assert.match(installer, /CODEX_SETUP_URL=\$\(automatic_codex_url\)/);
+  assert.match(installer, /clientSetupInstaller\.js/);
   assert.doesNotMatch(installer, /REPLACE_WITH_PRIVATE_HOSTNAME/);
 });
 
-test("copy-ready Codex block keeps the bearer token out of config.toml", () => {
-  const setupFunction = installer.slice(
-    installer.indexOf("print_codex_setup() {"),
-    installer.indexOf("\nmain() {")
-  );
-
-  assert.match(
-    setupFunction,
-    /token=\$\(read_config_value COMMAND_BRIDGE_BEARER_TOKEN\)/
-  );
-  assert.match(setupFunction, /\^\[A-Za-z0-9\._~-\]\{32,\}\$/);
-  assert.match(setupFunction, /BEGIN COPY FOR CODEX/);
-  assert.match(setupFunction, /Bearer token \(secret\): \$\{token\}/);
-  assert.match(
-    setupFunction,
-    /bearer_token_env_var.*token_env/
-  );
-  assert.match(setupFunction, /\[mcp_servers\.\$\{connection_name\}\]/);
-  assert.match(setupFunction, /Never overwrite the existing connection or its token/);
-  assert.match(setupFunction, /Do not repeat the bearer token in your final response/);
-  assert.doesNotMatch(setupFunction, /^bearer_token\s*=/m);
+test("installers use the shared Codex renderer with protected saved configuration", () => {
+  assert.match(installer, /clientSetupInstaller\.js.*print.*CONFIG_FILE.*CLIENT_SETUP_FILE.*show/);
+  const renderer = readFileSync("src/cli/connectionSetup.ts", "utf8");
+  assert.match(renderer, /Token is hidden/);
+  assert.match(renderer, /bearer_token_env_var/);
+  assert.doesNotMatch(renderer, /^bearer_token\s*=/m);
 });
 
 test("installation documentation enables the copy-ready Codex setup block", () => {

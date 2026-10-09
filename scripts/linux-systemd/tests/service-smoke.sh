@@ -39,7 +39,9 @@ while (true) {
 }
 NODE
 }
-sudo bash scripts/linux-systemd/install.sh
+sudo bash scripts/linux-systemd/install.sh --codex-name cb_saved --codex-url https://saved.example/mcp >/dev/null
+description=/etc/command-bridge/client-setup.json
+description_before=$(sudo sha256sum "$description")
 sudo systemctl is-active --quiet "$service"
 sudo systemctl is-enabled --quiet "$service"
 pid=$(sudo systemctl show "$service" --property=MainPID --value)
@@ -51,6 +53,7 @@ before=$(sudo sha256sum "$config")
 sudo touch /var/lib/command-bridge/work/preserved
 sudo bash scripts/linux-systemd/install.sh
 [[ "$(sudo sha256sum "$config")" == "$before" ]]
+[[ "$(sudo sha256sum "$description")" == "$description_before" ]]
 sudo bash scripts/linux-systemd/install.sh --refresh-network >/dev/null
 sudo systemctl restart "$service"
 wait_for_listener
@@ -77,6 +80,7 @@ assert_restored() {
   [[ "$(readlink /usr/local/lib/command-bridge/current)" == "$old" ]]
   [[ "$(sudo sha256sum /usr/local/lib/command-bridge/current/install-info.json)" == "$old_info" ]]
   [[ "$(sudo sha256sum "$config")" == "$before_refresh" ]]
+  [[ "$(sudo sha256sum "$description")" == "$description_before" ]]
   sudo test -f "$work/preserved"
   sudo systemctl is-active --quiet "$service"
   wait_for_listener
@@ -84,7 +88,7 @@ assert_restored() {
 }
 tar --exclude=.git --exclude=node_modules --exclude=dist -cf - . | tar -C "$fixture" -xf -
 sudo "$node" scripts/tests/rollback-fixture.mjs prepare "$fixture" verify "$verify_sha" "$verify_marker" "$new_host"
-if sudo bash "$fixture/scripts/linux-systemd/install.sh" --refresh-network > "$verify_log" 2>&1; then echo 'Expected verification failure.'; exit 1; fi
+if sudo bash "$fixture/scripts/linux-systemd/install.sh" --refresh-network --codex-name cb_failed --codex-url https://failed.example/mcp > "$verify_log" 2>&1; then echo 'Expected verification failure.'; exit 1; fi
 grep -q 'INJECTED_POST_ACTIVATION_FAILURE' "$verify_log"
 sudo "$node" scripts/tests/rollback-fixture.mjs assert "$verify_marker" "$verify_sha" verified
 assert_restored
@@ -106,6 +110,7 @@ sudo test ! -e /etc/sudoers.d/command-bridge-update
 sudo test ! -e /usr/local/libexec/command-bridge-update
 sudo test -f /var/lib/command-bridge-update/latest.json
 sudo test -f "$config"
+[[ "$(sudo sha256sum "$description")" == "$description_before" ]]
 sudo test -f /var/lib/command-bridge/work/preserved
 sudo bash "$root/scripts/linux-systemd/install.sh"
 # The intentional reinstall selected the repository SHA; snapshot that baseline.
@@ -138,6 +143,7 @@ sudo bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes
 sudo test ! -e /var/lib/command-bridge-update
 [[ ! -e /usr/local/lib/command-bridge ]]
 sudo test ! -e "$config"
+sudo test ! -e "$description"
 
 # Opt-in installer identity: file Audit, unrestricted commands, and only the
 # login account's existing non-interactive sudo rights plus the fixed updater grant.
@@ -153,6 +159,7 @@ sudo grep -Fxq 'COMMAND_BRIDGE_AUDIT_BACKEND=file' "$config"
 sudo grep -Fxq 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted' "$config"
 sudo test ! -e /etc/sudoers.d/command-bridge-audit-reader
 sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'sudo -n /usr/bin/id -u' 0
+sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config" 'command-bridge setup --show-token' error:LOCAL_ADMIN_COMMAND_BLOCKED
 # Verify the fixed numeric-UID request grant and update as the login identity.
 sudo env GITHUB_ACTIONS=true "$node" scripts/tests/managed-update-fixture.mjs linux "$update_archive" "$version" "$(printf '5%.0s' {1..40})"
 sudo env GITHUB_ACTIONS=true "$node" scripts/tests/verify-managed-update.mjs "$config" "$(printf '5%.0s' {1..40})"
