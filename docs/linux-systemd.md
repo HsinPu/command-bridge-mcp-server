@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -70,7 +70,7 @@ If MCP commands must use the same access as the non-root login account that runs
 
 On every install, leave off both `--guarded` and `--unrestricted` to select allowlist; a sudo command then also needs an exact administrator-managed command policy. Reinstallation selects the mode from the current options rather than the saved mode. `--unrestricted` cannot be used without `--run-as-installer`. The original account comes from `SUDO_USER`/`SUDO_UID`; direct root execution and a later reinstall by a different login account are rejected. The installer does **not** change its persistent groups or grant any general privilege. From 4.4.0, a separate exact no-argument sudoers rule permits only the fixed managed-update request helper. A command such as `sudo -n /usr/bin/id -u` can succeed only if the account's existing sudo policy allows it without a password. The background service has no terminal for password entry.
 
-The installer-account unit uses that account's UID and normal group memberships, plus the dedicated `command-bridge` group to read the root-owned policy. It allows home access and normal filesystem permissions. It does not apply the dedicated account's read-only filesystem, private temporary directory or capability ceiling, so existing sudo privileges remain usable. Anyone holding the bearer token can invoke the selected command policy using this account. Keep the endpoint on a trusted LAN/VPN or private HTTPS route and guard the token accordingly.
+The installer-account unit uses that account's UID and normal group memberships, plus the dedicated `command-bridge` group to read the root-owned policy. It allows home access and normal filesystem permissions. It does not apply the dedicated account's read-only filesystem, private temporary directory or capability ceiling, so existing sudo privileges remain usable. From 6.1.2, both account modes enter through fixed `/usr/bin/env --` before executing the absolute bundled Runtime. This keeps the selected Unix account and uses the host's existing SELinux service transition; it does not copy the SSH login session's SELinux domain. Anyone holding the bearer token can invoke the selected command policy using this account. Keep the endpoint on a trusted LAN/VPN or private HTTPS route and guard the token accordingly.
 
 This mode switches Audit to owner-only JSONL files under `/var/lib/command-bridge-installer/CommandBridgeMCP/audit` (10 MiB per file, five files). It removes the old dedicated-account Audit reader and exact sudoers rule only after the new service passes real MCP/Audit verification. A failed switch restores the prior unit, configuration and helper. Existing bearer token, network settings, policy and `/var/lib/command-bridge/work` data are preserved; when switching from the dedicated account, the working-directory roots become the login account's home followed by `/`. Subsequent reinstalls preserve custom roots. File Audit is writable by the service account and is not an immutable security ledger.
 
@@ -162,8 +162,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.1.1-<source-sha>
-├── releases/v6.1.1-<source-sha>/
+├── current -> releases/v6.1.2-<source-sha>
+├── releases/v6.1.2-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -210,13 +210,23 @@ Version 2.0.1 and earlier copied temporary SELinux labels into `/opt`; an Oracle
 
 Label repair uses host policy, including administrator-defined file-context mappings. It covers the managed application tree, configuration files, service unit and Audit assets. It does not follow application symlinks into external trees, cross mount points during recursive traversal, recursively relabel work data, disable SELinux, force a universal executable type, or generate allow rules. Rollback repairs restored paths before restarting the old service; a label failure is reported rather than claiming successful recovery. A remaining health failure reports bounded execution-file labels/permissions and mount type/noexec status, without dumping configuration or tokens.
 
+If source tests pass but the service exits with `status=5/TRAP`, `OS::SetPermissions` and `Check failed: 12 == (*__errno_location ())`, Node/V8 failed a memory-permission operation before opening the listener. This assertion does not prove memory exhaustion: [the pinned Node/V8 source](https://github.com/nodejs/node/blob/v24.18.0/deps/v8/src/base/platform/platform-posix.cc#L474-L484) checks that a failed `mprotect` returned the expected out-of-memory errno. SELinux denial or an externally applied syscall restriction can return a different errno. Inspect matching AVC records before treating SELinux as confirmed; a `lib_t` Runtime and systemd's `init_t` domain are a known diagnostic lead.
+
+6.1.2 starts the two main-service units and managed updater/finalizer through administrator-owned, write-protected `/usr/bin/env --`, which directly execs the fixed bundled Node.js path. UID/groups, configuration, environment, PID tracking, exit status and signal handling remain intact. The installer validates the launcher's original/resolved path and, on active SELinux hosts, its existing host-policy label before deployment changes. It never relabels `/usr/bin/env`, hardcodes a Node label, disables SELinux or installs an allow rule. If host policy still refuses service startup, activation fails and rollback remains mandatory. Successful SSH/installer tests do not prove that the service's SELinux domain can run Node.
+
+For a memory-permission startup failure, this read-only query shows recent matching denials without dumping configuration or Tokens:
+
+```bash
+sudo ausearch -m AVC,USER_AVC -ts today -i | grep -E 'avc:.*(execmem|execmod)' | tail -n 20
+```
+
 For a **fresh disposable Oracle Linux 8.10 VM only**, install the development/test prerequisites and run from a project checkout:
 
 ```bash
 sudo env COMMAND_BRIDGE_DISPOSABLE_VM=1 bash scripts/linux-systemd/tests/selinux-enforcing-smoke.sh
 ```
 
-The script requires systemd PID 1, SELinux Enforcing, and no existing installation/account. It deliberately labels the installed Node.js `user_tmp_t`, requires an actual `203/EXEC`, then verifies repair through reinstall, a new snapshot upgrade, post-MCP/Audit failure rollback, configuration/data preservation and uninstall/purge. Failed test logs remain in a root-only temporary directory. It never changes SELinux mode. This script's existence and mocked unit tests are not evidence of an Enforcing VM pass; see [validation status](validation-status.md).
+Run through sudo from a non-root login account. The script requires systemd PID 1, SELinux Enforcing, and no existing installation/dedicated account. It verifies that the managed Node process leaves systemd's init domain in both account modes. A private temporary direct-entry override reproduces historical `user_tmp_t`/`203/EXEC`, and is removed before verifying repair through reinstall, a new snapshot upgrade, post-MCP/Audit failure rollback, configuration/data preservation and uninstall/purge. Installer-account verification uses the original sudo caller and never removes that login account. Failed test logs remain in a root-only temporary directory. It never changes SELinux mode. This script's existence and mocked unit tests are not evidence of an Enforcing VM pass; see [validation status](validation-status.md).
 
 ### Environment file
 

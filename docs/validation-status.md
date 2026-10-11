@@ -1,6 +1,18 @@
 # Validation status
 
-The current package is 6.1.1, improving installation test scheduling and fixed failure diagnostics while retaining local info/setup and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.2, repairing the Linux fixed service entry while retaining test scheduling, local info/setup and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.2 validation (2026-10-11)
+
+PATCH: the two Linux main-service account modes and independent update worker/finalizer enter through fixed `/usr/bin/env --` and absolute bundled Runtime paths. Unix identity, argv, PID, environment, exit status and signals are retained; no production command/transfer/Audit/shutdown limit, host SELinux policy or system-file label is changed. Private behavior tests cover identity/PID, fixed arguments, nonzero exits, missing Runtime, termination and fail-closed launcher ownership/write/label checks. Unit digests are synchronized.
+
+Full native Windows `npm test` with the checksum-verified **complete** Node.js 24.18.0 distribution passed **176/211**, with **35 platform/elevation skips**, zero failures. An initial bare `node.exe` fixture failed the existing npm-presence assertion; using the complete official distribution corrected the validation environment without changing a test. Private WSL Ubuntu under `nobody`, locked dependencies and installer PATH `/usr/bin:/bin` plus the same pinned Runtime passed **181/211**, with **30 platform skips**, zero failures.
+
+Two temporary WSL systemd units derived from the actual dedicated/installer templates ran as non-root `nobody` and passed authenticated readiness, real MCP `hostname`, matching attempted/completed Audit, diagnostics and UID checks. Dedicated-account filesystem/capability/PrivateTmp settings were retained; only fixture identity/paths/state were substituted. Initial staging under `/var/tmp` was correctly hidden by PrivateTmp, so private assets were staged under a unique `/run` fixture instead. The units and live staging were removed afterward. All three unit variants also passed `systemd-analyze verify` with private paths. This is service-entry verification, not a managed-install/upgrade/rollback/purge or SELinux test.
+
+All **25 native Windows PowerShell 5.1 scripts**, WinSW XML, **24 Bash scripts/four fixed Linux launchers**, synchronized package/root lock/build versions and unit digests, unchanged third-party dependencies and production command/transfer code, fixed bilingual bootstrap one-liners, relative document links and `git diff --check` are checked for this delivery.
+
+The production log's V8 memory-permission failure is consistent with denied executable-memory access, but no matching host AVC was provided. Neither the actual host denial nor repair is confirmed. Oracle Linux 8.10 **SELinux Enforcing**, the expanded disposable Enforcing smoke (including original login-account mode), full managed deployment/rollback, elevated Windows lifecycle and actual reboot have not been run locally. WSL has no active SELinux enforcement. Hosted 6.1.2 CI and channel publication have not run; this batch is not pushed. All release gates remain intact.
 
 ## 6.1.1 validation (2026-10-11)
 
@@ -11,6 +23,8 @@ Full native Windows `npm test` with checksum-verified CI Node.js 24.18.0 passed 
 All **25 native Windows PowerShell 5.1 scripts**, WinSW XML, **24 Bash scripts/four fixed Linux launchers**, runner JavaScript syntax, package/root lock/build versions, unchanged third-party dependencies and production executor/transfer sources, fixed bilingual bootstrap one-liners, relative document links and `git diff --check` passed.
 
 The reported production-host transfer timeout and guarded result failure were not reproduced under that host's actual workload. Sequential scheduling reduces test-process contention but does not establish the host's CPU/storage cause or cure. Hosted 6.1.1 general/service/layout/channel checks have not run in this local delivery, and this batch has not been pushed. Oracle Linux 8.10 SELinux Enforcing, elevated Windows service installation and actual reboot remain unverified locally. No deployment checks are skipped or weakened.
+
+After push, [CI run 38123437694](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/38123437694) for `78b5da4de2fba7549e1143b3b1286c70f2a1645e` passed both general jobs, Linux service lifecycle and Linux layout checks; the Windows service lifecycle failed, so channel publication was skipped. The verified channel still contained `2d8fb38af6fb17af32f34accd54fceb416963bb6` / `6.0.5` when checked during the 6.1.2 investigation. The reported 192-test production output matches that older channel's test set; the pasted tail does not independently identify its download SHA.
 
 ## 6.1.0 validation (2026-10-09)
 

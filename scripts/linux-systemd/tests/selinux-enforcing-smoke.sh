@@ -4,16 +4,25 @@
 set -Eeuo pipefail
 [[ ${EUID} == 0 && ${COMMAND_BRIDGE_DISPOSABLE_VM:-} == 1 ]] || { echo 'Explicit disposable VM opt-in and root are required.' >&2; exit 1; }
 [[ "$(getenforce)" == Enforcing && "$(ps -p 1 -o comm=)" == systemd ]] || { echo 'SELinux Enforcing and systemd PID 1 are required.' >&2; exit 1; }
+[[ -n ${SUDO_USER:-} && ${SUDO_USER} != root && $(id -u "$SUDO_USER") == "${SUDO_UID:-}" ]] || { echo 'Run through sudo from the non-root login account to test both service identities.' >&2; exit 1; }
 for path in /usr/local/lib/command-bridge /etc/command-bridge /var/lib/command-bridge \
+    /opt/command-bridge /var/lib/command-bridge-installer /var/lib/command-bridge-update /var/lib/command-bridge-recovery \
     /opt/command-bridge-mcp-server /etc/command-bridge-mcp-server /var/lib/command-bridge-mcp-server \
     /etc/systemd/system/command-bridge.service /etc/systemd/system/command-bridge-mcp-server.service \
-    /usr/local/libexec/command-bridge /etc/sudoers.d/command-bridge-audit-reader; do
+    /etc/systemd/system/command-bridge-update.service /usr/local/bin/command-bridge \
+    /run/systemd/system/command-bridge.service /run/systemd/system/command-bridge.service.d \
+    /usr/local/libexec/command-bridge /etc/sudoers.d/command-bridge-audit-reader \
+    /usr/local/libexec/command-bridge-update /etc/sudoers.d/command-bridge-update \
+    /usr/local/libexec/command-bridge-diagnostics /etc/sudoers.d/command-bridge-diagnostics; do
   [[ ! -e "$path" && ! -L "$path" ]] || { echo "Empty VM required; found $path" >&2; exit 1; }
 done
 ! getent passwd command-bridge >/dev/null || { echo 'Existing service account; refusing test.' >&2; exit 1; }
+override=/run/systemd/system/command-bridge.service.d/cb-selinux-reproduction.conf
+[[ ! -e "$override" && ! -L "$override" ]] || { echo 'Unexpected reproduction override.' >&2; exit 1; }
 root=$(pwd)
 work=$(mktemp -d /tmp/command-bridge-selinux-smoke.XXXXXX)
-trap 'code=$?; if (( code == 0 )); then rm -rf -- "$work"; else printf "SELinux smoke failed. Private logs retained at %s\n" "$work" >&2; fi' EXIT
+override_created=0
+trap 'code=$?; if [[ "$override_created" == 1 ]]; then rm -f -- "$override"; systemctl daemon-reload; fi; if (( code == 0 )); then rm -rf -- "$work"; else printf "SELinux smoke failed. Private logs retained at %s\n" "$work" >&2; fi' EXIT
 mkdir "$work/base" "$work/candidate"
 tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=.env -cf - . | tar -C "$work/base" -xf -
 sha=3333333333333333333333333333333333333333
@@ -26,6 +35,11 @@ verify_service() {
   [[ "$(getenforce)" == Enforcing ]]
   systemctl is-active --quiet command-bridge
   systemctl is-enabled --quiet command-bridge
+  local pid domain
+  pid=$(systemctl show command-bridge -p MainPID --value)
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]]
+  domain=$(ps -p "$pid" -o label=)
+  [[ -n "$domain" && "$domain" != *:init_t:* ]] || { echo 'The Node service retained the systemd init domain.' >&2; return 1; }
   "$node" "$root/scripts/tests/wait-for-listener.mjs" "$config"
   "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
   matchpathcon -V "$(readlink -f "$node")" >/dev/null
@@ -36,8 +50,14 @@ config_hash=$(sha256sum "$config")
 old=$(readlink /usr/local/lib/command-bridge/current)
 old_info=$(sha256sum /usr/local/lib/command-bridge/current/install-info.json)
 
-# Reproduce the reported failure, then repair the SAME runtime via reinstall.
+# Reproduce the historical direct-entry 203/EXEC, then restore the managed entry.
 systemctl stop command-bridge
+install -d -m 0755 -- "${override%/*}"
+printf '[Service]\nExecStart=\nExecStart=%s /usr/local/lib/command-bridge/current/dist/index.js\n' "$node" > "$override"
+chmod 0644 "$override"
+override_created=1
+restorecon "${override%/*}" "$override"
+systemctl daemon-reload
 chcon -t user_tmp_t "$(readlink -f "$node")"
 systemctl start command-bridge || true
 denied=0
@@ -47,6 +67,10 @@ for ((attempt=0; attempt<20; attempt++)); do
 done
 systemctl stop command-bridge
 [[ "$denied" == 1 ]] || { echo 'Failed to reproduce 203/EXEC with user_tmp_t.' >&2; exit 1; }
+rm -f -- "$override"
+override_created=0
+rmdir -- "${override%/*}"
+systemctl daemon-reload
 systemctl reset-failed command-bridge
 bash "$work/base/scripts/linux-systemd/install.sh" > "$work/reinstall.log" 2>&1
 verify_service
@@ -82,4 +106,15 @@ verify_service
 bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes > "$work/purge.log" 2>&1
 [[ ! -e /usr/local/lib/command-bridge && ! -e /etc/command-bridge && ! -e /var/lib/command-bridge ]]
 [[ "$(getenforce)" == Enforcing ]]
-echo 'Enforcing: reproduced 203/EXEC, repaired reused runtime, verified fresh install, upgrade, rollback, MCP/Audit and purge.'
+
+# The caller's real login account must also start through the host transition.
+# No login account is created, deleted or granted general sudo rights here.
+printf '%s\n' 6666666666666666666666666666666666666666 > "$work/base/.command-bridge-source-sha"
+bash "$work/base/scripts/linux-systemd/install.sh" --run-as-installer > "$work/installer-account.log" 2>&1
+[[ "$(systemctl show command-bridge -p User --value)" == "$SUDO_UID" ]]
+verify_service
+account_uid=$(id -u "$SUDO_USER")
+bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes > "$work/installer-purge.log" 2>&1
+[[ "$(id -u "$SUDO_USER")" == "$account_uid" && ! -e /usr/local/lib/command-bridge ]]
+[[ "$(getenforce)" == Enforcing ]]
+echo 'Enforcing: verified both service identities, historical 203/EXEC repair, upgrade, rollback, MCP/Audit and purge.'

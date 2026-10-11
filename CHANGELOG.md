@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.1.2 — 2026-10-11
+
+PATCH: repair the Linux service startup entry on SELinux hosts without changing the service account, MCP interfaces, execution modes or host policy.
+
+- Start both Linux account modes through fixed `/usr/bin/env --` and then the absolute bundled Node.js path. This uses the host executable's existing SELinux service transition instead of directly starting a Runtime labeled `lib_t` in systemd's domain. The launcher preserves UID, groups, environment, argv and the tracked main PID; it adds no Shell or privilege transition.
+- Apply the same entry to the independent managed-update worker and its post-stop finalizer. Check the system launcher's administrator ownership, write protection, resolved path and host-policy label before changing the deployment; never relabel the system executable or add allow rules automatically.
+- Verify private real-process identity/PID, fixed arguments, exit failures, missing Runtime and termination; retain fail-closed labeling and rollback checks. Extend the disposable Enforcing smoke to verify service domains and the original sudo login account, while keeping historical direct-entry `203/EXEC` reproduction separate.
+- Explain V8 memory-permission startup failures separately from source tests and listener/firewall failures. Oracle Linux 8.10 Enforcing and hosted channel availability still require actual validation.
+
 ## 6.1.1 — 2026-10-11
 
 PATCH: improve target-host installation test reliability without changing MCP interfaces, command policies or production deadlines.

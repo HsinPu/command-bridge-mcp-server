@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.1-blue)
+![Version](https://img.shields.io/badge/version-6.1.2-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -60,7 +60,7 @@ HTTP connections use bearer-token authentication. The service executes commands 
 
 Alpine/musl is not supported. The systemd installer cannot run directly on Synology DSM. See the [Linux guide](docs/linux-systemd.md) and [Windows guide](docs/windows-service.md) for complete prerequisites.
 
-On SELinux Enforcing/Permissive hosts, the installer requires `restorecon` and `matchpathcon` and repairs deployment labels before starting the service. Version 2.0.3 fixes label repair for Oracle Linux 8.10's `restorecon` options; see the [SELinux recovery guide](docs/linux-systemd.md#selinux-hosts-and-recovery-from-203exec) and [validation status](docs/validation-status.md) before retrying.
+On SELinux Enforcing/Permissive hosts, the installer requires `restorecon` and `matchpathcon` and repairs deployment labels before starting the service. Version 6.1.2 uses a fixed host service entry while preserving the selected account and host policy; 2.0.3 retains Oracle Linux 8.10-compatible label repair. See the [SELinux recovery guide](docs/linux-systemd.md#selinux-hosts-and-recovery-from-203exec) and [validation status](docs/validation-status.md) before retrying.
 
 ## One-command installation
 
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.1 runs installation test files sequentially on both platforms and reports fixed stage/timing details for normal-command and transfer test failures. It retains 6.1.0 local installation summaries and repeatable Codex setup with protected, Token-free connection metadata, plus the Windows/dotenv and Linux recovery fixes. Real exit failures and MCP/Audit validation still stop deployment. Existing command, transfer, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
+6.1.2 repairs the Linux service entry for SELinux startup while preserving the selected service account, existing sudo policy and bundled Runtime. Both main-service account modes and the independent update worker use the fixed host launcher; no SELinux mode or allow rule changes are made. It retains sequential installation tests, local installation summaries and repeatable Codex setup with protected, Token-free connection metadata. Real exit failures and MCP/Audit validation still stop deployment. Existing command, transfer, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
 
 Example requests for a connected client:
 

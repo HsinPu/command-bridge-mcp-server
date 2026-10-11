@@ -80,6 +80,23 @@ MOCK_MODE=Enforcing
 expect_failure bash -c 'source "$1"; trap - EXIT ERR; command() { if [[ "$1 $2" == "-v restorecon" ]]; then return 1; fi; builtin command "$@"; }; detect_selinux' _ "$work/installer.sh"
 detect_selinux
 
+# The system launcher is verified, never relabeled or replaced by the installer.
+expect_failure assert_service_launcher
+printf '/usr/bin/env\n' >> "$LABEL_STATE"
+assert_service_launcher
+MOCK_FAIL_VERIFY=/usr/bin/env; expect_failure assert_service_launcher
+MOCK_FAIL_VERIFY=''
+stat() {
+  if [[ "$3" == /usr/bin/env && "$2" == %u && "${MOCK_LAUNCHER_UNSAFE:-}" == owner ]]; then printf '9000\n'; return; fi
+  if [[ "$3" == /usr/bin/env && "$2" == %a && "${MOCK_LAUNCHER_UNSAFE:-}" == writable ]]; then printf '777\n'; return; fi
+  command stat "$@"
+}
+MOCK_LAUNCHER_UNSAFE=owner; expect_failure assert_service_launcher
+MOCK_LAUNCHER_UNSAFE=writable; expect_failure assert_service_launcher
+unset MOCK_LAUNCHER_UNSAFE
+unset -f stat
+! grep -Fxq 'restore /usr/bin/env' "$LABEL_EVENTS"
+
 BUILT_PACKAGE_VERSION=4.3.3
 SOURCE_REF=1111111111111111111111111111111111111111
 runtime="$RUNTIME_DIR/node-v${NODE_VERSION}-linux-x64"

@@ -102,6 +102,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.1.2 起，Linux 主服務兩帳號模式及獨立更新 worker／finalizer 須以固定 `/usr/bin/env --` 再執行絕對內附 Node 路徑，沿用主機既有 SELinux 服務 transition，不把 Unix UID 等同於 SSH 登入的 SELinux domain。保留 UID／群組、PID、argv、環境、退出碼、訊號、sudo 與正式時限；切換前驗證系統啟動器原始／解析路徑的管理員所有權、不可由非管理員寫入及既有 SELinux 標籤，不自動重標系統檔案或新增 allow rule。真實私有程序須驗證身分／PID／終止與失敗傳遞；Enforcing smoke 須分開重現舊 direct-entry 203/EXEC 並驗證兩種帳號及 MCP／Audit。未實測 Oracle Enforcing 時明確記錄，不以一般測試推定現場已修復。
+
 - 6.1.1 起，兩平台安裝來源測試須逐檔執行，不依 CPU 數量開啟大量並行程序；保留個別指令、傳輸、Audit 及停機時限與全部安全斷言，不提供略過測試的部署參數。Linux 正常管線測試只依賴安裝器已要求存在的工具；成功同時檢查 ok、exitCode、timedOut、truncated 及固定輸出，失敗只補固定階段、旗標及耗時，避免公開指令／秘密／路徑。排程回歸須以私有實際程序驗證互斥與非零失敗傳遞；來源測試通過不得推定 hosted service／channel 或現場資源正常。
 
 - 6.1.0 起，受管理服務的 `info [--json]`／`setup` 僅供主機終端使用，透過固定位置與內附 Runtime 查詢，不啟動 MCP、依賴 Audit、連 GitHub 或寫入設定。一般輸出不得含 Token；`setup --show-token` 須明確要求並核對有效 root／提升後管理員身分，不自動提權。名稱／HTTPS 查詢覆寫只影響輸出；一般帳號不可讀設定時提供固定 schema 的部分摘要與權限問題，不把缺權限當成資料不存在。

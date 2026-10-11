@@ -37,8 +37,8 @@ readonly LEGACY_AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-aud
 SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SYSTEMD_UNIT_SHA256="91d21d93fa0fe174326ade9d91954627a3836db51b49114dfe221f14185c803f"
-readonly INSTALLER_UNIT_SHA256="4cacfd54253d38f3552c0340ed7739c197f3e05d1d07fc0d230f681b1ce22b8c"
+readonly SYSTEMD_UNIT_SHA256="638af9cc2c06d2bacfef2e4723e19970e74069d0692dda445153c9985891e149"
+readonly INSTALLER_UNIT_SHA256="6e5976866fea3846f2632828e699d539f9597399bc6852d5ddb1ff2cfb9519c1"
 readonly AUDIT_READER_SHA256="7e193ae6d90ab2097ecfecdf1529ce6ec165bd3ac2dd51fe778885c1b4418e6e"
 readonly DIAGNOSTIC_READER_SHA256="a6192101cbf82506a56f5d939bbeee09c35ef5ac1dcc0b7eb6245cf7aea86a47"
 readonly DIAGNOSTIC_PROGRAM_SHA256="cc895f97bf276e4f123752d03d5b44ff2ee3cb964e4d26f7c5a3e762df89c50a"
@@ -490,6 +490,19 @@ restore_current_selinux_layout() {
     restore_selinux_path "${INSTALLER_STATE_DIR}" || return 1
   fi
   restore_selinux_path "${CLI_LINK}" || return 1
+}
+
+assert_service_launcher() {
+  local launcher=/usr/bin/env resolved
+  [[ -f "$launcher" && -x "$launcher" ]] || fail "The fixed service launcher /usr/bin/env is unavailable."
+  assert_admin_path "${launcher%/*}"
+  [[ "$(stat -c %u "$launcher")" == 0 ]] || fail "The fixed service launcher is not administrator-owned."
+  resolved=$(readlink -f "$launcher") || fail "Cannot resolve the fixed service launcher."
+  assert_admin_path "$resolved"
+  if [[ "$SELINUX_ACTIVE" == 1 ]]; then
+    matchpathcon -V "$launcher" >/dev/null || fail "The fixed service launcher has an unexpected SELinux label; have an administrator restore its host-policy label."
+    [[ "$resolved" == "$launcher" ]] || matchpathcon -V "$resolved" >/dev/null || fail "The resolved service launcher has an unexpected SELinux label."
+  fi
 }
 
 assert_cli_entry() {
@@ -1635,6 +1648,7 @@ main() {
   done
 
   detect_selinux
+  assert_service_launcher
   collect_codex_setup_url
 
   install -d -m 0700 -o root -g root "${LOCK_DIR}"

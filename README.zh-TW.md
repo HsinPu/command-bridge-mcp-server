@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.1-blue)
+![Version](https://img.shields.io/badge/version-6.1.2-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -60,7 +60,7 @@ HTTP 連線使用 Bearer Token 驗證。服務在低權限帳號下執行指令�
 
 Linux 不支援 Alpine／musl，也不能直接以此 systemd 安裝器部署到 Synology DSM。完整前置條件見 [Linux 指南](docs/linux-systemd.md) 與 [Windows 指南](docs/windows-service.md)。
 
-SELinux Enforcing／Permissive 主機需有 `restorecon` 與 `matchpathcon`，安裝器會在啟動服務前修復部署標籤。2.0.3 修正 Oracle Linux 8.10 上不相容的 `restorecon` 參數；重試前請看 [SELinux 修復說明](docs/linux-systemd.md#selinux-hosts-and-recovery-from-203exec) 與 [驗證紀錄](docs/validation-status.md)。
+SELinux Enforcing／Permissive 主機需有 `restorecon` 與 `matchpathcon`，安裝器會在啟動服務前修復部署標籤。6.1.2 使用固定的系統服務入口，保留選定帳號與主機政策；2.0.3 的 Oracle Linux 8.10 相容標籤修復仍保留。重試前請看 [SELinux 修復說明](docs/linux-systemd.md#selinux-hosts-and-recovery-from-203exec) 與 [驗證紀錄](docs/validation-status.md)。
 
 ## 一鍵安裝
 
@@ -184,7 +184,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.1.1 讓兩平台安裝測試逐檔執行，並在正常指令與傳輸測試失敗時提供固定階段及耗時資訊。保留 6.1.0 的本機安裝摘要、可再次輸出的 Codex 設定與不含 Token 的受保護連線描述檔，以及 Windows／dotenv 和 Linux 回復修正。真正的退出錯誤與 MCP／Audit 驗證失敗仍會停止部署。既有指令、傳輸、Audit 與停機時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
+6.1.2 修正 Linux 在 SELinux 主機上的服務啟動入口，保留選定服務帳號、既有 sudo 政策及內附 Runtime。主服務的兩種帳號模式與獨立更新工作都使用固定系統啟動器，不調整 SELinux 模式或新增放行規則。保留逐檔安裝測試、本機安裝摘要、可再次輸出的 Codex 設定與不含 Token 的受保護連線描述檔。真正的退出錯誤與 MCP／Audit 驗證失敗仍會停止部署。既有指令、傳輸、Audit 與停機時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
 
 例如，你可以請已連線的用戶端：
 
