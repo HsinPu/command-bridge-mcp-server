@@ -101,8 +101,13 @@ BUILT_PACKAGE_VERSION=4.3.3
 SOURCE_REF=1111111111111111111111111111111111111111
 runtime="$RUNTIME_DIR/node-v${NODE_VERSION}-linux-x64"
 release="$RELEASES_DIR/v${BUILT_PACKAGE_VERSION}-${SOURCE_REF}"
-mkdir -p "$runtime/bin" "$release" "$CONFIG_DIR" "$WORK_DIR_PATH" "$(dirname "$UNIT_FILE")" "$SERVICE_HOME"
+mkdir -p "$runtime/bin" "$release/dist" "$CONFIG_DIR" "$WORK_DIR_PATH" "$(dirname "$UNIT_FILE")" "$SERVICE_HOME"
 printf '%s\n' "$SOURCE_REF" > "$release/.command-bridge-release"
+printf '{}' > "$release/dist/index.js"
+printf '{"version":"%s","sourceSha":"%s","runtimeVersion":"%s"}\n' "$BUILT_PACKAGE_VERSION" "$SOURCE_REF" "$NODE_VERSION" > "$release/install-info.json"
+TEMP_DIR="$work/staging"
+mkdir -p "$TEMP_DIR/node-runtime/bin"
+ln -s "$(command -v node)" "$TEMP_DIR/node-runtime/bin/node"
 printf 'preserved token\n' > "$CONFIG_FILE"
 printf '{}\n' > "$CONFIG_DIR/policy.json"
 printf 'user data\n' > "$WORK_DIR_PATH/preserved"
@@ -129,6 +134,7 @@ TEMP_DIR="$work/staging"
 mkdir -p "$TEMP_DIR/node-runtime/bin" "$TEMP_DIR/source/dist" "$TEMP_DIR/source/node_modules" \
   "$TEMP_DIR/source/scripts/linux-systemd" "$TEMP_DIR/source/packaging/linux"
 cp packaging/linux/command-bridge "$TEMP_DIR/source/packaging/linux/command-bridge"
+rm "$TEMP_DIR/node-runtime/bin/node"
 cp "$runtime/bin/node" "$TEMP_DIR/node-runtime/bin/node"
 for file in package.json package-lock.json README.md SECURITY.md scripts/verify-install.mjs scripts/verify-file-transfer.mjs scripts/linux-systemd/uninstall.sh scripts/linux-systemd/layout.sh scripts/bootstrap.sh; do
   printf 'fixture\n' > "$TEMP_DIR/source/$file"

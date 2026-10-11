@@ -6,3 +6,8 @@ test("Linux program relocation preserves originals, rolls back, and removes all 
   const result=spawnSync("bash",["scripts/linux-systemd/tests/layout.test.sh"],{encoding:"utf8",timeout:30000});
   assert.equal(result.status,0,result.stdout+result.stderr+String(result.error??""));
 });
+
+test("Linux installation and uninstall recognize managed entries and safely retry inactive files", {skip:process.platform!=="linux"},()=>{
+  const result=spawnSync("bash",["scripts/linux-systemd/tests/service-layout.test.sh"],{encoding:"utf8",timeout:30000,env:{...process.env,TEST_NODE:process.execPath}});
+  assert.equal(result.status,0,result.stdout+result.stderr+String(result.error??""));
+});

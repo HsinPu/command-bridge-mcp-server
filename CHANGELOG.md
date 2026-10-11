@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.1.3 — 2026-10-11
+
+PATCH: repair Linux deployment retries and managed-service recognition without changing MCP interfaces, accounts, execution modes or production deadlines.
+
+- Share exact recognition of the legacy direct Runtime entry and the fixed `/usr/bin/env --` entry across installation and uninstall. Reject extra arguments, environment substitutions, Shell wrappers and duplicate entries; preserve account/ownership/layout checks.
+- Retry protected program files left by a failed first activation only at the current root, with both active pointers absent and no installed/registered main, legacy or updater unit. Keep incomplete active deployments, old-root ambiguity, pending recovery, unsafe permissions and mounted roots blocked. Validate reused Runtime structure and exact release SHA/version/runtime metadata; never infer the previous active release.
+- Select a same-SHA capable uninstall fallback before executing saved scripts that cannot recognize the fixed entry. Failed downloads and an incompatible channel preserve the existing service and data.
+- Add private behavior regressions for both entries, accounts, update preservation, inactive retries and rejection boundaries. Extend the disposable real service gate to require first-activation failure evidence, retry and preserved configuration/work data. Retain all build, readiness, MCP/Audit, diagnostics and release gates.
+
+
 ## 6.1.2 — 2026-10-11
 
 PATCH: repair the Linux service startup entry on SELinux hosts without changing the service account, MCP interfaces, execution modes or host policy.

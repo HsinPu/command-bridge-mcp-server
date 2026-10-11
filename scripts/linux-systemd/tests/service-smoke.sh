@@ -9,10 +9,12 @@ config=/etc/command-bridge/command-bridge.env
 service=command-bridge
 fixture=$(mktemp -d)
 switch_fixture=$(mktemp -d)
+initial_fixture=$(mktemp -d)
+initial_log=$(mktemp)
 verify_log=$(mktemp)
 health_log=$(mktemp)
 switch_log=$(mktemp)
-trap 'rm -rf -- "$fixture" "$switch_fixture"; rm -f -- "$verify_log" "$health_log" "$switch_log"' EXIT
+trap 'rm -rf -- "$fixture" "$switch_fixture" "$initial_fixture"; rm -f -- "$verify_log" "$health_log" "$switch_log" "$initial_log"' EXIT
 wait_for_listener() {
   # Type=simple reports restart completion before Node starts listening.
   # Wait only for the socket; the mandatory verifier below still checks
@@ -39,7 +41,23 @@ while (true) {
 }
 NODE
 }
+# Prove that a failed first activation leaves an inactive cache that can be
+# retried without manual unlinking, deleting configuration, or skipping tests.
+initial_sha=$(printf '6%.0s' {1..40})
+initial_marker=/var/lib/command-bridge/work/initial-startup-evidence.json
+sudo test ! -e "$initial_marker"
+tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=.env -cf - . | tar -C "$initial_fixture" -xf -
+node scripts/tests/rollback-fixture.mjs prepare "$initial_fixture" health "$initial_sha" "$initial_marker"
+if sudo bash "$initial_fixture/scripts/linux-systemd/install.sh" > "$initial_log" 2>&1; then echo 'Expected first activation failure.'; exit 1; fi
+grep -q 'INJECTED_STARTUP_FAILURE' "$initial_log"
+sudo "$(command -v node)" scripts/tests/rollback-fixture.mjs assert "$initial_marker" "$initial_sha" started
+sudo test ! -e /etc/systemd/system/command-bridge.service
+sudo test ! -L /usr/local/lib/command-bridge/current
+sudo test ! -L /usr/local/lib/command-bridge/runtime/current
+initial_config=$(sudo sha256sum "$config")
 sudo bash scripts/linux-systemd/install.sh --codex-name cb_saved --codex-url https://saved.example/mcp >/dev/null
+[[ "$(sudo sha256sum "$config")" == "$initial_config" ]]
+sudo test -f "$initial_marker"
 description=/etc/command-bridge/client-setup.json
 description_before=$(sudo sha256sum "$description")
 sudo systemctl is-active --quiet "$service"

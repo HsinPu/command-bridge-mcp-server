@@ -102,6 +102,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.1.3 起，Linux 安裝與卸載共用新舊固定服務入口的精確辨識，拒絕額外 argv、環境覆寫、Shell 包裝及重複 ExecStart；舊卸載器無法辨識新入口時，須在任何服務變更前使用同一 CI SHA 的完整後備，後備不相容或下載失敗仍保留原部署。首次啟動失敗的程式檔僅能在新根目錄、兩個啟用指標皆不存在、無已安裝／已註冊的主服務、舊服務及 updater、且既有所有權／掛載／回復預檢通過時重用；not-found 的 systemd 失敗快取不等於活動服務。已有指標、舊根目錄或註冊服務的不完整部署不得猜測修復。重用 Runtime 須為受管理實體檔案，release 的 SHA／版本／Runtime metadata 須符合本次來源；仍執行全部建置與 MCP／Audit 驗證，保留 Token 與資料。真實 CI 須要求首次故障的啟動證據並驗證重試，不以單元測試宣稱 Oracle Enforcing 或 channel 已可用。
+
 - 6.1.2 起，Linux 主服務兩帳號模式及獨立更新 worker／finalizer 須以固定 `/usr/bin/env --` 再執行絕對內附 Node 路徑，沿用主機既有 SELinux 服務 transition，不把 Unix UID 等同於 SSH 登入的 SELinux domain。保留 UID／群組、PID、argv、環境、退出碼、訊號、sudo 與正式時限；切換前驗證系統啟動器原始／解析路徑的管理員所有權、不可由非管理員寫入及既有 SELinux 標籤，不自動重標系統檔案或新增 allow rule。真實私有程序須驗證身分／PID／終止與失敗傳遞；Enforcing smoke 須分開重現舊 direct-entry 203/EXEC 並驗證兩種帳號及 MCP／Audit。未實測 Oracle Enforcing 時明確記錄，不以一般測試推定現場已修復。
 
 - 6.1.1 起，兩平台安裝來源測試須逐檔執行，不依 CPU 數量開啟大量並行程序；保留個別指令、傳輸、Audit 及停機時限與全部安全斷言，不提供略過測試的部署參數。Linux 正常管線測試只依賴安裝器已要求存在的工具；成功同時檢查 ok、exitCode、timedOut、truncated 及固定輸出，失敗只補固定階段、旗標及耗時，避免公開指令／秘密／路徑。排程回歸須以私有實際程序驗證互斥與非零失敗傳遞；來源測試通過不得推定 hosted service／channel 或現場資源正常。

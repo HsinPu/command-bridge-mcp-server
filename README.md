@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.2-blue)
+![Version](https://img.shields.io/badge/version-6.1.3-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.2 repairs the Linux service entry for SELinux startup while preserving the selected service account, existing sudo policy and bundled Runtime. Both main-service account modes and the independent update worker use the fixed host launcher; no SELinux mode or allow rule changes are made. It retains sequential installation tests, local installation summaries and repeatable Codex setup with protected, Token-free connection metadata. Real exit failures and MCP/Audit validation still stop deployment. Existing command, transfer, Audit and shutdown time limits remain unchanged. Availability through one-command installation depends on all CI/service gates passing and the verified channel advancing.
+6.1.3 fixes Linux reinstall and uninstall recognition of both managed service entries, and safely retries protected program files left by a failed first activation. A damaged deployment with active pointers or a registered service still stops for administrator recovery. Configuration, Token and work/Audit data follow existing retention rules; the selected CI source is still built, tested and verified through real MCP/Audit. The fixed SELinux entry, local installation info/setup and production deadlines are retained. One-command availability requires all CI/service gates and a published verified channel.
 
 Example requests for a connected client:
 

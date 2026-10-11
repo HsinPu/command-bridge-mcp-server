@@ -598,7 +598,7 @@ assert_new_installation_paths() {
   if [[ -e "${UNIT_FILE}" || -L "${UNIT_FILE}" ]]; then
     [[ -f "${UNIT_FILE}" && ! -L "${UNIT_FILE}" ]] || fail "Service unit is not a regular file."
     assert_admin_path "$UNIT_FILE"
-    grep -Fxq "ExecStart=${EXISTING_APP_ROOT:-$INSTALL_ROOT}/runtime/current/bin/node ${EXISTING_APP_ROOT:-$INSTALL_ROOT}/current/dist/index.js" "${UNIT_FILE}" ||
+    is_managed_service_entry "${UNIT_FILE}" "${EXISTING_APP_ROOT:-$INSTALL_ROOT}" ||
       fail "An unrelated ${SERVICE_NAME}.service already exists; it was not replaced."
     if grep -Fxq "User=${SERVICE_USER}" "${UNIT_FILE}"; then
       : # A dedicated-account installation may switch to the opt-in account.
@@ -1153,6 +1153,10 @@ install_runtime_and_release() {
   done
 
   if [[ -e "${runtime_final}" ]]; then
+    [[ -d "${runtime_final}" && ! -L "${runtime_final}" &&
+       -d "${runtime_final}/bin" && ! -L "${runtime_final}/bin" &&
+       -f "${runtime_final}/bin/node" && ! -L "${runtime_final}/bin/node" ]] ||
+      fail "Existing runtime is not a regular managed runtime."
     restore_selinux_path "${runtime_final}" 1 || fail "Could not repair the existing runtime's SELinux labels."
     [[ -x "${runtime_final}/bin/node" ]] || fail "Existing runtime is incomplete: ${runtime_final}"
     [[ "$("${runtime_final}/bin/node" --version)" == "v${NODE_VERSION}" ]] || \
@@ -1166,8 +1170,16 @@ install_runtime_and_release() {
   fi
 
   if [[ -e "${release_final}" ]]; then
-    [[ -f "${release_final}/.command-bridge-release" ]] || \
+    [[ -d "${release_final}" && ! -L "${release_final}" &&
+       -f "${release_final}/.command-bridge-release" && ! -L "${release_final}/.command-bridge-release" &&
+       "$(cat "${release_final}/.command-bridge-release")" == "${SOURCE_REF}" &&
+       -f "${release_final}/install-info.json" && ! -L "${release_final}/install-info.json" &&
+       -d "${release_final}/dist" && ! -L "${release_final}/dist" &&
+       -f "${release_final}/dist/index.js" && ! -L "${release_final}/dist/index.js" ]] || \
       fail "Existing release is incomplete: ${release_final}"
+    "${TEMP_DIR}/node-runtime/bin/node" -e 'try { const i=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(i.sourceSha!==process.argv[2]||i.version!==process.argv[3]||i.runtimeVersion!==process.argv[4]) throw 0; } catch { process.exit(1); }' \
+      "${release_final}/install-info.json" "${SOURCE_REF}" "${package_version}" "${NODE_VERSION}" ||
+      fail "Existing release metadata does not match the selected verified source."
   else
     install -d -m 0755 "${release_staging}"
     cp -a --no-preserve=context \

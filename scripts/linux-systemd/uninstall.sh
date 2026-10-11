@@ -267,7 +267,7 @@ inspect_installed_unit() {
     [[ -f "$unit" && ! -L "$unit" ]] || fail "Expected a regular systemd unit at $unit."
     assert_admin_path "$unit"
     while IFS= read -r root; do
-      if grep -Fxq "ExecStart=$root/runtime/current/bin/node $root/current/dist/index.js" "$unit"; then found=1; fi
+      if is_managed_service_entry "$unit" "$root"; then found=1; fi
     done < <(layout_roots)
     [[ "$found" == 1 ]] || fail "Service does not belong to a known CommandBridge deployment."
   fi

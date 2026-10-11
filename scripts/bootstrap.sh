@@ -59,7 +59,14 @@ managed_program_remains() {
   done
   return 1
 }
+supports_env_service_entry() {
+  grep -Fq 'is_managed_service_entry ' "$1" && grep -Fq 'is_managed_service_entry()' "$2"
+}
+needs_env_service_entry=0
 if [[ "$mode" == uninstall ]]; then
+  for unit in /etc/systemd/system/command-bridge.service /etc/systemd/system/command-bridge-mcp-server.service; do
+    if [[ -f "$unit" ]] && grep -Fq 'ExecStart=/usr/bin/env -- ' "$unit"; then needs_env_service_entry=1; fi
+  done
   # Older saved modern helpers may not check alias parents. Protect every
   # existing root/backup's entry before selecting or downloading an uninstaller.
   for installed_root in /usr/local/lib/command-bridge /opt/command-bridge /opt/command-bridge-mcp-server; do
@@ -80,6 +87,10 @@ if [[ "$mode" == uninstall ]]; then
         [[ -f "$helper" && ! -L "$helper" ]] && trusted_installed_path "$helper" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
         if [[ ( -e /var/lib/command-bridge-recovery || -L /var/lib/command-bridge-recovery ) ]] && ! grep -Fq 'validate_installer_recovery()' "$helper"; then
           echo 'Installed uninstaller cannot inspect retained recovery records; using the verified channel uninstaller.' >&2
+          break
+        fi
+        if [[ "$needs_env_service_entry" == 1 ]] && ! supports_env_service_entry "$saved_uninstaller" "$helper"; then
+          echo 'Installed uninstaller does not recognize the managed service entry; using the verified channel uninstaller.' >&2
           break
         fi
         exec bash "$saved_uninstaller" "$@"
@@ -138,6 +149,10 @@ if [[ "$mode" == uninstall ]]; then
     [[ -f "${uninstaller%/*}/layout.sh" && ! -L "${uninstaller%/*}/layout.sh" ]] || { echo 'Verified uninstaller layout helper is missing or invalid; no changes were made.' >&2; exit 1; }
     if [[ ( -e /var/lib/command-bridge-recovery || -L /var/lib/command-bridge-recovery ) ]] && ! grep -Fq 'validate_installer_recovery()' "${uninstaller%/*}/layout.sh"; then
       echo 'Verified uninstaller is too old to inspect retained recovery records; no changes were made.' >&2
+      exit 1
+    fi
+    if [[ "$needs_env_service_entry" == 1 ]] && ! supports_env_service_entry "$uninstaller" "${uninstaller%/*}/layout.sh"; then
+      echo 'Verified uninstaller is too old for the managed service entry; no changes were made. Wait for a successful CI publication.' >&2
       exit 1
     fi
   else

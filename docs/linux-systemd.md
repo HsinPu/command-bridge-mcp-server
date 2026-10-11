@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.2. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -156,14 +156,22 @@ The bootstrap prefers a saved modern uninstaller with full layout validation. A 
 
 The fixed `.migration-backup` paths at all three program roots are included in direct self-modification checks in every execution mode; arbitrary similarly named directories are not included. Installation and uninstall validate the original parent of each compatibility alias, as well as its root-owned link and confined target; resolving into a protected new root does not make a writable `/opt` safe. Disposable Linux CI explicitly prepares `/opt` and `/usr/local` parents before fresh/old-root service tests, while production installers continue rejecting writable parents.
 
+## Retry after a failed first activation (6.1.3)
+
+A first installation that fails service verification rolls back its unit and active pointers, while retaining protected program files, configuration, Token and work/Audit data. Repeat the same one-command installation after the reported startup problem is resolved. The installer reuses those files only at `/usr/local/lib/command-bridge`, with **both** `current` and `runtime/current` absent, no installed unit and no registered/running main, legacy or managed-update service. A `not-found` unit may retain an inactive/failed systemd cache; a loaded unit is never treated as absent. Ownership, permissions, mount and pending-recovery checks remain mandatory. Reused Runtime structure and release SHA/version/runtime metadata must match the selected verified source; all source tests and service/MCP/Audit verification still run. The installer does not select a historical cached release, recreate missing pointers for an existing service, or delete data to clear the error.
+
+`Incomplete active deployment` for one missing/dangling pointer, incomplete metadata/Runtime, an old-root cache or a registered service still requires administrator inspection. Ordinary uninstall validates and removes managed program files while retaining configuration, Token and logs/work, allowing a fresh reinstall; `--purge` is not required for this retry and deletes retained data. Unknown, unsafe or mounted files and incomplete recovery records continue to stop installation/removal.
+
+Installation and uninstall recognize only the exact legacy direct Node entry and the fixed `/usr/bin/env --` entry, preserving the existing account checks. A saved uninstaller that predates this recognition uses a capable uninstaller downloaded from the same verified channel SHA before any service changes. An incompatible channel or failed download leaves the service intact; no fallback to unverified `main` is permitted.
+
 ## Installed layout
 
 Disposable-runner tests require evidence from the deployed test SHA before accepting an upgrade failure. They verify a changed loopback listener, restored configuration and source identity, preserved work data, and real MCP/Audit access after rollback. These checks do not replace actual reboot testing; see [validation status](validation-status.md) for executed results.
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.1.2-<source-sha>
-├── releases/v6.1.2-<source-sha>/
+├── current -> releases/v6.1.3-<source-sha>
+├── releases/v6.1.3-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/

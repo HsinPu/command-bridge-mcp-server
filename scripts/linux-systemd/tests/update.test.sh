@@ -28,9 +28,11 @@ unit() { printf 'ExecStart=%s/bin/node %s/dist/index.js\nUser=%s\nEnvironment=XD
 expect_failure() { if ( "$@" ); then echo 'Expected failure' >&2; exit 1; fi; }
 UPDATE_ONLY=1; EXPECTED_INSTALLED_SHA="$sha"
 for mode in allowlist guarded unrestricted; do
+ for entry_prefix in '' '/usr/bin/env -- '; do
   printf '# preserve all fields and quoting\nexport COMMAND_BRIDGE_EXECUTION_MODE="%s" # mode\nCOMMAND_BRIDGE_BEARER_TOKEN=fixture-only\n' "$mode" > "$CONFIG_FILE"
   cp "$CONFIG_FILE" "$work/before"
   unit 10001
+  sed -i "s|^ExecStart=|ExecStart=$entry_prefix|" "$UNIT_FILE"
   RUN_AS_INSTALLER=0
   prepare_update
   [[ "$PRESERVED_EXECUTION_MODE" == "$mode" && "$RUN_AS_INSTALLER" == 1 ]]
@@ -38,6 +40,7 @@ for mode in allowlist guarded unrestricted; do
   assert_new_installation_paths
   install_configuration
   cmp "$CONFIG_FILE" "$work/before"
+ done
 done
 unit command-bridge; RUN_AS_INSTALLER=0
 prepare_update; [[ "$RUN_AS_INSTALLER" == 0 ]]; select_service_identity; assert_new_installation_paths

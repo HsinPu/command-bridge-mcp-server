@@ -24,14 +24,20 @@ fail() { echo "$*" >&2; exit 1; }
 # remove_all_program_roots
 SH
 sed -n '/^validate_all_program_removals()/,/^}/p' scripts/linux-systemd/uninstall.sh >> "$work/modern.sh"
+sed -n '/^inspect_installed_unit()/,/^}/p' scripts/linux-systemd/uninstall.sh >> "$work/modern.sh"
 cat >> "$work/modern.sh" <<'SH'
 for option in "$@"; do case "$option" in --help|-h) exit 0 ;; esac; done
 validate_all_program_removals
 validate_installer_recovery
+systemctl() { :; }
+if [[ -e "$FIXTURE/units/command-bridge.service" ]]; then
+  inspect_installed_unit "$FIXTURE/units/command-bridge.service" command-bridge
+fi
 printf 'fallback-preflight\n' >> "$FIXTURE/stages"
 for option in "$@"; do case "$option" in --dry-run) exit 0 ;; esac; done
 printf 'fallback-stop\n' >> "$FIXTURE/stages"
 printf stopped > "$FIXTURE/service"
+rm -f -- "$FIXTURE/units/command-bridge.service"
 rm -rf -- "$INSTALL_ROOT" "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
 SH
 cat > "$work/bin/stat" <<'SH'
@@ -85,7 +91,7 @@ make_app() {
 }
 reset() {
   chmod 0755 "$work/old" 2>/dev/null || true
-  rm -rf -- "$app" "$old" "$legacy" "$work/recovery"
+  rm -rf -- "$app" "$old" "$legacy" "$work/recovery" "$work/units"
   : > "$work/stages"; : > "$work/requests"; printf running > "$work/service"
   archive_modern
 }
@@ -182,4 +188,32 @@ cp scripts/linux-systemd/layout.sh "$app/current/layout.sh"
 ln -s "$app" "$old"
 BAD_OWNER_PATH="$work/old" expect_failure
 assert_preserved; [[ ! -s "$work/requests" ]]
+# A saved pre-6.1.3 uninstaller cannot recognize the fixed env service entry.
+# Require a capable same-SHA fallback before it can stop or remove anything.
+for fault in channel archive old-script old-helper safe saved; do
+  reset; make_app "$app"; mkdir -p "$work/units"
+  printf 'ExecStart=/usr/bin/env -- %s/runtime/current/bin/node %s/current/dist/index.js\n' "$app" "$app" > "$work/units/command-bridge.service"
+  printf '#!/bin/bash\n# remove_all_program_roots\nprintf old-stop >> "$FIXTURE/stages"\n' > "$app/current/uninstall.sh"
+  cp scripts/linux-systemd/layout.sh "$app/current/layout.sh"
+  case "$fault" in
+    channel) FAIL_CHANNEL=1 expect_failure; assert_preserved ;;
+    archive) FAIL_ARCHIVE=1 expect_failure; assert_preserved ;;
+    old-script)
+      printf '#!/bin/bash\n# remove_all_program_roots\nprintf downloaded-old-stop >> "$FIXTURE/stages"\n' > "$work/source/scripts/linux-systemd/uninstall.sh"
+      tar -czf "$work/archive.tar.gz" -C "$work" source
+      expect_failure; assert_preserved; grep -q 'too old for the managed service entry' "$work/result" ;;
+    old-helper)
+      sed -i '/^is_managed_service_entry()/,/^}/d' "$work/source/scripts/linux-systemd/layout.sh"
+      tar -czf "$work/archive.tar.gz" -C "$work" source
+      expect_failure; assert_preserved; grep -q 'too old for the managed service entry' "$work/result" ;;
+    safe)
+      run; [[ "$(cat "$work/stages")" == $'fallback-preflight\nfallback-stop' ]]
+      [[ ! -e "$app" && "$(cat "$work/data/keep")" == keep-token-and-work ]]
+      grep -Fxq "https://github.com/HsinPu/command-bridge-mcp-server/archive/$sha.tar.gz" "$work/requests" ;;
+    saved)
+      cp "$work/modern.sh" "$app/current/uninstall.sh"
+      run; [[ ! -s "$work/requests" && ! -e "$app" ]]
+      [[ "$(cat "$work/data/keep")" == keep-token-and-work ]] ;;
+  esac
+done
 echo 'Uninstall validates before legacy mutation; unsafe aliases, roots, mounts and fallback failures preserve the service and data.'

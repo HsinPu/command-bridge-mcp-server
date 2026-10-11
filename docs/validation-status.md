@@ -1,6 +1,18 @@
 # Validation status
 
-The current package is 6.1.2, repairing the Linux fixed service entry while retaining test scheduling, local info/setup and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.3, repairing Linux inactive-install retries and managed-service recognition while retaining test scheduling, local info/setup and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.3 validation (2026-10-11)
+
+PATCH: installation/uninstall recognize both exact managed entries; protected inactive program caches may be retried only with both pointers absent and all main/legacy/updater units absent and unregistered. Reused releases require matching SHA/version/Runtime metadata. Extra argv, duplicate entries, foreign accounts, ambiguous old roots, active units, unsafe permissions, mounts and pending recovery remain rejected.
+
+Native Windows full `npm test` using the checksum-verified complete Node.js 24.18.0 distribution passed **176/212**, with **36 platform/elevation skips**, zero failures. Private WSL Ubuntu under `nobody`, locked dependencies and the installer PATH plus the same pinned Runtime passed **182/212**, with **30 platform skips**, zero failures. The initial Linux run exposed incomplete historical SELinux fixture metadata and a new uninstall fixture that left its simulated unit behind. Fixtures were corrected without relaxing production validation; the final full suite passed. Private behavior checks exercise actual cache/pointer creation and rollback, exact saved configuration/work bytes, both account modes and fail-closed fallback downloads. SELinux labels and service state in these regressions are simulated.
+
+All Bash scripts and four fixed Linux launchers passed individual syntax checks; native PowerShell 5.1 parsed all 25 scripts and WinSW XML passed. Package/root lock/build version consistency, unchanged dependencies, bilingual fixed bootstrap one-liners, relative document links and `git diff --check` are verified before commit.
+
+The disposable service gate now requires a unique deployed-SHA startup marker and the designated first-activation fault, then retries the installer and verifies preserved configuration/work. **This extended full managed-service gate has not run locally.** Private regression success is not actual Oracle Linux 8.10 SELinux Enforcing, elevated Windows lifecycle, production-host repair or reboot evidence. No production timeouts or publication gates were weakened. This batch is not pushed; 6.1.3 channel availability is not claimed.
+
+The prior pushed [6.1.2 CI run 38126112142](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/38126112142) passed both general jobs but failed Linux service/layout and Windows service lifecycle gates; publication was skipped. Linux reported an unrelated managed unit, addressed by this entry-recognition repair. Windows reported the wrong injected failure stage and remains unresolved in this Linux batch. The channel was still `2d8fb38af6fb17af32f34accd54fceb416963bb6` / `6.0.5` when checked during this investigation. Historical pre-push snapshots below do not establish current publication.
 
 ## 6.1.2 validation (2026-10-11)
 

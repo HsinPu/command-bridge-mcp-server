@@ -4,6 +4,41 @@ layout_roots() {
   printf '%s\n' "$INSTALL_ROOT" "$PREVIOUS_INSTALL_ROOT" "$LEGACY_INSTALL_ROOT"
 }
 
+# Accept only the two managed entries, never extra argv, env settings or Shells.
+is_managed_service_entry() {
+  local unit=$1 root=$2 count
+  count=$(grep -c '^ExecStart=' "$unit") || return 1
+  [[ "$count" == 1 ]] || return 1
+  grep -Fxq "ExecStart=/usr/bin/env -- $root/runtime/current/bin/node $root/current/dist/index.js" "$unit" ||
+    grep -Fxq "ExecStart=$root/runtime/current/bin/node $root/current/dist/index.js" "$unit"
+}
+
+assert_inactive_program_cache() {
+  local root=$1 unit state line load_count active_count fragment_count
+  [[ "$root" == "$INSTALL_ROOT" && "${UPDATE_ONLY:-0}" == 0 &&
+     ! -e "$root/current" && ! -L "$root/current" &&
+     ! -e "$root/runtime/current" && ! -L "$root/runtime/current" ]] ||
+    fail "Incomplete active deployment; the service was not changed."
+  for unit in "${UNIT_FILE:-/etc/systemd/system/command-bridge.service}" \
+      "${LEGACY_UNIT_FILE:-/etc/systemd/system/command-bridge-mcp-server.service}" \
+      "${UPDATE_UNIT_FILE:-/etc/systemd/system/command-bridge-update.service}"; do
+    [[ ! -e "$unit" && ! -L "$unit" ]] || fail "Incomplete deployment still has a service unit; restore it or use ordinary uninstall before reinstalling."
+    state=$(systemctl show "${unit##*/}" --property=LoadState --property=ActiveState --property=FragmentPath) ||
+      fail "Cannot verify inactive deployment services; no deployment was changed."
+    load_count=0; active_count=0; fragment_count=0
+    while IFS= read -r line; do
+      case "$line" in
+        LoadState=not-found) load_count=$((load_count + 1)) ;;
+        ActiveState=inactive|ActiveState=failed) active_count=$((active_count + 1)) ;;
+        FragmentPath=) fragment_count=$((fragment_count + 1)) ;;
+        *) fail "Incomplete deployment has a registered or active service; no deployment was changed." ;;
+      esac
+    done <<< "$state"
+    [[ "$load_count" == 1 && "$active_count" == 1 && "$fragment_count" == 1 ]] ||
+      fail "Incomplete deployment has a registered or active service; no deployment was changed."
+  done
+}
+
 validate_installer_recovery() {
   local root=/var/lib/command-bridge-recovery item unsafe
   assert_admin_path "$root"
@@ -89,6 +124,16 @@ inspect_application_layout() {
   (( ${#PROGRAM_ROOTS[@]} <= 1 )) || fail "Multiple independent CommandBridge deployments exist; the services were not changed."
   EXISTING_APP_ROOT=${PROGRAM_ROOTS[0]:-}
   if [[ -n "$EXISTING_APP_ROOT" ]]; then
+    if [[ ! -e "$EXISTING_APP_ROOT/current" && ! -L "$EXISTING_APP_ROOT/current" &&
+          ! -e "$EXISTING_APP_ROOT/runtime/current" && ! -L "$EXISTING_APP_ROOT/runtime/current" ]]; then
+      # Failed first activation removes both pointers but retains verified files.
+      # Reuse them only at the current root with no registered service; never
+      # infer an old active release or repair a damaged running deployment.
+      assert_inactive_program_cache "$EXISTING_APP_ROOT"
+      EXISTING_APP_ROOT=''
+      log "Reusing protected program files from an inactive installation; the selected verified source will be built and validated."
+      return
+    fi
     local release runtime
     release=$(readlink -f "$EXISTING_APP_ROOT/current") || fail "Missing active release."
     runtime=$(readlink -f "$EXISTING_APP_ROOT/runtime/current") || fail "Missing active runtime."
