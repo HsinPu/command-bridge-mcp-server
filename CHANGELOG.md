@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.1.1 — 2026-10-11
+
+PATCH: improve target-host installation test reliability without changing MCP interfaces, command policies or production deadlines.
+
+- Run discovered test files sequentially on Linux as well as Windows, avoiding CPU-count defaults that start competing test processes during installation. A private real-process regression checks recursive discovery, exclusive execution and nonzero failure propagation.
+- Use the installer-required `cat` for the Linux guarded pipeline fixture instead of assuming a pager is installed. Verify successful exit, timeout/truncation flags and output; failed assertions include only a fixed stage, result flags and elapsed time.
+- Add bounded stage/timing diagnostics to the Linux binary transfer round trip. Preserve its 15-second deadline, overwrite/link/path protections, Audit lifecycle and cleanup assertions, and retain the guarded fixture's three-second command budget and separate short-timeout/cancellation tests.
+- Wait at most five seconds when deleting the Windows test's own verified temporary directory after copied Runtime use. Persistent cleanup errors still fail; no production permissions, process or timeout behavior is changed.
+- Document source-test failures and separate verified local results from hosted service/channel publication and production-host resource diagnosis.
+
 ## 6.1.0 — 2026-10-09
 
 MINOR: add compatible local administration queries for service installations. Existing MCP tools, version/update commands and production deadlines remain unchanged.

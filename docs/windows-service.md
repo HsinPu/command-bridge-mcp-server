@@ -1,6 +1,6 @@
 # Windows service installation
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 6.1.0; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 6.1.1; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -96,6 +96,8 @@ From 4.1.15, new configurations allow command requests up to 300 seconds, while 
 The installer removes inherited ACLs and grants the application directory read/execute access to LocalService. Configuration is readable by LocalService; only LocalService can modify the dedicated work and service-log directories. Administrators and SYSTEM retain administrative recovery access.
 
 ## Service operations
+
+6.1.1 keeps the existing sequential Windows test runner and applies the same scheduling to Linux. Normal guarded execution checks success, exit code, timeout/truncation and fixture output; failures include fixed result/timing summaries. The private installer test verifies its temporary path and waits at most five seconds for cleanup after copied Runtime use; persistent errors still fail, without changing ACLs. Production deadlines and Windows PowerShell/native helper behavior are unchanged. Source tests remain required, and local success does not establish that hosted service/channel gates have passed.
 
 Version 1.0.3 preserves standard Windows system/program/profile directory variables in the filtered execution environment. Safe built-in cmdlets load only Windows PowerShell's own module manifests, independent of a parent PowerShell 7 or user module search path. Unrelated environment variables are still excluded unless explicitly configured for passthrough. Production timeout settings are unchanged.
 

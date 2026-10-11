@@ -160,7 +160,23 @@ try {
     [Environment]::SetEnvironmentVariable($key, $savedEnvironment[$key])
   }
   Remove-Item -LiteralPath $ConfigFile -Force -ErrorAction SilentlyContinue
-  [IO.Directory]::Delete($HostFixture, $true)
+  # A just-exited copied executable can still be held by Windows briefly.
+  # Retry only this script's unique private directory, never change its ACL.
+  $fixtureBase = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')
+  $fixturePath = [IO.Path]::GetFullPath($HostFixture)
+  if (-not [string]::Equals([IO.Path]::GetDirectoryName($fixturePath), $fixtureBase, [StringComparison]::OrdinalIgnoreCase) -or
+      [IO.Path]::GetFileName($fixturePath) -notmatch '^command bridge host [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' -or
+      ([IO.File]::GetAttributes($fixturePath) -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unexpected private fixture path.' }
+  $cleanupWait = [Diagnostics.Stopwatch]::StartNew()
+  while ($true) {
+    try { [IO.Directory]::Delete($fixturePath, $true); break }
+    catch {
+      $cleanupError = $_.Exception
+      if ($cleanupError.InnerException) { $cleanupError = $cleanupError.InnerException }
+      if (($cleanupError -isnot [IO.IOException] -and $cleanupError -isnot [UnauthorizedAccessException]) -or $cleanupWait.ElapsedMilliseconds -ge 5000) { throw }
+      Start-Sleep -Milliseconds 100
+    }
+  }
 }
 
 # Build with the current runtime as the downloaded runtime, and no Node on PATH.

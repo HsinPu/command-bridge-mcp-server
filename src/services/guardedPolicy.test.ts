@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { assertGuardedCommand } from "./guardedPolicy.js";
 import { CommandExecutor } from "./commandExecutor.js";
 import { toErrorPayload } from "../errors/AppError.js";
@@ -73,6 +74,15 @@ test("guarded executor preserves files, Audit identity and capacity after reject
   const events: CommandAuditEvent[] = []; const audit: AuditLog = { async write(event) { events.push(event); }, async list() { return { events, hasMore: false }; } };
   const cfg: AppConfig = { transport: "stdio", httpHost: "127.0.0.1", httpPort: 8800, allowedHosts: [], executionMode: "guarded", allowedShells: [process.platform === "win32" ? "cmd" : "sh"], allowedCommands: new Set(), allowedRoots: [root], defaultTimeoutMs: 3000, maxTimeoutMs: 3000, maxOutputChars: 1000, maxParallelCommands: 1, passthroughEnv: [] };
   const executor = new CommandExecutor(cfg, audit);
+  const assertSuccessful = async (stage: "guarded-pipeline" | "unrestricted", command: string) => {
+    const started = performance.now();
+    const result = await executor.execute({ command });
+    const summary = { ok: result.ok, exitCode: result.exitCode, timedOut: result.timedOut, truncated: result.truncated };
+    const diagnostic = JSON.stringify({ stage, elapsedMs: Math.round(performance.now() - started), ...summary });
+    assert.deepEqual(summary, { ok: true, exitCode: 0, timedOut: false, truncated: false }, diagnostic);
+    assert.ok(result.stdout.trim() === "normal", "Unexpected fixture stdout: " + diagnostic);
+    assert.ok(result.stderr === "", "Unexpected fixture stderr: " + diagnostic);
+  };
   try {
     let caught: unknown;
     try { await executor.execute({ command: `${process.platform === "win32" ? "del" : "rm"} "${file}"` }); } catch (error) { caught = error; }
@@ -90,9 +100,10 @@ test("guarded executor preserves files, Audit identity and capacity after reject
       assert.equal(events[offset + 1]!.errorCode, 'SYSTEM_MODIFICATION_BLOCKED');
       assert.equal(readFileSync(file, 'utf8'), 'unchanged');
     }
-    assert.equal((await executor.execute({ command: "echo normal | more" })).ok, true);
+    // Linux installers require cat, but minimal hosts need not provide a pager.
+    await assertSuccessful("guarded-pipeline", process.platform === "win32" ? "echo normal | more" : "echo normal | cat");
     cfg.executionMode = "allowlist"; await assert.rejects(executor.execute({ command: "echo normal" }), { code: "COMMAND_NOT_ALLOWED" });
-    cfg.executionMode = "unrestricted"; assert.equal((await executor.execute({ command: "echo normal" })).ok, true);
+    cfg.executionMode = "unrestricted"; await assertSuccessful("unrestricted", "echo normal");
   } finally { await executor.shutdown(); rmSync(root, { recursive: true, force: true }); }
 });
 

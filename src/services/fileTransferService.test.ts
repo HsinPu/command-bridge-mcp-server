@@ -4,6 +4,7 @@ import { mkdtemp, readdir, rm, writeFile, readFile, symlink, link, chmod, rename
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { FileTransferService, lockWindowsRoot } from "./fileTransferService.js";
 import { serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent } from "./auditLog.js";
 import type { AppConfig } from "../config/env.js";
@@ -58,13 +59,18 @@ test("file transfer permissions remain independent in unrestricted mode and reje
 
 test("Linux transfers round-trip binary data, preserve lifecycle metadata and never overwrite", { skip: process.platform !== "linux" }, async () => {
   const root = await mkdtemp(join(tmpdir(), "cb-files-")), audit = new MemoryAudit(), files = new FileTransferService(config(root), audit);
+  const started = performance.now();
+  let stage: "upload" | "download" | "safety-checks" = "upload";
   try {
     const data = Buffer.from([0, 255, 1, 128]), request = payload(data);
-    const uploaded = await files.upload(request), downloaded = await files.download(request.path);
+    const uploaded = await files.upload(request);
+    stage = "download";
+    const downloaded = await files.download(request.path);
     assert.equal(uploaded.sha256, downloaded.sha256); assert.equal(downloaded.contentBase64, request.contentBase64);
     assert.deepEqual(audit.events.map(e => e.phase), ["attempted", "completed", "attempted", "completed"]);
     const normalized = parseWindowsEventLogLines(audit.events.map(serializeAuditEvent).join("\n"));
     assert.equal(normalized.find(e => e.phase === "completed")!.fileTransfer!.sha256, request.sha256);
+    stage = "safety-checks";
     await assert.rejects(files.upload(request), /already exists/);
     await assert.rejects(files.upload({ ...request, overwrite: true, expectedSha256: request.sha256 }), /not supported/);
     assert.deepEqual(await readdir(root), [request.path]);
@@ -82,6 +88,10 @@ test("Linux transfers round-trip binary data, preserve lifecycle metadata and ne
     await writeFile(join(root, "large.bin"), Buffer.alloc(1025));
     await assert.rejects(files.download("large.bin"), /limit/);
     await chmod(root, 0o755); await assert.rejects(files.download("large.bin"), /private/); await chmod(root, 0o700);
+  } catch (error) {
+    const timedOut = typeof error === "object" && error !== null && "code" in error && error.code === "FILE_TIMEOUT";
+    console.error(JSON.stringify({ stage, elapsedMs: Math.round(performance.now() - started), outcome: timedOut ? "FILE_TIMEOUT" : "failed" }));
+    throw error;
   } finally { await files.shutdown(); await rm(root, { recursive: true, force: true }); }
 });
 

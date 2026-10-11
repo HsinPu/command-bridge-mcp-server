@@ -102,6 +102,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.1.1 起，兩平台安裝來源測試須逐檔執行，不依 CPU 數量開啟大量並行程序；保留個別指令、傳輸、Audit 及停機時限與全部安全斷言，不提供略過測試的部署參數。Linux 正常管線測試只依賴安裝器已要求存在的工具；成功同時檢查 ok、exitCode、timedOut、truncated 及固定輸出，失敗只補固定階段、旗標及耗時，避免公開指令／秘密／路徑。排程回歸須以私有實際程序驗證互斥與非零失敗傳遞；來源測試通過不得推定 hosted service／channel 或現場資源正常。
+
 - 6.1.0 起，受管理服務的 `info [--json]`／`setup` 僅供主機終端使用，透過固定位置與內附 Runtime 查詢，不啟動 MCP、依賴 Audit、連 GitHub 或寫入設定。一般輸出不得含 Token；`setup --show-token` 須明確要求並核對有效 root／提升後管理員身分，不自動提權。名稱／HTTPS 查詢覆寫只影響輸出；一般帳號不可讀設定時提供固定 schema 的部分摘要與權限問題，不把缺權限當成資料不存在。
 - `client-setup.json` 為 schemaVersion 1、無 Token、服務帳號唯讀的受保護描述；安裝器及 CLI 共用解析與 formatter。重裝／更新保留既有名稱及 HTTPS URL，僅明確安裝參數更新；wildcard 提供位址只在安裝／明確刷新時選擇。缺失舊描述須提示不能回復先前自訂值，格式錯誤不能默默重設。切換前完成備份、失敗驗證位元組／權限／SELinux 回復；不完整回復保留私有資料並拒絕重啟。一般卸載保留，purge 先完成安全預檢。
 - MCP 所有模式須在 attempted Audit 後、一般政策／子程序前，拒絕可辨識的直接 info/setup、常見字面 sudo／Shell 包裝及固定管理 helper，回傳 `LOCAL_ADMIN_COMMAND_BLOCKED`、規則及 Audit ID。不以此宣稱任意腳本隔離；既有 version、update check 及固定 MCP 更新工具維持原行為。查詢總上限 5 秒／64 KiB，原生服務探測須限時；偵測部署切換後要求重試，安裝成功前以真實 CLI 驗證摘要與隱藏設定，捕捉輸出留在私有交易目錄。

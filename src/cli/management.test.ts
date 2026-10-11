@@ -12,6 +12,7 @@ import { verifyQueries } from "./verifyQueries.js";
 
 const token = "private_test_token_0123456789_abcdefghijklmnopqrstuvwxyz";
 const sha = "a".repeat(40);
+// Historical 6.1.0 deployment metadata must stay readable by newer query code.
 const version = "6.1.0";
 async function fixture(platform: "linux" | "win32" = "win32") {
   const root = await mkdtemp(join(tmpdir(), "cb management 中文 "));

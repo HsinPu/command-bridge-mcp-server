@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -55,6 +55,8 @@ sudo systemctl is-active command-bridge
 With the default policies, `rm` and `sudo -n rm` are rejected, and sudo operations are not automatically permitted. Custom native policies can still allow destructive behavior; the allowlist is not a filesystem sandbox. Review permitted commands and argument combinations before enabling additional management operations. Invalid policy configuration fails closed; inspect startup diagnostics if the service cannot restart.
 
 ## Temporary files and failed installations
+
+From 6.1.1, source test files run sequentially on both platforms to avoid competing test processes on busy target hosts. The Linux normal-pipeline fixture uses the installer-required `cat`; success checks include exit code and timeout/truncation state. Failure diagnostics report only fixed stages, result flags and elapsed time. Production transfer/command/Audit deadlines and security assertions are unchanged. A source-test failure stops installation before service activation; retrying does not require uninstalling. Persistent `FILE_TIMEOUT` or command failures still require checking host load, storage and the actual result flags; serialized tests do not prove that a production host has no resource problem. Tests cannot be skipped to bypass deployment verification.
 
 The copy-ready commands use a subshell EXIT trap to remove the downloaded bootstrap script even when curl or installation fails; they do not replace traps in your interactive shell. Bootstrap source archives, build files and the isolated npm cache are removed on normal exit. Runtime/release `.new.<pid>` directories are tracked before creation and removed on exit only when their parent is a managed deployment directory and their suffix matches this invocation; symlinks and unrelated paths are rejected. Program relocation also tracks and removes its own `.command-bridge-migrate.*` staging directory on failure. Promoted runtimes/releases, previous versions, tokens and work data are retained. Configuration restoration failures are reported without preventing temporary-file cleanup. Cleanup errors are reported; SIGKILL, power loss and filesystem failures can leave temporary files. Uninstall checks managed program roots and migration backups, but never sweeps arbitrary temporary remnants.
 
@@ -160,8 +162,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.1.0-<source-sha>
-├── releases/v6.1.0-<source-sha>/
+├── current -> releases/v6.1.1-<source-sha>
+├── releases/v6.1.1-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/

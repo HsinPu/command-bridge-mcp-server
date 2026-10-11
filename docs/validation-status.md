@@ -1,6 +1,16 @@
 # Validation status
 
-The current package is 6.1.0, adding compatible local info/setup queries and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.1, improving installation test scheduling and fixed failure diagnostics while retaining local info/setup and protected Token-free client descriptions. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.1 validation (2026-10-11)
+
+PATCH: Linux now uses the same sequential file scheduling as Windows; no production executor, transfer, Audit or shutdown deadline changed. The original Linux runner fails a private actual-process exclusive fixture with `EEXIST`; the corrected runner passes recursive discovery, ignores non-test files and preserves a genuine failed-test exit code. Node.js 20.15.1 also passes this runner regression. The guarded normal-command fixture retains its three-second budget, uses the installer-required `cat` on Linux, checks all success flags and fixed output, and reports fixed stage/result/timing metadata without dumping stdout/stderr. Transfer failure diagnostics retain the 15-second deadline and safety/lifecycle assertions.
+
+Full native Windows `npm test` with checksum-verified CI Node.js 24.18.0 passed **176/209**, with **33 platform/elevation skips**, zero failures. Private WSL Ubuntu under `nobody`, locked dependencies and installer PATH `/usr/bin:/bin` plus the same verified Runtime passed **179/209**, with **30 platform skips**, zero failures. Focused final checks cover scheduling, guarded execution and Linux transfers. A Windows private fixture's copied Runtime cleanup failed before the bounded retry and passed afterward; its unique temporary path is checked, persistent failures still fail after five seconds, and no production ACL/process behavior was changed.
+
+All **25 native Windows PowerShell 5.1 scripts**, WinSW XML, **24 Bash scripts/four fixed Linux launchers**, runner JavaScript syntax, package/root lock/build versions, unchanged third-party dependencies and production executor/transfer sources, fixed bilingual bootstrap one-liners, relative document links and `git diff --check` passed.
+
+The reported production-host transfer timeout and guarded result failure were not reproduced under that host's actual workload. Sequential scheduling reduces test-process contention but does not establish the host's CPU/storage cause or cure. Hosted 6.1.1 general/service/layout/channel checks have not run in this local delivery, and this batch has not been pushed. Oracle Linux 8.10 SELinux Enforcing, elevated Windows service installation and actual reboot remain unverified locally. No deployment checks are skipped or weakened.
 
 ## 6.1.0 validation (2026-10-09)
 
@@ -12,6 +22,7 @@ Native Windows PowerShell 5.1 parsed all **25** scripts, including the new fixed
 
 The disposable Windows/Linux service smoke gates now assert metadata preservation through real service updates, overridden-name/HTTPS activation failures and uninstall/purge, plus actual CLI queries before upgrade backups are removed. **These updated hosted service/layout gates have not run for 6.1.0 in this local delivery.** No push or installation-channel publication is claimed. Oracle Linux 8.10 SELinux Enforcing, native elevated Windows ACL/service deployment and actual reboot remain untested locally; WSL/fixture checks and service startup settings do not replace those results.
 
+After push, [CI run 38020269346](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/38020269346) for `5e213d72a81a941eb3d3387605e7929f50052a20` passed both general jobs, Linux service smoke and Linux layout smoke, but the Windows service lifecycle failed. Channel publication was skipped; the channel remained `2d8fb38af6fb17af32f34accd54fceb416963bb6` / `6.0.5` when checked during this investigation. Passing local tests does not establish hosted Windows lifecycle or publication success.
 
 ## 6.0.5 validation (2026-10-08)
 
