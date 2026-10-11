@@ -38,6 +38,42 @@ test("rollback injection requires the deployed SHA and evidence cannot be omitte
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("rollback failure summaries preserve stages without exposing private log text", async () => {
+  const { summarizeRollbackFailure } = await import(pathToFileURL(resolve('scripts/tests/rollback-failure-summary.mjs')).href);
+  const secret = 'private-token-command-output-C:\\private\\config.env';
+  const log = `Installing locked dependencies\nnot ok 173\nERR_ASSERTION\n${secret}\nD:\\private\\scripts\\windows\\install.ps1:98 char:7\n`;
+  const summary = summarizeRollbackFailure(log.repeat(80), 'win32');
+  assert.ok(summary.stages.includes('source-tests'));
+  assert.ok(summary.knownErrorCategories.includes('ERR_ASSERTION'));
+  assert.equal(summary.designatedFaultSeen, false);
+  assert.equal(summary.networkMismatchSeen, false);
+  assert.ok(summary.failedTestIndices.length <= 64);
+  assert.ok(summary.locations.length <= 16);
+  assert.ok(!JSON.stringify(summary).includes(secret));
+  const injected = summarizeRollbackFailure('INJECTED_POST_ACTIVATION_FAILURE\nNetwork refresh did not take effect\nMCP installation verification timed out.', 'win32');
+  assert.equal(injected.designatedFaultSeen, true);
+  assert.equal(injected.networkMismatchSeen, true);
+  assert.equal(injected.verificationTimeoutSeen, true);
+  const directory = mkdtempSync(join(tmpdir(), 'cb-rollback-summary-'));
+  try {
+    for (const encoding of ['utf8', 'utf16le'] as const) {
+      const path = join(directory, 'private.log');
+      const bytes = Buffer.from(log, encoding);
+      writeFileSync(path, encoding === 'utf16le' ? Buffer.concat([Buffer.from([0xff, 0xfe]), bytes]) : bytes);
+      const captured = spawnSync(process.execPath, [resolve('scripts/tests/rollback-failure-summary.mjs'), path, 'win32'], { encoding: 'utf8', windowsHide: true });
+      assert.equal(captured.status, 0);
+      assert.equal(captured.stderr, '');
+      assert.ok(!captured.stdout.includes(secret));
+      const result = JSON.parse(captured.stdout.trim().slice('Rollback failure summary: '.length));
+      assert.deepEqual(result.failedTestIndices, [173]);
+    }
+    const missing = spawnSync(process.execPath, [resolve('scripts/tests/rollback-failure-summary.mjs'), join(directory, secret), 'win32'], { encoding: 'utf8', windowsHide: true });
+    assert.equal(missing.status, 1);
+    assert.equal(missing.stderr, '');
+    assert.equal(missing.stdout.trim(), 'Rollback failure summary: {"summaryUnavailable":true}');
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("health fixture records startup only for its deployed identity", () => {
   const root = mkdtempSync(join(tmpdir(), "command-bridge-health-fault-"));
   const helper = resolve("scripts/tests/rollback-fixture.mjs");

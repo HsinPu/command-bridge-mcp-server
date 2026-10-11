@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { buildChildEnvironment } from "./commandExecutor.js";
@@ -15,14 +15,33 @@ test("Windows Audit startup excludes secrets and rejects invalid payload without
   assert.equal(environment.NODE_OPTIONS, undefined);
   assert.equal(environment.COMMAND_BRIDGE_CMDLET_REQUEST, undefined);
   assert.match(environment.PSModulePath ?? '', /WindowsPowerShell[\\/]v1\.0[\\/]Modules$/);
-  const started = Date.now();
-  const result = spawnSync(join(process.env.SystemRoot ?? "C:\\Windows", 'System32/WindowsPowerShell/v1.0/powershell.exe'), [
-    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', resolve('scripts/windows/audit/write-audit-event.ps1')
-  ], { env: environment, encoding: 'utf8', windowsHide: true, timeout: 15_000 });
-  assert.equal(result.error, undefined, JSON.stringify({ error: result.error?.message, elapsedMs: Date.now() - started, status: result.status }));
-  assert.notEqual(result.status, 0);
-  // StrictMode rejects missing fields before any Event Log write.
-  assert.match(result.stderr, /schemaVersion|payload is invalid/);
+  const directory = mkdtempSync(join(tmpdir(), "cb-audit-input-"));
+  try {
+    // Long deployment paths can wrap translated PowerShell errors mid-word.
+    // Catch the actual StrictMode error, never infer rejection from formatting.
+    const nested = join(directory, "long-'quoted path-" + "x".repeat(80));
+    mkdirSync(nested);
+    const copied = join(nested, 'write-audit-event.ps1');
+    copyFileSync(resolve('scripts/windows/audit/write-audit-event.ps1'), copied);
+    for (const script of [resolve('scripts/windows/audit/write-audit-event.ps1'), copied]) {
+      const command = `try { & '${script.replaceAll("'", "''")}'; exit 0 } catch {
+        if ($_.FullyQualifiedErrorId -eq 'PropertyNotFoundStrict,write-audit-event.ps1' -and
+            $_.Exception -is [System.Management.Automation.PropertyNotFoundException]) {
+          [Console]::Out.WriteLine('AUDIT_INPUT_REJECTED'); exit 1
+        }
+        [Console]::Out.WriteLine('UNEXPECTED_AUDIT_FAILURE'); exit 2
+      }`;
+      const started = Date.now();
+      const result = spawnSync(join(process.env.SystemRoot ?? "C:\\Windows", 'System32/WindowsPowerShell/v1.0/powershell.exe'), [
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command
+      ], { env: environment, encoding: 'utf8', windowsHide: true, timeout: 15_000 });
+      const diagnostic = JSON.stringify({ stage: 'invalid-audit-input', elapsedMs: Date.now() - started, status: result.status, signal: result.signal, spawnFailed: Boolean(result.error) });
+      assert.ok(!result.error, diagnostic);
+      assert.equal(result.status, 1, diagnostic);
+      assert.ok(result.stdout.trim() === 'AUDIT_INPUT_REJECTED', diagnostic);
+      assert.ok(result.stderr.trim() === '', diagnostic);
+    }
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("Windows environment keeps startup directories but excludes unrelated secrets", { skip: process.platform !== "win32" }, () => {

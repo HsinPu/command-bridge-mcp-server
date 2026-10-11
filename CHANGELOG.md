@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.1.4 — 2026-10-11
+
+PATCH: repair Windows installer test reliability without changing production Audit, policies, MCP interfaces or deadlines.
+
+- Validate invalid Audit input using the actual StrictMode exception identity and fixed test output instead of translated, console-wrapped stderr. Cover the original script and a long private path with spaces/apostrophes.
+- Report bounded fixed failure categories/counts when rollback fails before the designated fault; keep raw installer logs private and support PowerShell 5.1 BOM-marked UTF-16LE redirection. Missing evidence and wrong stages still fail the service gate.
+- Preserve all real MCP/Audit, network rollback, source-build and publication requirements. The reproduced long-path source-test failure explains an early rejection; hosted Windows service validation remains required to confirm the CI cause and recovery.
+
 ## 6.1.3 — 2026-10-11
 
 PATCH: repair Linux deployment retries and managed-service recognition without changing MCP interfaces, accounts, execution modes or production deadlines.

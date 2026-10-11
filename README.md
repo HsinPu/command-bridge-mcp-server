@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.3-blue)
+![Version](https://img.shields.io/badge/version-6.1.4-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.3 fixes Linux reinstall and uninstall recognition of both managed service entries, and safely retries protected program files left by a failed first activation. A damaged deployment with active pointers or a registered service still stops for administrator recovery. Configuration, Token and work/Audit data follow existing retention rules; the selected CI source is still built, tested and verified through real MCP/Audit. The fixed SELinux entry, local installation info/setup and production deadlines are retained. One-command availability requires all CI/service gates and a published verified channel.
+6.1.4 fixes a Windows installer source-test failure caused by wrapped/localized PowerShell error text in long deployment paths. Audit rejection is verified using the actual error type; private rollback failures expose only bounded fixed diagnostic categories. The 6.1.3 Linux retry/service-entry repair remains. Production policies, Audit behavior, deadlines and one-command entry points are unchanged. Installation availability still requires every CI/service gate and publication of the verified channel.
 
 Example requests for a connected client:
 

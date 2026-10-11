@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.3-blue)
+![Version](https://img.shields.io/badge/version-6.1.4-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.1.3 修正 Linux 重裝與卸載對新舊服務入口的辨識，並安全重試首次啟動失敗留下的受保護程式檔案。仍有啟用連結或已註冊服務的損壞部署，會停止並要求管理員處理。設定、Token、工作資料及 Audit 沿用既有保留規則；選定的 CI 來源仍須建置、測試並通過真實 MCP／Audit 驗證。固定 SELinux 入口、本機安裝摘要與 Codex 設定查詢，以及正式時限維持不變；一鍵安裝可用性仍以全部 CI／服務驗證通過並更新已驗證 channel 為準。
+6.1.4 修正 Windows 安裝測試在長路徑下因 PowerShell 錯誤文字換行／語系而誤判的問題，改以實際錯誤類型驗證 Audit 拒絕；回復測試失敗只提供有上限的固定診斷分類。6.1.3 的 Linux 重試與服務入口修正仍保留。正式政策、Audit 行為、時限與一鍵操作入口不變；安裝來源仍須通過所有 CI／服務驗證並發布已驗證 channel。
 
 例如，你可以請已連線的用戶端：
 

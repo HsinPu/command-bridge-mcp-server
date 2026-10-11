@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.3. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.4. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -170,8 +170,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.1.3-<source-sha>
-├── releases/v6.1.3-<source-sha>/
+├── current -> releases/v6.1.4-<source-sha>
+├── releases/v6.1.4-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/

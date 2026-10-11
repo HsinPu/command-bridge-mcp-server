@@ -93,7 +93,11 @@ try {
   & $node $helper prepare $fixture verify ('1' * 40) $verifyMarker $newHost
   if ($LASTEXITCODE -ne 0) { throw 'Fixture setup failed.' }
   if ((Run-FailingInstaller (Join-Path $fixture 'verify.log') @('-RefreshNetwork', '-CodexName', 'cb_failed', '-CodexUrl', 'https://failed.example/mcp')) -eq 0) { throw 'Expected verification failure.' }
-  if (-not (Select-String -LiteralPath (Join-Path $fixture 'verify.log') -Pattern 'INJECTED_POST_ACTIVATION_FAILURE' -Quiet)) { throw 'Wrong failure stage.' }
+  if (-not (Select-String -LiteralPath (Join-Path $fixture 'verify.log') -Pattern 'INJECTED_POST_ACTIVATION_FAILURE' -Quiet)) {
+    # Never print the private log: it can contain configuration and credentials.
+    & $externalNode (Join-Path $root 'scripts\tests\rollback-failure-summary.mjs') (Join-Path $fixture 'verify.log') win32
+    throw 'Wrong failure stage.'
+  }
   & $node $helper assert $verifyMarker ('1' * 40) verified
   if ($LASTEXITCODE -ne 0) { throw 'Activation evidence missing.' }
   Assert-Restored
