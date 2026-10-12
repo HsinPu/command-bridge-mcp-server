@@ -23,6 +23,8 @@ try {
   $descriptionBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($description))
   if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Service is not running.' }
   if ((Get-CimInstance Win32_Service -Filter "Name='CommandBridgeMCP'").StartMode -ne 'Auto') { throw 'Service is not automatic.' }
+  & (Join-Path $install 'runtime\node.exe') (Join-Path $root 'scripts\tests\verify-temporary-access.mjs')
+  if ($LASTEXITCODE -ne 0) { throw 'Temporary access lifecycle verification failed.' }
   # Keep the verifier executable outside the deployment being replaced.
   $updateFixture = Join-Path $env:RUNNER_TEMP ('command-bridge-update-source-' + [guid]::NewGuid())
   New-Item -ItemType Directory -Path $updateFixture | Out-Null

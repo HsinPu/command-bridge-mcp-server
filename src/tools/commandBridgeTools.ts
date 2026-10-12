@@ -94,7 +94,7 @@ export function registerCommandBridgeTools(
         openWorldHint: false
       }
     },
-    async () => toToolResult(getSystemInfo(config))
+    async () => toToolResult(getSystemInfo({ ...config, executionMode: await executor.effectiveExecutionMode() }))
   );
 
   server.registerTool(

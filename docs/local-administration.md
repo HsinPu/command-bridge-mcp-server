@@ -1,4 +1,4 @@
-# Local installation information / 本機安裝與連線資訊 (6.1.10)
+# Local installation information / 本機安裝與連線資訊 (6.2.0)
 
 These commands run in a host terminal and use the service installation's bundled Runtime. They do not start MCP, load its full policy/configuration, depend on Audit, contact GitHub, restart services, or write settings. npm/stdio installations return `SERVICE_INSTALLATION_REQUIRED` (or the npm entry's equivalent message); their existing no-argument MCP startup and version query remain unchanged.
 
@@ -88,6 +88,8 @@ Listener-derived descriptions use `urlMode: "listener"`, `explicitUrl: null`. A 
 Ordinary uninstall preserves this file with configuration, Token and data. `--purge` / `-Purge` removes it only after safe path/ownership checks. Do not edit it through MCP. The installer verifies actual `info --json` and hidden `setup` output before discarding upgrade backups; captured outputs stay in its private transaction directory.
 
 ## MCP boundary / MCP 邊界
+
+6.2.0 adds administrator-only `access open [--minutes N]`, `access status` and `access close` for managed services. See [temporary access](temporary-access.md) for commands, per-boot expiry, protected records and the existing sudo trust boundary. 6.2.0 新增管理員終端限定的臨時放寬、查詢與立即恢復；MCP 直接呼叫同樣會被攔截。
 
 Recognizable direct calls to info/setup, their JSON/Token variants, sudo/common literal shell wrappers and fixed implementation helpers are blocked in all execution modes before spawning a child. The result is `LOCAL_ADMIN_COMMAND_BLOCKED`, rule `local-admin-only` and an Audit ID, with attempted/blocked lifecycle events. Use [sanitized MCP diagnostics](diagnostics.md) for remote troubleshooting.
 

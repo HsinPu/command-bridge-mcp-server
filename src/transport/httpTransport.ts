@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, createHmac } from "node:crypto";
 import type { Server } from "node:http";
 import express from "express";
 import { hostHeaderValidation, localhostHostValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
@@ -32,13 +32,16 @@ export async function startHttpTransport(
     res.json({ status: "ok" });
   });
 
-  app.use(["/mcp", "/ready"], (req, res, next) => {
+  app.use(["/mcp", "/ready", "/access"], (req, res, next) => {
     const authorization = req.headers.authorization;
     const suppliedToken = authorization?.startsWith("Bearer ")
       ? authorization.slice("Bearer ".length)
       : "";
 
-    if (!tokensMatch(suppliedToken, bearerToken)) {
+    const challenge = req.headers["x-commandbridge-challenge"];
+    const accessProof = req.method === "GET" && req.baseUrl === "/access" && req.path === "/" && typeof challenge === "string" && /^[a-f0-9]{64}$/.test(challenge) &&
+      authorization?.startsWith("CommandBridge-HMAC ") && tokensMatch(authorization.slice("CommandBridge-HMAC ".length), createHmac("sha256", bearerToken).update("access-request:" + challenge).digest("hex"));
+    if (!tokensMatch(suppliedToken, bearerToken) && !accessProof) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="command-bridge"');
       res.status(401).json({
         jsonrpc: "2.0",
@@ -67,6 +70,16 @@ export async function startHttpTransport(
       const readiness = await executor.readiness();
       res.status(readiness.ready ? 200 : 503).json(readiness);
     } catch { res.status(503).json({ ready: false }); }
+  });
+
+  // Read-only boot identity/status. Only protected local storage can grant access.
+  app.get("/access", async (req, res) => {
+    const status = await executor.accessStatus();
+    res.setHeader("Cache-Control", "no-store");
+    const challenge = req.headers["x-commandbridge-challenge"];
+    if (status && req.headers.authorization?.startsWith("CommandBridge-HMAC ") && typeof challenge === "string") {
+      res.json({ ...status, signature: createHmac("sha256", bearerToken).update("access-response:" + challenge + ":" + JSON.stringify(status)).digest("hex") });
+    } else res.status(status ? 200 : 404).json(status ?? { error: "Service installation required" });
   });
 
   app.post("/mcp", async (req, res) => {

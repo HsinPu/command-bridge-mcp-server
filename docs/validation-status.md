@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.1.10, repairing linked local CLI and installer query entry points while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.2.0, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.2.0 validation (2026-10-12)
+
+MINOR: temporary administrator access with protected per-boot leases and scoped HMAC local-service verification. Final native Windows npm test passed 188/225 with 37 skips and zero failures; all ten focused access tests passed. Earlier debugging included one unpreserved full-run failure and a captured HMAC middleware path failure; the path was corrected, without relaxing assertions or deadlines. PowerShell 5.1 parsed all 26 scripts and WinSW XML; Bash scripts/launchers, versions, links and unchanged bootstrap commands passed checks. Native admin/LocalService protected storage and real expiry/restart/MCP/Audit remain delegated to disposable CI. Hosted publication, Oracle Enforcing and actual reboot are not verified locally.
 
 ## 6.1.10 validation (2026-10-12)
 

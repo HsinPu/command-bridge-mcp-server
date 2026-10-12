@@ -102,6 +102,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.2.0 起，受管理服務提供管理員終端限定的 access open/status/close；預設 5 分鐘、僅接受 1–60 整數分鐘，不修改永久模式、不新增 sudo 權限或開啟傳輸。root／提升後管理員寫入固定、原子發布且服務唯讀的 access-lease.json；授權綁定服務啟動 UUID。到期、關閉、重啟、紀錄異常及時鐘回退恢復基準；已啟動程序沿用原逾時。讀取有上限並共用未完成工作，逾時後不得延遲授權。開啟前 Audit 成功；指令以實際模式執行與記錄，Audit 等待後須再檢查到期。HTTP /access 僅提供受 Host 與 Bearer／專用 HMAC 驗證保護的固定狀態，不接受修改；CLI 用既有 Token 的挑戰證明與簽署回應驗證本機服務，不外送原始 Token，拒絕非本機 IP／非 localhost DNS。MCP 攔截可辨識的管理命令、helper 與授權檔自改；不得宣稱隔離任意腳本或完整 root sudo。真實 CI 須驗證兩平台管理命令、到期、重啟恢復、MCP／Audit 與設定保留；不以 restart 宣稱實際重開機。詳見 docs/temporary-access.md。
+
 - 6.1.5 起，Windows 既有連線描述的原子替換須用 `[NullString]::Value` 傳遞真正空備份路徑，不得用 PowerShell 5.1 會轉成空字串的 `$null`；每次 ACL 寫入須由快照建立新的 descriptor，明確套用 Access／Owner／Group，不重用可能已清除 dirty flags 的 .NET ACL 物件；設定與連線描述回復亦同。保留相同檔案系統暫存、固定管理員／LocalService ACL 與精確回復。私有實際檔案測試涵蓋新建、內容與 ACL 替換、BOM／換行回復、真實分享鎖拒絕與暫存清除；回復不完整仍不得重啟。CI 摘要排除成功測試標題內的錯誤碼，固定終結錯誤識別與關鍵字提示分開，不把測試提及 Audit 失敗當成實際 Audit 根因。
 
 - 6.1.4 起，Windows 無效 Audit 輸入測試須檢查實際 StrictMode 例外類型與固定結果，不能依賴可能被長路徑換行或翻譯的 stderr；涵蓋長路徑、空白及單引號。回復故障階段不符時只公開有上限的分類／數字摘要，支援 PowerShell 5.1 的 BOM UTF-16LE 私有日誌；原始日誌、設定、Token 與指令不得公開。指定錯誤與部署 SHA 階段證據缺一仍失敗，不以本機 fixture 通過推定 hosted 服務或 channel 通過。

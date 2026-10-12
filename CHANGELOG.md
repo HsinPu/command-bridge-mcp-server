@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.2.0 — 2026-10-12
+
+MINOR: add optional administrator-only temporary command access without changing configured modes or MCP tool interfaces.
+
+- Add service-installed access open/status/close commands on Linux and Windows; default to 5 minutes and accept 1–60 integer minutes. Use protected atomic leases bound to the current service boot; do not edit permanent settings or add sudo grants.
+- Restore the baseline on expiry, close, restart, unsafe storage or clock rollback; preserve existing command deadlines, working roots, transfer settings and direct self-protection.
+- Keep Audit-first activation and command output withholding. Report effective command mode, protect status with Bearer/Host checks, and block recognizable MCP calls to the local management commands/helpers.
+- Add behavior/HTTP tests and real two-platform service validation for CLI, expiry, restart and MCP/Audit; document root/free-shell trust boundaries.
+
+
 ## 6.1.10 — 2026-10-12
 
 PATCH: document Linux sudo command lookup without changing host configuration or runtime behavior.

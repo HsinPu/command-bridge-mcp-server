@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.10-blue)
+![Version](https://img.shields.io/badge/version-6.2.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -149,6 +149,18 @@ On Linux, use the full `/usr/local/bin/command-bridge` path with `sudo`: some ho
 
 Windows uses `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` with the same arguments; `--show-token` requires an elevated PowerShell terminal. Ordinary queries hide the Token and do not write settings or depend on Audit. If protected settings are unreadable, use `sudo /usr/local/bin/command-bridge setup` (still hidden) or an elevated Windows terminal; `info` can return a partial summary. Saved connection names/HTTPS URLs survive reinstall and update. `setup --codex-name cb_other --codex-url https://private.example/mcp` changes only the output. Direct calls through MCP are blocked in every mode; use the MCP diagnostics tool for remote troubleshooting. See [local commands, permissions and metadata](docs/local-administration.md).
 
+## Temporary administrator access
+
+From 6.2.0, a host administrator can temporarily use `unrestricted` command execution without changing permanent configuration:
+
+```bash
+sudo /usr/local/bin/command-bridge access open --minutes 5
+sudo /usr/local/bin/command-bridge access status
+sudo /usr/local/bin/command-bridge access close
+```
+
+The default is 5 minutes, with an integer range of 1–60; the grant applies to all authenticated clients of this service. Expiry, close or service restart restores the configured mode for new commands; existing commands keep their original timeout. This does not add sudo rights or enable file transfers. MCP blocks recognizable direct calls to these management commands; arbitrary scripts with full root sudo remain outside that protection. Windows provides the same arguments through its installed `command-bridge.cmd` in an elevated terminal. See [temporary access, permissions and failure handling](docs/temporary-access.md).
+
 ## Update an installed service
 
 From 4.3.0, check the verified CI channel without changing the host:
@@ -186,7 +198,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.10 documents the fixed Linux sudo command path without changing runtime behavior. 6.1.9 enables migrated Linux services before mandatory autostart validation and ensures private query failures trigger one parent-owned rollback. The linked info/setup and installation setup output fixes remain in place; Linux sudo examples use the full /usr/local/bin/command-bridge path. Permissions and CI gates remain unchanged.
+6.2.0 adds temporary administrator command access with automatic expiry and restoration. 6.1.10 documents the fixed Linux sudo command path without changing runtime behavior. 6.1.9 enables migrated Linux services before mandatory autostart validation and ensures private query failures trigger one parent-owned rollback. The linked info/setup and installation setup output fixes remain in place; Linux sudo examples use the full /usr/local/bin/command-bridge path. Permissions and CI gates remain unchanged.
 
 Example requests for a connected client:
 

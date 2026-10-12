@@ -13,6 +13,7 @@ import { RecentDiagnosticRequests, type RecentDiagnosticRequest } from "./diagno
 import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { assertNoSelfModification, assertNoLocalAdminCommand } from "./selfProtection.js";
 import { assertGuardedCommand } from "./guardedPolicy.js";
+import type { TemporaryAccess } from "./temporaryAccess.js";
 import { assertOutputEncoding, createOutputDecoder, outputDecodingError, type OutputEncoding } from "./textEncoding.js";
 import {
   assertCommandAllowed,
@@ -102,6 +103,16 @@ export class CommandExecutor {
     this.updates = new ManagedUpdateService(config, this.auditLog);
   }
 
+  private temporaryAccess?: TemporaryAccess;
+  enableTemporaryAccess(control: TemporaryAccess) { this.temporaryAccess = control; }
+  async effectiveExecutionMode() { return this.temporaryAccess ? this.temporaryAccess.refresh() : this.config.executionMode; }
+  async accessStatus() { if (!this.temporaryAccess) return null; await this.temporaryAccess.refresh(); return this.temporaryAccess.status(); }
+  async auditAccess(action: string) {
+    const attempted = createAuditEvent({ phase: "attempted", command: "CommandBridge temporary access " + action, executionMode: this.config.executionMode, source: this.auditSource() });
+    await this.writeAuditEvent(attempted);
+    await this.writeAuditEvent(this.followUpAuditEvent(attempted, "completed", {}));
+  }
+
   execute(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
     const operation = this.executeInternal(request, signal);
     this.pending.add(operation);
@@ -113,13 +124,14 @@ export class CommandExecutor {
     const fileShutdown = this.files.shutdown();
     const updateShutdown = this.updates.shutdown();
     this.stopping = true;
+    const accessShutdown = this.temporaryAccess?.stop();
     this.diagnostics.stop();
     this.updates.stop();
     for (const stop of this.running) stop();
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        Promise.allSettled([...this.pending, fileShutdown, updateShutdown, this.diagnostics.drain(), ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
+        Promise.allSettled([...this.pending, fileShutdown, updateShutdown, accessShutdown, this.diagnostics.drain(), ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
     } finally { if (timer) clearTimeout(timer); }
@@ -181,6 +193,7 @@ export class CommandExecutor {
   }
 
   private async executeInternal(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
+    let executionMode = await this.effectiveExecutionMode();
     const requestedShell = request.shell ?? this.config.allowedShells[0] ?? null;
     const requestedCwd = request.cwd ?? this.config.allowedRoots[0] ?? null;
     const attempted = createAuditEvent({
@@ -188,7 +201,7 @@ export class CommandExecutor {
       command: request.command,
       shell: requestedShell,
       cwd: requestedCwd,
-      executionMode: this.config.executionMode,
+      executionMode,
       source: this.auditSource()
     });
 
@@ -221,10 +234,12 @@ export class CommandExecutor {
       shell = requestedShell;
       assertOutputEncoding(request.outputEncoding ?? "utf8");
       assertNoLocalAdminCommand(request.command, process.platform, requestedCwd ?? process.cwd());
-      assertCommandAllowed(this.config, shell, request.command);
+      // Audit admission may consume the remaining lease; recheck before policy/spawn.
+      executionMode = this.temporaryAccess?.mode() ?? this.config.executionMode;
+      assertCommandAllowed({ ...this.config, executionMode }, shell, request.command);
       cwd = resolveWorkingDirectory(this.config.allowedRoots, request.cwd);
       assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile });
-      if (this.config.executionMode === "guarded") assertGuardedCommand(request.command, cwd);
+      if (executionMode === "guarded") assertGuardedCommand(request.command, cwd);
       timeoutMs = clampTimeout(
         request.timeoutMs,
         this.config.defaultTimeoutMs,
@@ -234,6 +249,7 @@ export class CommandExecutor {
       if (error instanceof AppError && error.rule) error.auditId = attempted.auditId;
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "blocked", {
+          executionMode,
           errorCode: auditErrorCode(error, "COMMAND_BLOCKED")
         })
       );
@@ -244,10 +260,11 @@ export class CommandExecutor {
     this.activeCommands += 1;
     try {
       let result: CommandResult;
-      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8"); }
+      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8", executionMode); }
       finally { this.activeCommands -= 1; }
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "completed", {
+          executionMode,
           shell,
           cwd,
           exitCode: result.exitCode,
@@ -268,6 +285,7 @@ export class CommandExecutor {
 
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "failed", {
+          executionMode,
           shell,
           cwd,
           errorCode: auditErrorCode(error, "COMMAND_EXECUTION_FAILED")
@@ -294,6 +312,7 @@ export class CommandExecutor {
       | "timedOut"
       | "truncated"
       | "errorCode"
+      | "executionMode"
     >>
   ): CommandAuditEvent {
     const event = createAuditEvent({
@@ -302,7 +321,7 @@ export class CommandExecutor {
       command: attempted.command,
       shell: overrides.shell ?? attempted.shell,
       cwd: overrides.cwd ?? attempted.cwd,
-      executionMode: this.config.executionMode,
+      executionMode: overrides.executionMode ?? attempted.executionMode,
       source: this.auditSource(),
       exitCode: overrides.exitCode ?? null,
       signal: overrides.signal ?? null,
@@ -348,11 +367,12 @@ export class CommandExecutor {
     cwd: string,
     timeoutMs: number,
     signal?: AbortSignal,
-    outputEncoding: OutputEncoding = "utf8"
+    outputEncoding: OutputEncoding = "utf8",
+    executionMode = this.config.executionMode
   ): Promise<CommandResult> {
     let invocation: ShellInvocation;
     const environment = buildChildEnvironment(this.config.passthroughEnv);
-    if (this.config.executionMode === "allowlist") {
+    if (executionMode === "allowlist") {
       const { profile, args } = resolveSafeCommand(this.config, shell, command);
       invocation = { executable: profile.executable, args };
       if (profile.cmdlet) {

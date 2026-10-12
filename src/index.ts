@@ -10,8 +10,8 @@ async function main(): Promise<void> {
     return;
   }
   if (args.length) {
-    if (["info", "setup"].includes(args[0]!)) {
-      console.error("Info/setup require the service-installed launcher. Linux: /usr/local/bin/command-bridge; Windows: CommandBridgeMCP\\command-bridge.cmd. This entry starts MCP without arguments.");
+    if (["info", "setup", "access"].includes(args[0]!)) {
+      console.error("Info/setup/access require the service-installed launcher. Linux: /usr/local/bin/command-bridge; Windows: CommandBridgeMCP\\command-bridge.cmd. This entry starts MCP without arguments.");
       process.exitCode = 3;
       return;
     }
@@ -36,6 +36,13 @@ async function main(): Promise<void> {
   if (!readiness.ready) console.error("CommandBridge diagnostic-only startup: Audit unavailable; new operations remain blocked.");
 
   if (config.transport === "http") {
+    const [{ installedPaths }, { dirname, resolve }, { fileURLToPath }] = await Promise.all([import("./cli/management.js"), import("node:path"), import("node:url")]);
+    let managed = false;
+    try { installedPaths(resolve(dirname(fileURLToPath(import.meta.url)), "..")); managed = true; } catch { /* npm/dev deployments have no admin lease. */ }
+    if (managed) {
+      const [{ TemporaryAccess }, { readAccessLease }] = await Promise.all([import("./services/temporaryAccess.js"), import("./cli/accessStorage.js")]);
+      executor.enableTemporaryAccess(new TemporaryAccess(config.executionMode, readAccessLease, action => executor.auditAccess(action)));
+    }
     const httpServer = await startHttpTransport(config, executor);
     console.error(
       "CommandBridge MCP listening on http://" +

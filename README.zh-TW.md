@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.10-blue)
+![Version](https://img.shields.io/badge/version-6.2.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -149,6 +149,18 @@ Linux 使用 `sudo` 時，請保留 `/usr/local/bin/command-bridge` 完整路徑
 
 Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` 加相同參數；顯示 Token 須使用已提升權限的 PowerShell。一般查詢隱藏 Token，不寫設定，也不依賴 Audit。設定不可讀時，使用 `sudo /usr/local/bin/command-bridge setup`（仍隱藏 Token）或管理員 PowerShell；`info` 可提供部分摘要。儲存的連線名稱／HTTPS 網址在重裝與更新後保留。`setup --codex-name cb_other --codex-url https://private.example/mcp` 只改本次輸出。所有模式都會攔截 MCP 直接呼叫這些命令；遠端偵錯使用 MCP 診斷工具。詳見[本機命令、權限與連線描述](docs/local-administration.md)。
 
+## 管理員臨時放寬指令
+
+6.2.0 起，主機管理員可暫時使用 `unrestricted`，不修改永久設定：
+
+```bash
+sudo /usr/local/bin/command-bridge access open --minutes 5
+sudo /usr/local/bin/command-bridge access status
+sudo /usr/local/bin/command-bridge access close
+```
+
+預設 5 分鐘，只接受 1–60 的整數，適用於這台服務所有已驗證用戶端。到期、close 或服務重啟後，新指令恢復原模式；已啟動的指令維持原逾時。不新增 sudo 權限，也不開啟檔案傳輸。MCP 會攔截可辨識的直接管理命令；任意腳本加完整 root sudo 不屬於此防護的隔離範圍。Windows 在已提升權限的終端透過安裝的 `command-bridge.cmd` 使用相同參數。詳見[臨時授權、權限與失敗處理](docs/temporary-access.md)。
+
 ## 更新已安裝的服務
 
 4.3.0 起，可先檢查已通過 CI 的更新來源，不修改主機：
@@ -186,7 +198,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.1.10 補充 Linux sudo 完整命令路徑的說明，不改變執行行為。6.1.9 修正 Linux 舊版遷移時開機啟用順序，並讓查詢驗證失敗只由主安裝程序回復一次。保留 current 版本連結的查詢／連線設定輸出修正；Linux sudo 範例使用 /usr/local/bin/command-bridge 完整路徑。既有權限與 CI 門檻維持不變。
+6.2.0 新增管理員臨時放寬指令，具備到期與重啟恢復。6.1.10 補充 Linux sudo 完整命令路徑的說明，不改變執行行為。6.1.9 修正 Linux 舊版遷移時開機啟用順序，並讓查詢驗證失敗只由主安裝程序回復一次。保留 current 版本連結的查詢／連線設定輸出修正；Linux sudo 範例使用 /usr/local/bin/command-bridge 完整路徑。既有權限與 CI 門檻維持不變。
 
 例如，你可以請已連線的用戶端：
 

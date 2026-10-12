@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.10. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.2.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -170,8 +170,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.1.10-<source-sha>
-├── releases/v6.1.10-<source-sha>/
+├── current -> releases/v6.2.0-<source-sha>
+├── releases/v6.2.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -452,3 +452,7 @@ Managed service installation provisions the default-enabled fixed-purpose update
 Both dedicated and installer-account installations provision `/usr/local/libexec/command-bridge-diagnostics/{reader,reader.mjs}` and `/etc/sudoers.d/command-bridge-diagnostics`. Programs are pinned to source digests, root-owned, not writable by the service, and restored to host SELinux policy. The exact numeric service UID may run only the no-argument reader with `NOSETENV`. It reads fixed `command-bridge.service` metadata, the last 100 journal entries for known diagnostic codes, and fixed deployment/work/storage metadata; it returns no raw log messages. It does not grant generic journal/root access or replace the existing Audit reader. Installer-account file Audit still needs no privileged Audit reader.
 
 New assets and the previous authorization are backed up before changes and restored before restarting the old deployment after activation failure. The installer verifies the running fixed reader through MCP in addition to readiness, hostname and its Audit lifecycle. Normal uninstall and purge remove the diagnostic program and rule; preserved configuration/work/Audit behavior is unchanged. A diagnostic-only service is not accepted as a successful installation. CI fixtures check no-argument authorization and uninstall cleanup; hosted lifecycle checks must still execute before publication.
+
+## Temporary administrator access
+
+Use sudo /usr/local/bin/command-bridge access open --minutes 5, access status or access close from the host terminal. Grants expire without changing permanent mode and are invalid after service restart. See [temporary access](temporary-access.md) for protected storage, Audit and root/free-shell limits.

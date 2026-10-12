@@ -37,7 +37,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
     const data = join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeMCP");
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeUpdate"), join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeUpdate"));
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeMCP"),
-      join(data, "command-bridge.env"), join(data, "policy.json"), join(data, "client-setup.json"));
+      join(data, "command-bridge.env"), join(data, "policy.json"), join(data, "client-setup.json"), join(data, "access-lease.json"));
   }
   return paths;
 }
@@ -148,7 +148,7 @@ export function assertNoLocalAdminCommand(command: string, platform: NodeJS.Plat
     return applicationRoots.some(root => contains(normalize(root), normalize(paths.resolve(cwd, file)), paths));
   };
   const reject = () => {
-    const error = new AppError("LOCAL_ADMIN_COMMAND_BLOCKED", "CommandBridge info/setup are local terminal commands and cannot be called through MCP.", "Use a host terminal for these commands, or command_bridge_get_diagnostics for MCP diagnostics.");
+    const error = new AppError("LOCAL_ADMIN_COMMAND_BLOCKED", "CommandBridge info/setup/access are local terminal commands and cannot be called through MCP.", "Use a host terminal for these commands, or command_bridge_get_diagnostics for MCP diagnostics.");
     error.rule = "local-admin-only";
     throw error;
   };
@@ -169,7 +169,7 @@ export function assertNoLocalAdminCommand(command: string, platform: NodeJS.Plat
     }
     const name = basename(tokens[head] ?? "");
     const args = tokens.slice(head + 1);
-    if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/.test(name) && /^(info|setup)$/i.test(args[0] ?? "")) reject();
+    if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/.test(name) && /^(info|setup|access)$/i.test(args[0] ?? "")) reject();
     if (/^(node|nodejs|tsx|ts-node|bash|sh|powershell|pwsh)$/.test(name)) {
       const fileOption = args.findIndex(arg => /^-file$/i.test(arg));
       const sourceOption = args.findIndex(arg => /^(?:-e|--eval|-p|--print|-[a-z]*c|-command|-encodedcommand|-enc|-ec)$/i.test(arg));
@@ -177,9 +177,9 @@ export function assertNoLocalAdminCommand(command: string, platform: NodeJS.Plat
       if (script >= 0 && args[script]) {
         const i = script;
         const file = basename(args[i]!);
-        if (ownFile(args[i]!) && (/^(clientsetupinstaller|management|verifyqueries)\.(js|ts)$/.test(file) || file === "read-installation-status.ps1")) reject();
-        if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/.test(file) && /^(info|setup)$/i.test(args[i + 1] ?? "")) reject();
-        if (file === "index.js" && ownFile(args[i]!) && /^(info|setup)$/i.test(args[i + 1] ?? "")) reject();
+        if (ownFile(args[i]!) && (/^(clientsetupinstaller|management|verifyqueries|access|accessstorage)\.(js|ts)$/.test(file) || ["read-installation-status.ps1", "temporary-access.ps1"].includes(file))) reject();
+        if (/^command-bridge(?:-mcp-server)?(?:\.cmd)?$/.test(file) && /^(info|setup|access)$/i.test(args[i + 1] ?? "")) reject();
+        if (file === "index.js" && ownFile(args[i]!) && /^(info|setup|access)$/i.test(args[i + 1] ?? "")) reject();
       }
     }
     if (/^(bash|sh|dash|zsh|powershell|pwsh|cmd)$/.test(name)) {

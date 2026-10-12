@@ -525,7 +525,7 @@ function Copy-ApplicationPayload {
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\verify-file-transfer.mjs') -Destination (Join-Path $Destination 'scripts\verify-file-transfer.mjs')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmdlet.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmdlet.ps1')
   Copy-Item -LiteralPath (Join-Path $SourceRoot 'scripts\windows\run-cmd.ps1') -Destination (Join-Path $Destination 'scripts\windows\run-cmd.ps1')
-  foreach ($asset in @('read-installation-status.ps1', 'installation-paths.ps1')) { Copy-Item -LiteralPath (Join-Path $SourceRoot "scripts\windows\$asset") -Destination (Join-Path $Destination "scripts\windows\$asset") }
+  foreach ($asset in @('read-installation-status.ps1', 'installation-paths.ps1', 'temporary-access.ps1')) { Copy-Item -LiteralPath (Join-Path $SourceRoot "scripts\windows\$asset") -Destination (Join-Path $Destination "scripts\windows\$asset") }
   [IO.File]::WriteAllText((Join-Path $Destination 'install-info.json'), (@{ version = $PackageVersion; sourceSha = $SourceRef; runtimeVersion = $NodeVersion } | ConvertTo-Json))
 }
 
