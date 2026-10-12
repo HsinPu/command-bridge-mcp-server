@@ -31,6 +31,9 @@ const probe = (command = 'hostname', expectation, stage = 'baseline') => {
     if (summary) console.error(summary);
     const failures = ['Service dependencies are not ready.', 'Matching audit lifecycle was not returned.', 'Independent diagnostics verification failed.', 'Installed fixed diagnostic reader verification failed.', 'Verification command returned unexpected output.', 'Expected command rejection was not returned.'];
     const kind = failures.findIndex(message => (call.stderr ?? '').includes(message));
+    if (windows) {
+      try { const phase = readFileSync(join(process.env.ProgramData, 'CommandBridgeMCP/work/ps-startup-stage.txt'), 'utf8').trim(); if (/^[1-7]$/.test(phase)) console.error('POWERSHELL_SERVICE_PHASE=' + phase); } catch {}
+    }
     throw Error(`ACCESS_SMOKE_MCP_AUDIT stage=${stage} kind=${kind} exit=${call.status ?? -1}`);
   }
 };

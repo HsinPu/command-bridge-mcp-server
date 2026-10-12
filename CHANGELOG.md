@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.2.3 — 2026-10-12
+
+PATCH: locate the LocalService PowerShell timeout using private deployed-source instrumentation.
+
+- Instrument only a copied disposable Windows source and a unique deployment SHA, leaving source-build tests and published execution settings unchanged.
+- Publish only a numeric startup phase on failure; do not log command text, output, credentials or private paths. Keep every verification assertion and deadline.
+
+
 ## 6.2.2 — 2026-10-12
 
 PATCH: add bounded private-safe stage and command-result diagnostics to service verification.

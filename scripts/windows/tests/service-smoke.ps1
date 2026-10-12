@@ -18,7 +18,12 @@ function Run-FailingInstaller([string]$Log, [string[]]$Extra = @(), [string]$Pat
   return $LASTEXITCODE
 }
 try {
-  Run-Installer (Join-Path $root 'scripts\windows\install.ps1') @('-CodexName', 'cb_saved', '-CodexUrl', 'https://saved.example/mcp') | Out-Null
+  $probeSource = Join-Path $env:RUNNER_TEMP ('command-bridge-ps-probe-' + [guid]::NewGuid())
+  New-Item -ItemType Directory -Path $probeSource | Out-Null
+  Get-ChildItem -LiteralPath $root -Force | Where-Object { $_.Name -notin @('.git','node_modules','dist','.env') } | Copy-Item -Destination $probeSource -Recurse -Force
+  & node (Join-Path $root 'scripts\tests\powershell-service-probe.mjs') $probeSource ('7' * 40)
+  if ($LASTEXITCODE -ne 0) { throw 'Private PowerShell probe preparation failed.' }
+  Run-Installer (Join-Path $probeSource 'scripts\windows\install.ps1') @('-CodexName', 'cb_saved', '-CodexUrl', 'https://saved.example/mcp') | Out-Null
   $description = Join-Path $env:ProgramData 'CommandBridgeMCP\client-setup.json'
   $descriptionBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($description))
   if ((Get-Service CommandBridgeMCP).Status -ne 'Running') { throw 'Service is not running.' }
@@ -130,6 +135,11 @@ try {
   if (Test-Path -LiteralPath $description) { throw 'Purge left client setup.' }
   if (Test-Path -LiteralPath (Join-Path $env:ProgramData 'CommandBridgeUpdate')) { throw 'Purge left update records.' }
 } finally {
+  if ($probeSource) {
+    $probeResolved = [IO.Path]::GetFullPath($probeSource)
+    if (-not $probeResolved.StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe probe fixture cleanup path.' }
+    if (Test-Path -LiteralPath $probeResolved) { Remove-Item -LiteralPath $probeResolved -Recurse -Force }
+  }
   if ($updateFixture) {
     $updateResolved = [IO.Path]::GetFullPath($updateFixture)
     if (-not $updateResolved.StartsWith([IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe update fixture cleanup path.' }
