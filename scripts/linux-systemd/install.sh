@@ -1425,6 +1425,8 @@ install_client_setup() {
 }
 
 verify_cli_queries() (
+  # The parent owns rollback; inherited ERR traps must not roll back twice.
+  trap - ERR
   umask 077
   "${CLI_LINK}" info --json > "${TEMP_DIR}/cli-info.json"
   "${CLI_LINK}" setup > "${TEMP_DIR}/cli-setup.txt"
@@ -1553,9 +1555,9 @@ install_and_start_service() {
   install -m 0644 "${TEMP_DIR}/${SERVICE_NAME}.service" "${UNIT_FILE}"
   restore_selinux_path "${UNIT_FILE}" || fail "Could not prepare SELinux label for the systemd unit."
   systemctl daemon-reload
-  if [[ "${LEGACY_MIGRATION}" == "0" ]]; then
-    systemctl enable "${SERVICE_NAME}.service" >/dev/null
-  fi
+  # Verify the candidate's real autostart state before committing migration.
+  # The original unit stays enabled until commit; rollback disables this one.
+  systemctl enable "${SERVICE_NAME}.service" >/dev/null
 
   if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
     systemctl restart "${SERVICE_NAME}.service"

@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.1.9 — 2026-10-12
+
+PATCH: repair legacy Linux migration activation and single-owner rollback without weakening CLI validation.
+
+- Enable the candidate service before checking its actual autostart state; retain the original unit until migration commits and disable the candidate on rollback.
+- Let the parent installer own rollback when private CLI verification fails, preventing duplicate recovery from inherited subshell ERR traps.
+- Add isolated Bash execution tests for fresh/legacy activation ordering and info/setup/verifier failures; require exactly one rollback in the parent process.
+
+
 ## 6.1.8 — 2026-10-12
 
 PATCH: restore local administration and installation setup output through managed release links.

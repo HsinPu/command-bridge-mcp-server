@@ -61,6 +61,46 @@ check_original_assets() {
   done
 }
 case "${1:-}" in
+  query-activation)
+    for legacy in 0 1; do
+      prepare
+      LEGACY_CASE=$legacy bash -c '
+        source "$FIXTURE/common.sh"; trap - EXIT ERR
+        mkdir -p "$TEMP_DIR" "$RUNTIME_LINK/bin"
+        printf candidate > "$TEMP_DIR/$SERVICE_NAME.service"
+        printf "#!/usr/bin/env bash\nprintf fixture-host\\n" > "$RUNTIME_LINK/bin/node"
+        chmod 0755 "$RUNTIME_LINK/bin/node"
+        LEGACY_MIGRATION=$LEGACY_CASE
+        systemctl() { printf "%s\n" "$*" >> "$FIXTURE/service-events"; if [[ "$1" == is-active ]]; then [[ -e "$FIXTURE/started" ]]; return; fi; if [[ "$1" == start ]]; then touch "$FIXTURE/started"; fi; return 0; }
+        health_url() { printf "http://127.0.0.1:8800/health\n"; }
+        read_config_value() { printf fixture; }
+        curl() { printf "{\"status\":\"ok\"}"; }
+        install_and_start_service
+        grep -Fxq "enable $SERVICE_NAME.service" "$FIXTURE/service-events"
+        [[ "$(grep -n "^enable " "$FIXTURE/service-events" | cut -d: -f1)" -lt "$(grep -n "^start " "$FIXTURE/service-events" | cut -d: -f1)" ]]
+      ' > "$work/output" 2>&1
+      rm -f "$work/started"
+    done
+    for failure in info setup verifier; do
+      prepare
+      if QUERY_FAILURE=$failure bash -c '
+        source "$FIXTURE/common.sh"; trap - EXIT
+        mkdir -p "$TEMP_DIR" "$RUNTIME_LINK/bin" "$(dirname "$CLI_LINK")"
+        printf "#!/usr/bin/env bash\n[[ \$1 != \$QUERY_FAILURE ]] || exit 73\nprintf query-output\\n" > "$CLI_LINK"
+        printf "#!/usr/bin/env bash\nexit 73\n" > "$RUNTIME_LINK/bin/node"
+        chmod 0755 "$CLI_LINK" "$RUNTIME_LINK/bin/node"
+        cleanup() { :; }
+        rollback_activation() { printf "%s\n" "$BASHPID" >> "$FIXTURE/rollbacks"; ACTIVATION_STARTED=0; }
+        ACTIVATION_STARTED=1
+        printf "%s\n" "$BASHPID" > "$FIXTURE/parent-pid"
+        verify_cli_queries
+      ' > "$work/output" 2>&1; then echo 'Query failure was accepted'; exit 1
+      else [[ "$?" == 73 ]]; fi
+      [[ "$(wc -l < "$work/rollbacks")" == 1 ]]
+      cmp -s "$work/rollbacks" "$work/parent-pid"
+      rm "$work/rollbacks"
+    done
+    ;;
   backup)
     for helper in update diagnostic; do
       count=3; [[ "$helper" != update ]] || count=4

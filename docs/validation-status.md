@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.1.8, repairing linked local CLI and installer query entry points while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.9, repairing linked local CLI and installer query entry points while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.9 validation (2026-10-12)
+
+PATCH: enable the migrated candidate before mandatory autostart validation and leave rollback ownership with the parent installer. Native Windows npm test passed 178/215 with 37 skips and zero failures. Ubuntu WSL passed all seven private Bash recovery scenarios, including fresh/legacy activation ordering and single parent rollback for info/setup/verifier failures; all Bash scripts/launchers parsed successfully. Root manifest versions and git diff --check passed. No local Oracle Enforcing, reboot or real legacy-service smoke was performed. CI 38201507910 exposed the previously skipped legacy autostart check in 6.1.8. Hosted 6.1.9 validation/channel remain pending.
 
 ## 6.1.8 validation (2026-10-12)
 

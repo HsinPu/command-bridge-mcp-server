@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.8-blue)
+![Version](https://img.shields.io/badge/version-6.1.9-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.8 fixes local info/setup and installation setup output when executed through the managed current release link. Linux sudo examples use /usr/local/bin/command-bridge to work when sudo excludes that directory from its search path. Permissions and CI publication gates remain unchanged.
+6.1.9 also enables migrated Linux services before mandatory autostart validation and ensures private query failures trigger one parent-owned rollback. The linked info/setup and installation setup output fixes remain in place; Linux sudo examples use the full /usr/local/bin/command-bridge path. Permissions and CI gates remain unchanged.
 
 Example requests for a connected client:
 
