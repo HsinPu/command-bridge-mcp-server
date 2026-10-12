@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-if (process.env.GITHUB_ACTIONS !== 'true') throw Error('Disposable CI host required');
+if (process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_OS !== (process.platform === 'win32' ? 'Windows' : 'Linux')) throw Error('Disposable CI host required');
 const windows = process.platform === 'win32';
 const root = windows ? join(process.env.ProgramFiles, 'CommandBridgeMCP') : '/usr/local/lib/command-bridge';
 const metadata = JSON.parse(readFileSync(join(root, windows ? 'install-info.json' : 'current/install-info.json'), 'utf8'));

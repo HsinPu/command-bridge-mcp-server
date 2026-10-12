@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.2.0, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.2.1, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.2.1 validation (2026-10-12)
+
+PATCH: fix only the disposable Linux verifier environment and require matching platform markers. Ubuntu WSL confirmed sudo clears the CI marker; parent-validated marker forwarding is explicit. Native Windows npm test passed 188/225 with 37 skips and zero failures. Bash/Node syntax, minimal marker forwarding and git diff checks passed. CI 38232775307 passed both general test jobs but its Linux service smoke rejected the absent marker at line 61, confirming the cause. Hosted service/installation-channel validation for 6.2.1 remains pending.
 
 ## 6.2.0 validation (2026-10-12)
 

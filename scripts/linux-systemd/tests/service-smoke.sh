@@ -58,7 +58,7 @@ initial_config=$(sudo sha256sum "$config")
 sudo bash scripts/linux-systemd/install.sh --codex-name cb_saved --codex-url https://saved.example/mcp >/dev/null
 [[ "$(sudo sha256sum "$config")" == "$initial_config" ]]
 sudo test -f "$initial_marker"
-sudo "$(command -v node)" scripts/tests/verify-temporary-access.mjs
+sudo env GITHUB_ACTIONS=true RUNNER_OS=Linux "$(command -v node)" scripts/tests/verify-temporary-access.mjs
 description=/etc/command-bridge/client-setup.json
 description_before=$(sudo sha256sum "$description")
 sudo systemctl is-active --quiet "$service"

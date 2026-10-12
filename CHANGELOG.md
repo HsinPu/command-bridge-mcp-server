@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.2.1 — 2026-10-12
+
+PATCH: preserve the disposable CI identity through the Linux administrator verification call.
+
+- Forward only GITHUB_ACTIONS=true and RUNNER_OS=Linux after the parent smoke script validates those exact values; do not preserve the caller environment generally or change production installers.
+- Require a matching platform marker in the real temporary-access verifier. All admin, expiry, restart, MCP/Audit and configuration assertions remain mandatory.
+
+
 ## 6.2.0 — 2026-10-12
 
 MINOR: add optional administrator-only temporary command access without changing configured modes or MCP tool interfaces.
