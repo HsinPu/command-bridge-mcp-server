@@ -588,7 +588,8 @@ function buildShellInvocation(shell: ShellKind, command: string): ShellInvocatio
               "$commandBridgeSource = [Environment]::GetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_REQUEST'); " +
               "[Environment]::SetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_REQUEST',$null); " +
               "if ([Environment]::GetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_BUILTINS') -eq '1') { " +
-              "Import-Module -Name ([IO.Path]::Combine($PSHOME,'Modules\\Microsoft.PowerShell.Management\\Microsoft.PowerShell.Management.psd1')) -ErrorAction Stop }; " +
+              "Import-Module -Name ([IO.Path]::Combine($PSHOME,'Modules\\Microsoft.PowerShell.Management\\Microsoft.PowerShell.Management.psd1')) -ErrorAction Stop; " +
+              "Import-Module -Name ([IO.Path]::Combine($PSHOME,'Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1')) -ErrorAction Stop }; " +
               "[Environment]::SetEnvironmentVariable('COMMAND_BRIDGE_POWERSHELL_BUILTINS',$null); " +
               ". ([scriptblock]::Create($commandBridgeSource))" : command)
         ]

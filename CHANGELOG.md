@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.2.4 — 2026-10-12
+
+PATCH: explicitly load the fixed built-in PowerShell Utility module for default Windows Shell execution.
+
+- Deployed LocalService probe reached user-source execution before echo timed out; load Utility alongside Management instead of requiring command discovery for echo/Write-Output.
+- Keep authorized custom module-path behavior, Unicode source transport, command/Audit timeouts and native allowlist execution unchanged.
+- Add actual command coverage with module auto-loading disabled; retain the real service probe to verify the hosted result.
+
 ## 6.2.3 — 2026-10-12
 
 PATCH: locate the LocalService PowerShell timeout using private deployed-source instrumentation.

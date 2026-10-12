@@ -205,6 +205,17 @@ test("Windows PowerShell preserves long Unicode source, quotes and explicit exit
   } finally { await executor.shutdown(); await rm(root, { recursive: true, force: true }); }
 });
 
+test("Windows PowerShell default built-ins work without command module discovery", { skip: process.platform !== "win32" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-powershell-builtins-")), cfg = fixtureConfig(root);
+  cfg.allowedShells = ["powershell"];
+  const executor = new CommandExecutor(cfg, memoryAudit().audit);
+  try {
+    const result = await executor.execute({ command: "$PSModuleAutoLoadingPreference='None'; echo 'builtin'; Write-Output ((Get-Location).Path.Length -gt 0); ConvertTo-Json -InputObject 'utility' -Compress" });
+    assertSucceeded(result, "explicit-default-builtins");
+    assert.deepEqual(result.stdout.trim().split(/\r?\n/), ["builtin", "True", '"utility"']);
+  } finally { await executor.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
 test("Windows PowerShell honors explicitly allowed module-path passthrough", { skip: process.platform !== "win32" }, async () => {
   const root = await mkdtemp(join(tmpdir(), "cb-powershell-module-")), cfg = fixtureConfig(root);
   const previous = process.env.PSModulePath;

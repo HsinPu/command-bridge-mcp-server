@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.2.3, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.2.4, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.2.4 validation (2026-10-12)
+
+CI 38237225700 passed both general test jobs; the deployed LocalService probe reached phase 6 before echo timed out. Native Windows npm test passed 190/227 with 37 skips and zero failures, including the real no-auto-loading regression and existing custom module-path coverage. Hosted service and channel publication remain pending; this is not yet a confirmed deployment fix.
 
 ## 6.2.3 validation (2026-10-12)
 
