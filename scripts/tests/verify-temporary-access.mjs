@@ -24,24 +24,30 @@ const cli = (operation, minutes) => {
     throw Error(`ACCESS_SMOKE_CLI_${operation.toUpperCase()} code=${code} exit=${call.status ?? -1}`);
   }
 };
-const probe = (command = 'hostname', expectation) => {
+const probe = (command = 'hostname', expectation, stage = 'baseline') => {
   const call = spawnSync(runtime, [join(release, 'scripts/verify-install.mjs'), config, command, ...(expectation ? [expectation] : [])], { encoding: 'utf8', timeout: 30000 });
-  if (call.status !== 0) throw Error('ACCESS_SMOKE_MCP_AUDIT');
+  if (call.status !== 0) {
+    const summary = (call.stderr ?? '').match(/VERIFIER_COMMAND_FAILURE code=[A-Z_]{1,64} error=[01] ok=[01] exit=(?:unknown|-?\d{1,10}) timeout=[01] truncated=[01]/)?.[0];
+    if (summary) console.error(summary);
+    const failures = ['Service dependencies are not ready.', 'Matching audit lifecycle was not returned.', 'Independent diagnostics verification failed.', 'Installed fixed diagnostic reader verification failed.', 'Verification command returned unexpected output.', 'Expected command rejection was not returned.'];
+    const kind = failures.findIndex(message => (call.stderr ?? '').includes(message));
+    throw Error(`ACCESS_SMOKE_MCP_AUDIT stage=${stage} kind=${kind} exit=${call.status ?? -1}`);
+  }
 };
 const status = () => readAccessStatus(values);
 const original = await status();
 if (original.baseMode === 'unrestricted') throw Error('ACCESS_SMOKE_RESTRICTED_BASE_REQUIRED');
 cli('open', 1);
 if ((await status()).effectiveMode !== 'unrestricted') throw Error('ACCESS_SMOKE_OPEN');
-probe('echo CB_TEMP_ACCESS', 'CB_TEMP_ACCESS');
-probe('command-bridge access open', 'error:LOCAL_ADMIN_COMMAND_BLOCKED');
+probe('echo CB_TEMP_ACCESS', 'CB_TEMP_ACCESS', 'temporary');
+probe('command-bridge access open', 'error:LOCAL_ADMIN_COMMAND_BLOCKED', 'local-admin-block');
 cli('close');
 if ((await status()).effectiveMode !== original.baseMode) throw Error('ACCESS_SMOKE_CLOSE');
 cli('open', 1);
 const expires = (await status()).expiresAt;
 await new Promise(resolve => setTimeout(resolve, Math.max(1, expires - Date.now() + 500)));
 if ((await status()).effectiveMode !== original.baseMode) throw Error('ACCESS_SMOKE_EXPIRY');
-probe();
+probe('hostname', undefined, 'expiry');
 cli('open', 1);
 const restart = windows ? spawnSync(join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoProfile', '-NonInteractive', '-Command', 'Restart-Service CommandBridgeMCP'], { timeout: 20000, stdio: 'ignore' }) :
   spawnSync('/usr/bin/systemctl', ['restart', 'command-bridge.service'], { timeout: 20000, stdio: 'ignore' });
@@ -52,6 +58,6 @@ while (!restarted) {
   try { restarted = await status(); } catch { if (Date.now() >= deadline) throw Error('ACCESS_SMOKE_RESTART_STATUS'); await new Promise(r => setTimeout(r, 200)); }
 }
 if (restarted.instanceId === original.instanceId || restarted.effectiveMode !== original.baseMode || restarted.grantId !== null) throw Error('ACCESS_SMOKE_RESTART_RESTORE');
-cli('status'); cli('close'); probe();
+cli('status'); cli('close'); probe('hostname', undefined, 'restart');
 if (!readFileSync(config).equals(before)) throw Error('ACCESS_SMOKE_CONFIGURATION_CHANGED');
 console.log('Temporary access: real admin CLI, MCP/Audit, expiry, restart restoration and configuration preservation passed.');

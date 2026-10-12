@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.2.1, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.2.2, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.2.2 validation (2026-10-12)
+
+PATCH: fixed verifier stage/result summaries after Windows CI 38232775307 failed a temporary-access MCP/Audit probe without identifying its phase. No permission, command policy, Audit or timeout was relaxed. Native Windows npm test passed 189/226 with 37 skips and zero failures; summary privacy tests passed. Hosted service validation and channel publication remain pending.
 
 ## 6.2.1 validation (2026-10-12)
 

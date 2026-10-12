@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.2.2 — 2026-10-12
+
+PATCH: add bounded private-safe stage and command-result diagnostics to service verification.
+
+- Report only fixed error codes, numeric exit values and boolean flags when a verification command fails; never print commands, output, messages, paths or Tokens.
+- Identify the temporary, blocked-admin, expiry or restart probe stage while retaining every MCP/Audit assertion and existing timeout.
+
+
 ## 6.2.1 — 2026-10-12
 
 PATCH: preserve the disposable CI identity through the Linux administrator verification call.

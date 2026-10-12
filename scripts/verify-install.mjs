@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { normalizeAllowedHosts } from '../dist/config/allowedHosts.js';
 import { decodeUtf8File } from '../dist/services/textEncoding.js';
+import { commandVerificationSummary } from '../dist/services/verificationSummary.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 const config = Object.fromEntries(decodeUtf8File(readFileSync(process.argv[2])).split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
@@ -43,7 +44,7 @@ try {
   if (expectedError) {
     if (!result.isError || result.structuredContent?.error?.code !== expectedError) throw new Error('Expected command rejection was not returned.');
   } else {
-    if (result.isError || !result.structuredContent?.ok) throw new Error('Service account could not execute the verification command.');
+    if (result.isError || !result.structuredContent?.ok) { console.error(commandVerificationSummary(result)); throw new Error('Service account could not execute the verification command.'); }
     if (expectedStdout !== undefined && result.structuredContent.stdout.trim() !== expectedStdout) throw new Error('Verification command returned unexpected output.');
   }
   let matched = false;
