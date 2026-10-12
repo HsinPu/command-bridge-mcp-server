@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.1.7 — 2026-10-12
+
+PATCH: correct Windows configuration-recovery fixture setup without relaxing assertions or production permissions.
+
+- Use the protected explicit configuration DACL used by managed deployment; runner temporary-directory CREATOR OWNER inheritance is not a managed configuration baseline. Keep distinct original/candidate reader ACEs and exact bytes/SDDL restoration.
+- Preserve lock, fault evidence, restart-refusal and publication gates. CI 6.1.6 located the failure in configuration restoration; hosted validation remains required.
+
 ## 6.1.6 — 2026-10-12
 
 PATCH: add fixed, bounded diagnostics for the CI-only Windows client-description regression without changing production ACLs or relaxing any test.

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.6-blue)
+![Version](https://img.shields.io/badge/version-6.1.7-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.1.6 補上 Windows 連線描述測試的固定階段、例外類型及數字錯誤碼，用來定位只在 CI 出現的發布／回復失敗，不公開私有內容。檔案、ACL、故障證據及服務驗證要求都保留；6.1.5 的原子替換與 ACL 快照修正、正式政策及時限不變。安裝來源仍須通過全部 CI／服務驗證並發布已驗證 channel。
+6.1.7 讓 Windows 設定回復測試使用與正式受管理安裝一致的受保護明確 ACL，避免沿用 CI 暫存目錄的特殊繼承權限。精確位元組／ACL 回復與失敗時拒絕重啟仍為必要條件；正式政策、權限及時限不變。安裝來源仍須通過全部 CI／服務驗證才能更新。
 
 例如，你可以請已連線的用戶端：
 

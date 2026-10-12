@@ -45,6 +45,14 @@ try {
   }
   $ConfigFile = Join-Path $private 'config.env'
   [IO.File]::WriteAllText($ConfigFile, 'preserved-configuration')
+  # Managed configuration has a protected explicit DACL. Do not inherit the
+  # runner's temporary-directory CREATOR OWNER rules (recomputed on ACL writes).
+  # Keep the original and candidate readers different so restore must really act.
+  $configAcl = [IO.File]::GetAccessControl($ConfigFile)
+  $configAcl.SetAccessRuleProtection($true, $false)
+  $configAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'Allow'))
+  $configAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-18'), 'Read', 'Allow'))
+  [IO.File]::SetAccessControl($ConfigFile, $configAcl)
   $ConfigBackup = [IO.File]::ReadAllBytes($ConfigFile)
   $ConfigAclBackup = [IO.File]::GetAccessControl($ConfigFile)
   Set-FileAclSnapshot $ConfigFile $candidateAcl

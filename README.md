@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.6-blue)
+![Version](https://img.shields.io/badge/version-6.1.7-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.6 adds bounded, secret-free Windows client-description fixture diagnostics to identify CI-only publication/recovery failures. All file, ACL, fault-evidence and service gates remain required. The 6.1.5 atomic replacement and ACL snapshot repair remains; production policies and deadlines are unchanged. Installation availability still requires all CI/service gates and a verified channel.
+6.1.7 aligns the Windows configuration-recovery fixture with the protected explicit ACL used by managed installations, instead of inheriting runner-specific temporary-directory permissions. Exact bytes/ACL restoration and restart refusal remain mandatory; production policies, permissions and deadlines are unchanged. All CI/service gates must pass before the installation channel updates.
 
 Example requests for a connected client:
 

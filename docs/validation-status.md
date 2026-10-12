@@ -1,6 +1,12 @@
 # Validation status
 
-The current package is 6.1.6, repairing Windows replacement of saved client descriptions while preserving test scheduling, Linux retry/service-entry repair and protected local info/setup. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.7, repairing Windows replacement of saved client descriptions while preserving test scheduling, Linux retry/service-entry repair and protected local info/setup. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.7 validation (2026-10-12)
+
+PATCH: private configuration recovery now starts from a protected explicit DACL, matching managed configuration. Original/candidate readers differ and exact bytes/SDDL restoration remains required. Production code/permissions/deadlines and CI gates are unchanged. Full native Windows npm test on Node.js 20.15.1 passed 177/213 with 36 skips and zero failures. PowerShell/XML and diff checks passed. Hosted 6.1.7 results are pending.
+
+CI 38194951227 for 6.1.6 passed Linux general tests but failed the Windows fixture at restore-config (RuntimeException, HRESULT -2146233087). All earlier description publication/replacement/recovery phases passed. The failing case started from an inherited temporary-file ACL; hosted validation must confirm whether the explicit managed baseline resolves it.
 
 ## 6.1.6 validation (2026-10-12)
 
