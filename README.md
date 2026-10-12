@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.9-blue)
+![Version](https://img.shields.io/badge/version-6.1.10-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -145,6 +145,8 @@ command-bridge setup
 sudo /usr/local/bin/command-bridge setup --show-token
 ```
 
+On Linux, use the full `/usr/local/bin/command-bridge` path with `sudo`: some hosts omit `/usr/local/bin` from sudo's `secure_path`, causing `sudo command-bridge` to report `command not found` even after a successful installation. The installer and updater leave the host's sudo search path unchanged. This fixed command follows the active release automatically, so you do not need to specify a version directory after updating.
+
 Windows uses `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` with the same arguments; `--show-token` requires an elevated PowerShell terminal. Ordinary queries hide the Token and do not write settings or depend on Audit. If protected settings are unreadable, use `sudo /usr/local/bin/command-bridge setup` (still hidden) or an elevated Windows terminal; `info` can return a partial summary. Saved connection names/HTTPS URLs survive reinstall and update. `setup --codex-name cb_other --codex-url https://private.example/mcp` changes only the output. Direct calls through MCP are blocked in every mode; use the MCP diagnostics tool for remote troubleshooting. See [local commands, permissions and metadata](docs/local-administration.md).
 
 ## Update an installed service
@@ -184,7 +186,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.9 also enables migrated Linux services before mandatory autostart validation and ensures private query failures trigger one parent-owned rollback. The linked info/setup and installation setup output fixes remain in place; Linux sudo examples use the full /usr/local/bin/command-bridge path. Permissions and CI gates remain unchanged.
+6.1.10 documents the fixed Linux sudo command path without changing runtime behavior. 6.1.9 enables migrated Linux services before mandatory autostart validation and ensures private query failures trigger one parent-owned rollback. The linked info/setup and installation setup output fixes remain in place; Linux sudo examples use the full /usr/local/bin/command-bridge path. Permissions and CI gates remain unchanged.
 
 Example requests for a connected client:
 

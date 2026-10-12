@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.1.9, repairing linked local CLI and installer query entry points while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.10, repairing linked local CLI and installer query entry points while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.10 validation (2026-10-12)
+
+Documentation-only PATCH: explain Linux sudo secure_path and the stable absolute CLI path in both READMEs. Runtime code and the four bootstrap installation/uninstallation commands are unchanged. Documentation links, root manifest versions and git diff --check are checked locally; npm test is not rerun for this documentation-only batch. This version has not been pushed or published.
 
 ## 6.1.9 validation (2026-10-12)
 

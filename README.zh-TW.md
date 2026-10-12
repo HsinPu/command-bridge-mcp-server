@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.9-blue)
+![Version](https://img.shields.io/badge/version-6.1.10-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -145,6 +145,8 @@ command-bridge setup
 sudo /usr/local/bin/command-bridge setup --show-token
 ```
 
+Linux 使用 `sudo` 時，請保留 `/usr/local/bin/command-bridge` 完整路徑：部分主機的 sudo `secure_path` 未包含 `/usr/local/bin`，因此即使安裝成功，`sudo command-bridge` 仍會顯示 `command not found`。安裝器與更新程式不會修改主機的 sudo 搜尋路徑。這個固定命令會自動使用目前啟用的版本，更新後不需要指定版本目錄。
+
 Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` 加相同參數；顯示 Token 須使用已提升權限的 PowerShell。一般查詢隱藏 Token，不寫設定，也不依賴 Audit。設定不可讀時，使用 `sudo /usr/local/bin/command-bridge setup`（仍隱藏 Token）或管理員 PowerShell；`info` 可提供部分摘要。儲存的連線名稱／HTTPS 網址在重裝與更新後保留。`setup --codex-name cb_other --codex-url https://private.example/mcp` 只改本次輸出。所有模式都會攔截 MCP 直接呼叫這些命令；遠端偵錯使用 MCP 診斷工具。詳見[本機命令、權限與連線描述](docs/local-administration.md)。
 
 ## 更新已安裝的服務
@@ -184,7 +186,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.1.9 修正 Linux 舊版遷移時開機啟用順序，並讓查詢驗證失敗只由主安裝程序回復一次。保留 current 版本連結的查詢／連線設定輸出修正；Linux sudo 範例使用 /usr/local/bin/command-bridge 完整路徑。既有權限與 CI 門檻維持不變。
+6.1.10 補充 Linux sudo 完整命令路徑的說明，不改變執行行為。6.1.9 修正 Linux 舊版遷移時開機啟用順序，並讓查詢驗證失敗只由主安裝程序回復一次。保留 current 版本連結的查詢／連線設定輸出修正；Linux sudo 範例使用 /usr/local/bin/command-bridge 完整路徑。既有權限與 CI 門檻維持不變。
 
 例如，你可以請已連線的用戶端：
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.1.10 — 2026-10-12
+
+PATCH: document Linux sudo command lookup without changing host configuration or runtime behavior.
+
+- Explain in both READMEs why sudo may not find the short command, recommend the fixed /usr/local/bin/command-bridge path, and clarify that it follows the active release after updates.
+- Keep host sudo secure_path unchanged; retain the fixed one-command installation and uninstallation entry points.
+
+
 ## 6.1.9 — 2026-10-12
 
 PATCH: repair legacy Linux migration activation and single-owner rollback without weakening CLI validation.
