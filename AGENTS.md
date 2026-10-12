@@ -102,6 +102,8 @@ npm start
 
 ## 修改時應維持的行為
 
+- 6.1.5 起，Windows 既有連線描述的原子替換須用 `[NullString]::Value` 傳遞真正空備份路徑，不得用 PowerShell 5.1 會轉成空字串的 `$null`；每次 ACL 寫入須由快照建立新的 descriptor，明確套用 Access／Owner／Group，不重用可能已清除 dirty flags 的 .NET ACL 物件；設定與連線描述回復亦同。保留相同檔案系統暫存、固定管理員／LocalService ACL 與精確回復。私有實際檔案測試涵蓋新建、內容與 ACL 替換、BOM／換行回復、真實分享鎖拒絕與暫存清除；回復不完整仍不得重啟。CI 摘要排除成功測試標題內的錯誤碼，固定終結錯誤識別與關鍵字提示分開，不把測試提及 Audit 失敗當成實際 Audit 根因。
+
 - 6.1.4 起，Windows 無效 Audit 輸入測試須檢查實際 StrictMode 例外類型與固定結果，不能依賴可能被長路徑換行或翻譯的 stderr；涵蓋長路徑、空白及單引號。回復故障階段不符時只公開有上限的分類／數字摘要，支援 PowerShell 5.1 的 BOM UTF-16LE 私有日誌；原始日誌、設定、Token 與指令不得公開。指定錯誤與部署 SHA 階段證據缺一仍失敗，不以本機 fixture 通過推定 hosted 服務或 channel 通過。
 
 - 6.1.3 起，Linux 安裝與卸載共用新舊固定服務入口的精確辨識，拒絕額外 argv、環境覆寫、Shell 包裝及重複 ExecStart；舊卸載器無法辨識新入口時，須在任何服務變更前使用同一 CI SHA 的完整後備，後備不相容或下載失敗仍保留原部署。首次啟動失敗的程式檔僅能在新根目錄、兩個啟用指標皆不存在、無已安裝／已註冊的主服務、舊服務及 updater、且既有所有權／掛載／回復預檢通過時重用；not-found 的 systemd 失敗快取不等於活動服務。已有指標、舊根目錄或註冊服務的不完整部署不得猜測修復。重用 Runtime 須為受管理實體檔案，release 的 SHA／版本／Runtime metadata 須符合本次來源；仍執行全部建置與 MCP／Audit 驗證，保留 Token 與資料。真實 CI 須要求首次故障的啟動證據並驗證重試，不以單元測試宣稱 Oracle Enforcing 或 channel 已可用。

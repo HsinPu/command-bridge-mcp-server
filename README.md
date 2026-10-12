@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.4-blue)
+![Version](https://img.shields.io/badge/version-6.1.5-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.4 fixes a Windows installer source-test failure caused by wrapped/localized PowerShell error text in long deployment paths. Audit rejection is verified using the actual error type; private rollback failures expose only bounded fixed diagnostic categories. The 6.1.3 Linux retry/service-entry repair remains. Production policies, Audit behavior, deadlines and one-command entry points are unchanged. Installation availability still requires every CI/service gate and publication of the verified channel.
+6.1.5 fixes Windows replacement of an existing client setup description: PowerShell 5.1 now passes a real null backup path to the atomic file replacement. Actual file/ACL tests cover new publication, changed descriptions, locked-file rejection and exact recovery. Rollback summaries distinguish terminal error identities from error codes mentioned by successful tests. Existing Linux fixes, production policies, Audit requirements and deadlines remain unchanged. One-command availability still requires every CI/service gate and a published verified channel.
 
 Example requests for a connected client:
 

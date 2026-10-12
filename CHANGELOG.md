@@ -1,5 +1,15 @@
 # Changelog
 
+## 6.1.5 — 2026-10-12
+
+PATCH: fix updating an existing Windows client description without changing MCP interfaces, service identities, protected ACLs or deadlines.
+
+- Pass an actual null backup path (`[NullString]::Value`) to .NET atomic file replacement under PowerShell 5.1; the old `$null` conversion raised `ArgumentException` before service switching when the saved name/HTTPS URL changed. Keep same-filesystem staging, fixed ACLs and exact rollback.
+- Reapply administrator/SYSTEM/LocalService access and restore saved configuration/description ACLs from a fresh descriptor on every write; reused/read .NET ACL objects may have no modified sections and silently skip persistence.
+- Exercise the production publisher with private real files/ACLs: fresh publication, changed bytes, BOM/newline snapshot recovery, a genuine sharing violation, staging cleanup and restart refusal on incomplete recovery.
+- Exclude successful test titles from rollback error-code hints and add fixed terminal exception identities. An Audit error mentioned by a passing test is not evidence of an Audit failure.
+- Preserve source tests, designated fault/deployed-SHA evidence, real MCP/Audit and publication gates.
+
 ## 6.1.4 — 2026-10-11
 
 PATCH: repair Windows installer test reliability without changing production Audit, policies, MCP interfaces or deadlines.

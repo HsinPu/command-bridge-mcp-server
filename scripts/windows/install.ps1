@@ -280,7 +280,7 @@ function Restore-ConfigurationBytes {
       if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ConfigFile)) -cne [Convert]::ToBase64String($script:ConfigBackup)) { throw 'Configuration byte restoration failed.' }
     }
     if ($null -ne $script:ConfigAclBackup) {
-      [IO.File]::SetAccessControl($ConfigFile, $script:ConfigAclBackup)
+      Set-FileAclSnapshot $ConfigFile $script:ConfigAclBackup
       if ([IO.File]::GetAccessControl($ConfigFile).Sddl -cne $script:ConfigAclBackup.Sddl) { throw 'Configuration ACL restoration failed.' }
     }
   } catch { $script:ClientSetupRecoveryFailed = $true; throw }
@@ -337,13 +337,29 @@ function Install-ClientSetup([string]$NodeRoot, [string]$SourceRoot) {
   $acl.SetOwner([Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
   foreach ($sid in @('S-1-5-18','S-1-5-32-544')) { $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'Allow')) }
   $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-19'), 'Read', 'Allow'))
-  [IO.File]::SetAccessControl($candidate, $acl)
+  Set-FileAclSnapshot $candidate $acl
+  $acl = [IO.File]::GetAccessControl($candidate)
+  Publish-ClientSetupCandidate $candidate $acl
+}
+
+function Set-FileAclSnapshot([string]$Path, [Security.AccessControl.FileSecurity]$Snapshot) {
+  # SetAccessControl persists only modified sections. A read/reused snapshot can
+  # have no dirty flags, so deserialize into a fresh descriptor for every write.
+  $sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group
+  $fresh = [Security.AccessControl.FileSecurity]::new()
+  $fresh.SetSecurityDescriptorSddlForm($Snapshot.GetSecurityDescriptorSddlForm($sections), $sections)
+  [IO.File]::SetAccessControl($Path, $fresh)
+}
+
+function Publish-ClientSetupCandidate([string]$Candidate, [Security.AccessControl.FileSecurity]$Acl) {
   # Move on the same configuration filesystem, retaining the protected candidate ACL.
   $staged = Join-Path $ConfigRoot ('.client-setup-' + [Guid]::NewGuid().ToString('N'))
   try {
-    [IO.File]::Copy($candidate, $staged, $false)
-    [IO.File]::SetAccessControl($staged, $acl)
-    if ([IO.File]::Exists($ClientSetupFile)) { [IO.File]::Replace($staged, $ClientSetupFile, $null); [IO.File]::SetAccessControl($ClientSetupFile, $acl) }
+    [IO.File]::Copy($Candidate, $staged, $false)
+    Set-FileAclSnapshot $staged $Acl
+    # PowerShell 5.1 binds $null to an empty string for this .NET overload.
+    # NullString passes an actual null backup path and keeps replacement atomic.
+    if ([IO.File]::Exists($ClientSetupFile)) { [IO.File]::Replace($staged, $ClientSetupFile, [NullString]::Value); Set-FileAclSnapshot $ClientSetupFile $Acl }
     else { [IO.File]::Move($staged, $ClientSetupFile) }
   } finally { if ([IO.File]::Exists($staged)) { [IO.File]::Delete($staged) } }
 }
@@ -354,7 +370,7 @@ function Restore-ClientSetup {
     if ($script:ClientSetupExisted) {
       if ($null -eq $script:ClientSetupBackup -or $null -eq $script:ClientSetupAcl) { throw 'Missing client description snapshot.' }
       [IO.File]::WriteAllBytes($ClientSetupFile, $script:ClientSetupBackup)
-      [IO.File]::SetAccessControl($ClientSetupFile, $script:ClientSetupAcl)
+      Set-FileAclSnapshot $ClientSetupFile $script:ClientSetupAcl
       if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ClientSetupFile)) -cne [Convert]::ToBase64String($script:ClientSetupBackup) -or [IO.File]::GetAccessControl($ClientSetupFile).Sddl -cne $script:ClientSetupAcl.Sddl) { throw 'Client description restoration verification failed.' }
     } elseif ([IO.File]::Exists($ClientSetupFile)) { [IO.File]::Delete($ClientSetupFile) }
     $script:ClientSetupChanged = $false

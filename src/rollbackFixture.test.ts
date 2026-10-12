@@ -50,6 +50,10 @@ test("rollback failure summaries preserve stages without exposing private log te
   assert.ok(summary.failedTestIndices.length <= 64);
   assert.ok(summary.locations.length <= 16);
   assert.ok(!JSON.stringify(summary).includes(secret));
+  const successful = summarizeRollbackFailure('✔ first write with AUDIT_LOG_WRITE_FAILED stays blocked\nok 19 AUDIT_LOG_WRITE_FAILED\n# Subtest: AUDIT_LOG_WRITE_FAILED\nFullyQualifiedErrorId : ArgumentException,install.ps1', 'win32');
+  assert.ok(!successful.knownErrorCategories.includes('AUDIT_LOG_WRITE_FAILED'));
+  assert.deepEqual(successful.terminalErrorKinds, ['ArgumentException']);
+  assert.ok(summarizeRollbackFailure('Error: AUDIT_LOG_WRITE_FAILED', 'win32').knownErrorCategories.includes('AUDIT_LOG_WRITE_FAILED'));
   const injected = summarizeRollbackFailure('INJECTED_POST_ACTIVATION_FAILURE\nNetwork refresh did not take effect\nMCP installation verification timed out.', 'win32');
   assert.equal(injected.designatedFaultSeen, true);
   assert.equal(injected.networkMismatchSeen, true);

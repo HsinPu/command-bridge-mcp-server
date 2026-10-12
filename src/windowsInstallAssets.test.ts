@@ -9,7 +9,7 @@ import { spawn, spawnSync } from "node:child_process";
 const projectRoot = process.cwd();
 test("Windows client description restores exact bytes and ACLs and withholds restart on failed recovery", { skip: process.platform !== "win32" }, () => {
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(projectRoot, "scripts/windows/tests/client-setup.test.ps1")], { encoding: "utf8", windowsHide: true, timeout: 15_000 });
-  assert.equal(result.status, 0, result.stdout + result.stderr + (result.error ?? ""));
+  assert.equal(result.status, 0, JSON.stringify({ stage: 'client-description-publish-recovery', status: result.status, signal: result.signal, spawnFailed: Boolean(result.error) }));
 });
 test("Windows UTF-8 configuration changes retain Chinese, BOM/newlines and exact rollback bytes", { skip: process.platform !== "win32" }, () => {
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(projectRoot, "scripts/windows/tests/encoding.tests.ps1")], { encoding: "utf8", windowsHide: true, timeout: 15_000 });

@@ -11,18 +11,54 @@ $ClientSetupFile = Join-Path $private 'client.json'
 $ClientSetupRecoveryFailed = $false
 $ConfigAclBackup = $null
 $TempRoot = $private
+$ConfigRoot = $private
 try {
+  # Exercise the production publisher with private files and the current user's
+  # ACL. The production caller still supplies its fixed administrator/LocalService ACL.
+  $candidate = Join-Path $private 'candidate.json'
+  $newBytes = [Text.Encoding]::UTF8.GetBytes('{"schemaVersion":1,"connectionName":"cb_new","urlMode":"explicit","explicitUrl":"https://new.example/mcp","advertisedHost":null}')
+  [IO.File]::WriteAllBytes($candidate, $newBytes)
+  $candidateAcl = [IO.File]::GetAccessControl($candidate)
+  $candidateAcl.SetAccessRuleProtection($true, $false)
+  $candidateAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.WindowsIdentity]::GetCurrent().User, 'FullControl', 'Allow'))
+  $candidateAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]::new('S-1-5-19'), 'Read', 'Allow'))
+  [IO.File]::SetAccessControl($candidate, $candidateAcl)
+  # Compare the OS-canonical descriptor, including its inherited-control flags.
+  $candidateAcl = [IO.File]::GetAccessControl($candidate)
+  Publish-ClientSetupCandidate $candidate $candidateAcl
+  if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ClientSetupFile)) -cne [Convert]::ToBase64String($newBytes)) { throw 'Fresh publication failed.' }
   foreach ($bom in @($false, $true)) {
     foreach ($newline in @("`n", "`r`n")) {
-      [IO.File]::WriteAllText($ClientSetupFile, ('{"schemaVersion":1}' + $newline), [Text.UTF8Encoding]::new($bom))
+      [IO.File]::WriteAllText($ClientSetupFile, ('{"schemaVersion":1,"connectionName":"cb_old","urlMode":"explicit","explicitUrl":"https://old.example/mcp","advertisedHost":null}' + $newline), [Text.UTF8Encoding]::new($bom))
       $ClientSetupBackup = [IO.File]::ReadAllBytes($ClientSetupFile)
       $ClientSetupAcl = [IO.File]::GetAccessControl($ClientSetupFile)
       $ClientSetupExisted = $true; $ClientSetupChanged = $true
-      [IO.File]::WriteAllText($ClientSetupFile, 'candidate')
+      Publish-ClientSetupCandidate $candidate $candidateAcl
+      if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ClientSetupFile)) -cne [Convert]::ToBase64String($newBytes) -or [IO.File]::GetAccessControl($ClientSetupFile).Sddl -cne $candidateAcl.Sddl) { throw 'Replacement bytes or ACL mismatch.' }
       Restore-ClientSetup
       if ($ClientSetupChanged -or [Convert]::ToBase64String([IO.File]::ReadAllBytes($ClientSetupFile)) -cne [Convert]::ToBase64String($ClientSetupBackup) -or [IO.File]::GetAccessControl($ClientSetupFile).Sddl -cne $ClientSetupAcl.Sddl) { throw 'Byte or ACL rollback failed.' }
     }
   }
+  $ConfigFile = Join-Path $private 'config.env'
+  [IO.File]::WriteAllText($ConfigFile, 'preserved-configuration')
+  $ConfigBackup = [IO.File]::ReadAllBytes($ConfigFile)
+  $ConfigAclBackup = [IO.File]::GetAccessControl($ConfigFile)
+  Set-FileAclSnapshot $ConfigFile $candidateAcl
+  [IO.File]::WriteAllText($ConfigFile, 'changed-configuration')
+  Restore-ConfigurationBytes
+  if ([IO.File]::GetAccessControl($ConfigFile).Sddl -cne $ConfigAclBackup.Sddl -or [Convert]::ToBase64String([IO.File]::ReadAllBytes($ConfigFile)) -cne [Convert]::ToBase64String($ConfigBackup)) { throw 'Configuration ACL or bytes were not restored.' }
+  $ConfigBackup = $null; $ConfigAclBackup = $null
+  # A real sharing violation must fail and clean the unpublished stage; it must
+  # not silently overwrite a locked description or discard rollback snapshots.
+  $original = [IO.File]::ReadAllBytes($ClientSetupFile)
+  $ClientSetupBackup = $original; $ClientSetupAcl = [IO.File]::GetAccessControl($ClientSetupFile)
+  $ClientSetupExisted = $true; $ClientSetupChanged = $true
+  $held = [IO.File]::Open($ClientSetupFile, 'Open', 'Read', 'None')
+  $rejected = $false
+  try { try { Publish-ClientSetupCandidate $candidate $candidateAcl } catch { $rejected = $true } } finally { $held.Dispose() }
+  if (-not $rejected -or @(Get-ChildItem -LiteralPath $private -Filter '.client-setup-*').Count -ne 0) { throw 'Locked publication was accepted or retained staging.' }
+  Restore-ClientSetup
+  if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($ClientSetupFile)) -cne [Convert]::ToBase64String($original) -or [IO.File]::GetAccessControl($ClientSetupFile).Sddl -cne $ClientSetupAcl.Sddl) { throw 'Locked publication rollback mismatch.' }
   $ClientSetupExisted = $false; $ClientSetupChanged = $true
   Restore-ClientSetup
   if ([IO.File]::Exists($ClientSetupFile)) { throw 'Failed fresh install retained the new description.' }

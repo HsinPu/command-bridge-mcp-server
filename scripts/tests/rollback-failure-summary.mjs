@@ -7,10 +7,15 @@ import { summarizeUpdateFailure } from './update-failure-summary.mjs';
 // The underlying installer log remains private, including on summary failure.
 export function summarizeRollbackFailure(log, platform) {
   const summary = summarizeUpdateFailure(log, platform);
+  // Successful test titles can mention error codes without any Audit failure.
+  const diagnostics = log.split(/\r?\n/).filter(line => !/^\s*(?:✔|﹣|ok \d+\b|# Subtest:)/u.test(line)).join('\n');
+  summary.knownErrorCategories = summarizeUpdateFailure(diagnostics, platform).knownErrorCategories;
+  const errorKinds = ['ArgumentException', 'IOException', 'UnauthorizedAccessException', 'MethodInvocationException'];
   summary.installerErrorIndices = summary.installerErrorIndices.slice(0, 64);
   summary.bootstrapErrorIndices = summary.bootstrapErrorIndices.slice(0, 64);
   return {
     ...summary,
+    terminalErrorKinds: errorKinds.filter(kind => new RegExp(`FullyQualifiedErrorId\\s*:\\s*${kind}\\b`).test(log)),
     designatedFaultSeen: log.includes('INJECTED_POST_ACTIVATION_FAILURE'),
     networkMismatchSeen: log.includes('Network refresh did not take effect'),
     verificationTimeoutSeen: log.includes('MCP installation verification timed out.'),
