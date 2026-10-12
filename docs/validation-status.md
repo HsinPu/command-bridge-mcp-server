@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.2.4, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.2.5, adding temporary administrator access while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.2.5 validation (2026-10-12)
+
+CI 38238372476 failed locked dependency installation on both platforms: a root-version replacement accidentally modified jose to 6.2.4 while retaining the 6.2.3 checksum. Its original entry is restored; fresh npm ci passed, all third-party lock entries exactly match 6.2.3, and full native Windows tests passed 190/227 with 37 skips and zero failures. The deployed Windows Utility fix has not yet been tested by CI.
 
 ## 6.2.4 validation (2026-10-12)
 

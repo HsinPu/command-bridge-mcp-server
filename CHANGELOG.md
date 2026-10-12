@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.2.5 — 2026-10-12
+
+PATCH: restore the unchanged third-party jose lock entry after a root-version replacement accidentally changed it.
+
+- Preserve jose 6.2.3, its original tarball and integrity; only package and lock root versions are updated.
+- Revalidate a fresh locked dependency installation before rerunning all tests and service gates.
+
 ## 6.2.4 — 2026-10-12
 
 PATCH: explicitly load the fixed built-in PowerShell Utility module for default Windows Shell execution.
