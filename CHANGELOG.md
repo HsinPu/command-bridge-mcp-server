@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.1.8 — 2026-10-12
+
+PATCH: restore local administration and installation setup output through managed release links.
+
+- Compare physical module and command entry paths instead of symlink spelling; preserve import-only behavior and existing permission checks.
+- Verify linked and physical entry execution with real subprocesses, including setup output and invalid argument failures.
+- Document absolute sudo command paths for hosts whose sudo secure_path excludes /usr/local/bin; do not modify host sudo policy.
+
+
 ## 6.1.7 — 2026-10-12
 
 PATCH: correct Windows configuration-recovery fixture setup without relaxing assertions or production permissions.

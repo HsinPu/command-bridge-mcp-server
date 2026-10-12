@@ -1,6 +1,6 @@
 # Windows service installation
 
-6.1.7 uses an explicit protected DACL in the private configuration rollback fixture, matching managed configuration rather than runner-temp inheritance. Original/candidate readers differ; exact saved ACL/bytes and failure/restart assertions remain intact. Production permission behavior is unchanged.
+6.1.8 resolves physical module entry paths for local administration and installer setup output; Windows direct-path execution and permission checks remain unchanged.
 
 6.1.6 adds a fixed phase, whitelisted exception kind and numeric HRESULT when the private client-description fixture fails. Raw errors, paths, configuration and Token remain private; native file/ACL and rollback assertions are unchanged. This diagnosis does not establish hosted lifecycle or installation-channel readiness.
 
@@ -8,7 +8,7 @@
 
 6.1.4 repairs Windows source-test rejection assertions for long paths and localized/wrapped PowerShell errors. Tests inspect the actual StrictMode error identity before emitting a fixed result; no production Audit validation or timeout is relaxed. Rollback-stage failures print only bounded fixed categories/counts from private UTF-8 or BOM-marked PowerShell UTF-16LE logs, never the raw log, configuration or Token. The designated fault and deployed-SHA evidence are still required. The 6.1.3 Linux repair remains; full cross-platform service checks are still mandatory for channel publication.
 
-Version 2.0.0 changes Linux service and installation path names only. The current package is 6.1.7; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
+Version 2.0.0 changes Linux service and installation path names only. The current package is 6.1.8; Windows keeps the `CommandBridgeMCP` service and its existing paths. The 1.0.5 startup diagnostics still report dependency/error categories, child-process/listener presence and bounded startup-log excerpts when health validation fails. They mask the configured bearer token and credential fields, skip Audit payloads and never dump configuration or environment values. Downloads suppress PowerShell progress rendering and still verify checksums.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -211,7 +211,7 @@ Windows PowerShell: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" -
 
 ## Update the installed service (4.3.0+)
 
-Linux: `command-bridge update --check`, then `sudo command-bridge update`. Windows: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`, then use `update` in an elevated PowerShell terminal. No automatic elevation or unattended background updates are added. A Linux installer-account service must be updated through sudo by its original login account; another account/direct root is rejected. Dedicated-account installations retain their identity. npm installations use npm for updates.
+Linux: `command-bridge update --check`, then `sudo /usr/local/bin/command-bridge update`. Windows: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`, then use `update` in an elevated PowerShell terminal. No automatic elevation or unattended background updates are added. A Linux installer-account service must be updated through sudo by its original login account; another account/direct root is rejected. Dedicated-account installations retain their identity. npm installations use npm for updates.
 
 The locally saved bootstrap reads the verified CI channel once and compares full SHA. Identical SHA skips building/restarting; a different SHA at the same version can be updated. Missing/invalid metadata or channel and failed downloads stop before activation. All downloads use the selected SHA. A deployment lock serializes changes (Linux flock; Windows installation/removal mutex). Inside that lock the installer requires the previously observed installed SHA to match; otherwise retry.
 

@@ -1,7 +1,8 @@
 import { hostname } from "node:os";
 import { dirname, join, relative, resolve, win32 } from "node:path";
 import { realpath } from "node:fs/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { isModuleEntry } from "./moduleEntry.js";
 import { decodeUtf8File } from "../services/textEncoding.js";
 import { version } from "../version.js";
 import { CliError, connectionName, httpsConnectionUrl, parseClientSetup, parseSavedConfiguration, renderCodexSetup, resolveConnection } from "./connectionSetup.js";
@@ -144,7 +145,7 @@ export async function runInstalledManagement(args: string[], paths: Installation
   return { output, exitCode: report.partial ? 1 : 0 };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isModuleEntry(import.meta.url)) {
   let timer: NodeJS.Timeout;
   const work = async () => {
     const flags = parseManagementArgs(process.argv.slice(2));

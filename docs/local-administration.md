@@ -1,4 +1,4 @@
-# Local installation information / 本機安裝與連線資訊 (6.1.7)
+# Local installation information / 本機安裝與連線資訊 (6.1.8)
 
 These commands run in a host terminal and use the service installation's bundled Runtime. They do not start MCP, load its full policy/configuration, depend on Audit, contact GitHub, restart services, or write settings. npm/stdio installations return `SERVICE_INSTALLATION_REQUIRED` (or the npm entry's equivalent message); their existing no-argument MCP startup and version query remain unchanged.
 
@@ -12,7 +12,7 @@ Linux:
 command-bridge info
 command-bridge info --json
 command-bridge setup
-sudo command-bridge setup --show-token
+sudo /usr/local/bin/command-bridge setup --show-token
 command-bridge setup --codex-name cb_other --codex-url https://private.example/mcp
 ```
 
@@ -27,9 +27,9 @@ Windows PowerShell:
 & "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" setup --codex-name cb_other --codex-url https://private.example/mcp
 ```
 
-`info` and ordinary `setup` never intentionally print the saved Bearer Token. `setup` needs readable protected settings: use `sudo command-bridge setup` (still hidden) or an elevated Windows terminal when ordinary-user access is insufficient. `setup --show-token` requires Linux effective UID 0 or an elevated Windows administrator token, readable protected settings and a printable Token. It does not auto-elevate. Its complete copy block contains a secret: use it only in a trusted Codex task and do not publish or commit it. The output keeps the host-specific Token environment variable, connection collision warning and existing 20-second startup / 360-second tool budget.
+`info` and ordinary `setup` never intentionally print the saved Bearer Token. `setup` needs readable protected settings: use `sudo /usr/local/bin/command-bridge setup` (still hidden) or an elevated Windows terminal when ordinary-user access is insufficient. `setup --show-token` requires Linux effective UID 0 or an elevated Windows administrator token, readable protected settings and a printable Token. It does not auto-elevate. Its complete copy block contains a secret: use it only in a trusted Codex task and do not publish or commit it. The output keeps the host-specific Token environment variable, connection collision warning and existing 20-second startup / 360-second tool budget.
 
-`info` 與一般 `setup` 隱藏既有 Bearer Token。`setup` 仍需讀取受保護設定；一般帳號無權限時使用 `sudo command-bridge setup`（仍隱藏 Token）或管理員 PowerShell。`setup --show-token` 須由 Linux root 或已提升權限的 Windows 管理員執行，且設定可安全讀取；不會自動提權。完整複製區塊含秘密，只可交給受信任的 Codex 工作，不要公開或提交到 Git。連線名稱或 Token 環境變數已被其他主機使用時，改用未占用的名稱，不能覆蓋其他連線。
+`info` 與一般 `setup` 隱藏既有 Bearer Token。`setup` 仍需讀取受保護設定；一般帳號無權限時使用 `sudo /usr/local/bin/command-bridge setup`（仍隱藏 Token）或管理員 PowerShell。`setup --show-token` 須由 Linux root 或已提升權限的 Windows 管理員執行，且設定可安全讀取；不會自動提權。完整複製區塊含秘密，只可交給受信任的 Codex 工作，不要公開或提交到 Git。連線名稱或 Token 環境變數已被其他主機使用時，改用未占用的名稱，不能覆蓋其他連線。
 
 Overrides change only this query's output. Names follow `[a-z][a-z0-9_]{0,63}`. URLs must be HTTPS, end in `/mcp` (optional trailing slash), and contain no credentials, query or fragment. They do not change the listener, allowed Host, saved name, proxy, firewall or TLS. Installation still uses its existing `--codex-name` / `-CodexName` and `--codex-url` / `-CodexUrl` options to save these values.
 

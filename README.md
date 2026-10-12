@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.7-blue)
+![Version](https://img.shields.io/badge/version-6.1.8-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -86,7 +86,7 @@ On a glibc Linux host with systemd (x64/ARM64), run this from your non-root logi
 
 On Linux, the application and runtime are installed at `/usr/local/lib/command-bridge`. From 5.0.0, verified migration completely removes `/opt/command-bridge` and `/opt/command-bridge-mcp-server`, including compatibility links left by 4.6.x; failure restores the original deployment. Configuration remains under `/etc`, work/state under `/var/lib`; the Token and existing Audit logs are preserved. Uninstalling first is unnecessary.
 
-Run the one-command installer or `sudo command-bridge update` from an administrator terminal for the first migration from an actual `/opt` deployment. Old-path scripts need updating; legacy MCP workers cannot perform this migration, while subsequent MCP updates remain supported. Reinstall downloads the CI-published source, so a newer `main` version is installable only after all release gates succeed. See [migration and location checks](docs/linux-systemd.md#checking-the-physical-program-location).
+Run the one-command installer or `sudo /usr/local/bin/command-bridge update` from an administrator terminal for the first migration from an actual `/opt` deployment. Old-path scripts need updating; legacy MCP workers cannot perform this migration, while subsequent MCP updates remain supported. Reinstall downloads the CI-published source, so a newer `main` version is installable only after all release gates succeed. See [migration and location checks](docs/linux-systemd.md#checking-the-physical-program-location).
 
 Installation starts `CommandBridgeMCP` on Windows or `command-bridge` on Linux and enables startup after a reboot. The installer checks `/health` to verify that the service responds. Linux installations upgrading from 1.x move to the shorter service and paths; see the [Linux migration guide](docs/linux-systemd.md).
 
@@ -142,10 +142,10 @@ From 6.1.0, use a host terminal:
 ```bash
 command-bridge info --json
 command-bridge setup
-sudo command-bridge setup --show-token
+sudo /usr/local/bin/command-bridge setup --show-token
 ```
 
-Windows uses `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` with the same arguments; `--show-token` requires an elevated PowerShell terminal. Ordinary queries hide the Token and do not write settings or depend on Audit. If protected settings are unreadable, use `sudo command-bridge setup` (still hidden) or an elevated Windows terminal; `info` can return a partial summary. Saved connection names/HTTPS URLs survive reinstall and update. `setup --codex-name cb_other --codex-url https://private.example/mcp` changes only the output. Direct calls through MCP are blocked in every mode; use the MCP diagnostics tool for remote troubleshooting. See [local commands, permissions and metadata](docs/local-administration.md).
+Windows uses `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` with the same arguments; `--show-token` requires an elevated PowerShell terminal. Ordinary queries hide the Token and do not write settings or depend on Audit. If protected settings are unreadable, use `sudo /usr/local/bin/command-bridge setup` (still hidden) or an elevated Windows terminal; `info` can return a partial summary. Saved connection names/HTTPS URLs survive reinstall and update. `setup --codex-name cb_other --codex-url https://private.example/mcp` changes only the output. Direct calls through MCP are blocked in every mode; use the MCP diagnostics tool for remote troubleshooting. See [local commands, permissions and metadata](docs/local-administration.md).
 
 ## Update an installed service
 
@@ -158,7 +158,7 @@ command-bridge update --check
 Update Linux from a separate administrator terminal:
 
 ```bash
-sudo command-bridge update
+sudo /usr/local/bin/command-bridge update
 ```
 
 Windows: run `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`; apply `update` from an elevated PowerShell terminal. Updates preserve the existing service account, execution mode, Token, network, policy and work data. The service briefly restarts, and failed activation restores the previous deployment. Identical source SHA skips rebuilding/restarting. Only `--print-codex-setup` prints the Token. Earlier installations need one upgrade through the existing installer before this command exists. Re-running that installer still selects the execution mode from its arguments; `update` preserves it. npm installations use npm for updates. See the platform guides for details.
@@ -184,7 +184,7 @@ Command output defaults to UTF-8. Version 6.0.0 adds optional `outputEncoding` (
 
 Upgrading to 6.0.0: legacy program calls need their actual `outputEncoding` instead of accepting replacement characters. cmd text redirection now uses its UTF-8 console; do not append to a file in a different encoding. Existing valid UTF-8 calls keep their input/result format. See the [migration notes](docs/text-encoding.md#升級遷移--upgrade-migration).
 
-6.1.7 aligns the Windows configuration-recovery fixture with the protected explicit ACL used by managed installations, instead of inheriting runner-specific temporary-directory permissions. Exact bytes/ACL restoration and restart refusal remain mandatory; production policies, permissions and deadlines are unchanged. All CI/service gates must pass before the installation channel updates.
+6.1.8 fixes local info/setup and installation setup output when executed through the managed current release link. Linux sudo examples use /usr/local/bin/command-bridge to work when sudo excludes that directory from its search path. Permissions and CI publication gates remain unchanged.
 
 Example requests for a connected client:
 

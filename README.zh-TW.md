@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.1.7-blue)
+![Version](https://img.shields.io/badge/version-6.1.8-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -86,7 +86,7 @@ $script = Join-Path $env:TEMP ("command-bridge-" + [guid]::NewGuid() + ".ps1"); 
 
 Linux 的程式與 Runtime 安裝在 `/usr/local/lib/command-bridge`。5.0.0 起，搬遷驗證成功後完全移除 `/opt/command-bridge` 和 `/opt/command-bridge-mcp-server`，包含 4.6.x 留下的相容連結；失敗則回復原部署。設定仍在 `/etc`，工作與狀態資料仍在 `/var/lib`；Token 與既有 Audit log 保留，不需要先解除安裝。
 
-第一次從 `/opt` 實體部署搬遷，請從管理員終端執行一鍵安裝或 `sudo command-bridge update`，並更新引用舊路徑的腳本。舊版 MCP 更新程序無法進行這次搬遷；完成後仍支援 MCP 自我更新。重新安裝下載的是 CI 已發布的來源，`main` 有較新版本仍需全部發布檢查通過。詳見 [搬遷與位置檢查](docs/linux-systemd.md#checking-the-physical-program-location)。
+第一次從 `/opt` 實體部署搬遷，請從管理員終端執行一鍵安裝或 `sudo /usr/local/bin/command-bridge update`，並更新引用舊路徑的腳本。舊版 MCP 更新程序無法進行這次搬遷；完成後仍支援 MCP 自我更新。重新安裝下載的是 CI 已發布的來源，`main` 有較新版本仍需全部發布檢查通過。詳見 [搬遷與位置檢查](docs/linux-systemd.md#checking-the-physical-program-location)。
 
 安裝完成後，Windows 的 `CommandBridgeMCP` 或 Linux 的 `command-bridge` 服務會啟動，並在重開機後自動啟動。安裝器會檢查 `/health`，確認服務有回應。從 Linux 1.x 升級會遷移到簡短名稱及路徑，詳見 [Linux 遷移說明](docs/linux-systemd.md)。
 
@@ -142,10 +142,10 @@ Windows PowerShell：
 ```bash
 command-bridge info --json
 command-bridge setup
-sudo command-bridge setup --show-token
+sudo /usr/local/bin/command-bridge setup --show-token
 ```
 
-Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` 加相同參數；顯示 Token 須使用已提升權限的 PowerShell。一般查詢隱藏 Token，不寫設定，也不依賴 Audit。設定不可讀時，使用 `sudo command-bridge setup`（仍隱藏 Token）或管理員 PowerShell；`info` 可提供部分摘要。儲存的連線名稱／HTTPS 網址在重裝與更新後保留。`setup --codex-name cb_other --codex-url https://private.example/mcp` 只改本次輸出。所有模式都會攔截 MCP 直接呼叫這些命令；遠端偵錯使用 MCP 診斷工具。詳見[本機命令、權限與連線描述](docs/local-administration.md)。
+Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` 加相同參數；顯示 Token 須使用已提升權限的 PowerShell。一般查詢隱藏 Token，不寫設定，也不依賴 Audit。設定不可讀時，使用 `sudo /usr/local/bin/command-bridge setup`（仍隱藏 Token）或管理員 PowerShell；`info` 可提供部分摘要。儲存的連線名稱／HTTPS 網址在重裝與更新後保留。`setup --codex-name cb_other --codex-url https://private.example/mcp` 只改本次輸出。所有模式都會攔截 MCP 直接呼叫這些命令；遠端偵錯使用 MCP 診斷工具。詳見[本機命令、權限與連線描述](docs/local-administration.md)。
 
 ## 更新已安裝的服務
 
@@ -158,7 +158,7 @@ command-bridge update --check
 Linux 在獨立的管理員終端更新：
 
 ```bash
-sudo command-bridge update
+sudo /usr/local/bin/command-bridge update
 ```
 
 Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check` 檢查；在系統管理員 PowerShell 執行 `update` 更新。更新保留目前服務帳號、執行模式、Token、網路、政策及工作資料，會短暫重啟服務，切換驗證失敗則回復舊部署。來源 SHA 相同時不重建、不重啟；只有加上 `--print-codex-setup` 才印出 Token。舊安裝需先使用既有一鍵安裝升級一次，才會有此指令。重新執行一鍵安裝仍依參數選擇模式，`update` 則保留目前模式；npm 安裝請透過 npm 更新。詳細說明見平台指南。
@@ -184,7 +184,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 升級至 6.0.0：舊編碼程式需指定實際的 `outputEncoding`，不能再接受替代字元的結果。cmd 文字重新導向改用其 UTF-8 主控台，不可直接附加到其他編碼的文件。既有有效 UTF-8 呼叫的輸入／結果格式維持原樣，詳見 [遷移說明](docs/text-encoding.md#升級遷移--upgrade-migration)。
 
-6.1.7 讓 Windows 設定回復測試使用與正式受管理安裝一致的受保護明確 ACL，避免沿用 CI 暫存目錄的特殊繼承權限。精確位元組／ACL 回復與失敗時拒絕重啟仍為必要條件；正式政策、權限及時限不變。安裝來源仍須通過全部 CI／服務驗證才能更新。
+6.1.8 修正透過 current 版本連結執行時，本機 info/setup 與安裝後連線設定沒有輸出的問題。Linux sudo 範例使用 /usr/local/bin/command-bridge 完整路徑，相容 sudo 搜尋路徑未包含該目錄的主機。既有權限與 CI 發布門檻維持不變。
 
 例如，你可以請已連線的用戶端：
 

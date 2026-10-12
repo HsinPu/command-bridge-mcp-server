@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.7. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.1.8. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -135,7 +135,7 @@ The old program is copied into staging on the destination filesystem, so crossin
 
 Successful migration removes both old program paths completely, including managed backups and any compatibility links created by 4.6.x. No `/opt` program alias is retained or created. Configuration, Token, logs and work data remain in their existing locations; the historical 1.x configuration/data aliases under `/etc` and `/var/lib` are retained. CLI/MCP updates preserve account, mode, network, token and policy; ordinary reinstall still selects mode from its arguments (the README selects guarded).
 
-This is a breaking path change. Update scripts that reference `/opt/command-bridge` or `/opt/command-bridge-mcp-server` to use `/usr/local/lib/command-bridge`, preferably the managed `command-bridge` CLI where applicable. For a deployment physically under `/opt`, run the one-command installer or `sudo command-bridge update` from the host administrator terminal. A legacy MCP worker keeps its old program path in memory and would fail to record the resulting SHA after removal: migration refuses its active task before any deployment changes, returning a failed task with the original SHA/service/configuration intact. Wait for that task to finish before terminal migration. After moving to the new physical root, MCP updates continue normally and clean up any 4.6.x aliases.
+This is a breaking path change. Update scripts that reference `/opt/command-bridge` or `/opt/command-bridge-mcp-server` to use `/usr/local/lib/command-bridge`, preferably the managed `command-bridge` CLI where applicable. For a deployment physically under `/opt`, run the one-command installer or `sudo /usr/local/bin/command-bridge update` from the host administrator terminal. A legacy MCP worker keeps its old program path in memory and would fail to record the resulting SHA after removal: migration refuses its active task before any deployment changes, returning a failed task with the original SHA/service/configuration intact. Wait for that task to finish before terminal migration. After moving to the new physical root, MCP updates continue normally and clean up any 4.6.x aliases.
 
 ### Checking the physical program location
 
@@ -170,8 +170,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.1.7-<source-sha>
-├── releases/v6.1.7-<source-sha>/
+├── current -> releases/v6.1.8-<source-sha>
+├── releases/v6.1.8-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -417,7 +417,7 @@ Windows PowerShell: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" -
 
 ## Update the installed service (4.3.0+)
 
-Linux: `command-bridge update --check`, then `sudo command-bridge update`. Windows: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`, then use `update` in an elevated PowerShell terminal. No automatic elevation or unattended background updates are added. A Linux installer-account service must be updated through sudo by its original login account; another account/direct root is rejected. Dedicated-account installations retain their identity. npm installations use npm for updates.
+Linux: `command-bridge update --check`, then `sudo /usr/local/bin/command-bridge update`. Windows: `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update --check`, then use `update` in an elevated PowerShell terminal. No automatic elevation or unattended background updates are added. A Linux installer-account service must be updated through sudo by its original login account; another account/direct root is rejected. Dedicated-account installations retain their identity. npm installations use npm for updates.
 
 The locally saved bootstrap reads the verified CI channel once and compares full SHA. Identical SHA skips building/restarting; a different SHA at the same version can be updated. Missing/invalid metadata or channel and failed downloads stop before activation. All downloads use the selected SHA. A deployment lock serializes changes (Linux flock; Windows installation/removal mutex). Inside that lock the installer requires the previously observed installed SHA to match; otherwise retry.
 

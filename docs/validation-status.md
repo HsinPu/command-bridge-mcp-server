@@ -1,6 +1,10 @@
 # Validation status
 
-The current package is 6.1.7, repairing Windows replacement of saved client descriptions while preserving test scheduling, Linux retry/service-entry repair and protected local info/setup. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.8, repairing linked local CLI and installer query entry points while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.8 validation (2026-10-12)
+
+PATCH: resolve physical CLI entry paths so current/release links execute local queries and installer setup output. Add actual subprocess tests for linked and physical entries, invalid arguments and import-only behavior. Native Windows npm test passed 178/214 with 36 skips and zero failures. After extending the same fix to the installer query verifier, the final build and focused CLI tests passed 12/13 with one Linux-only skip. git diff --check and root manifest version consistency passed. WSL has no Linux Node.js on PATH, so Linux runtime/Oracle Enforcing/service smoke were not performed locally. Hosted CI/channel publication for 6.1.8 has not been run.
 
 ## 6.1.7 validation (2026-10-12)
 

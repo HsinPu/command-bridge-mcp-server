@@ -1,4 +1,4 @@
-import { pathToFileURL } from "node:url";
+import { isModuleEntry } from "./moduleEntry.js";
 import { parseSavedConfiguration, CliError } from "./connectionSetup.js";
 import { readRecord, readFailure } from "./managedFiles.js";
 import { decodeUtf8File } from "../services/textEncoding.js";
@@ -15,6 +15,6 @@ export async function verifyQueries(args: string[]) {
       info.service?.state !== "running" || info.service?.autoStart !== true || !setup.includes("Token is hidden.") ||
       infoText.includes(token) || setup.includes(token)) throw new CliError("QUERY_VERIFICATION_FAILED");
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isModuleEntry(import.meta.url)) {
   verifyQueries(process.argv.slice(2)).catch(error => { process.stderr.write(`CommandBridge query verification: ${readFailure(error)}\n`); process.exitCode = 1; });
 }

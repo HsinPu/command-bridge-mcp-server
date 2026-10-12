@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import { writeFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
+import { isModuleEntry } from "./moduleEntry.js";
 import { CliError, createClientSetup, parseClientSetup, parseSavedConfiguration, renderCodexSetup, resolveConnection } from "./connectionSetup.js";
 import { readRecord, readFailure } from "./managedFiles.js";
 
@@ -29,7 +29,7 @@ export async function runClientSetupInstaller(args: string[]): Promise<string> {
   return "";
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isModuleEntry(import.meta.url)) {
   runClientSetupInstaller(process.argv.slice(2)).then(output => { if (output) process.stdout.write(output); })
     .catch(error => { process.stderr.write(`CommandBridge client setup: ${readFailure(error)}\n`); process.exitCode = error instanceof CliError ? error.exitCode : 1; });
 }
