@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.1.6 — 2026-10-12
+
+PATCH: add fixed, bounded diagnostics for the CI-only Windows client-description regression without changing production ACLs or relaxing any test.
+
+- Report only an allowlisted fixture phase, exception class and numeric HRESULT through the existing test assertion. Do not reveal private errors, file paths, identities or configuration.
+- Preserve publication, exact ACL/byte restoration, locking and restart-refusal checks; use hosted results to identify the next correction.
+- Keep production code, deadlines and all publication gates unchanged.
+
 ## 6.1.5 — 2026-10-12
 
 PATCH: fix updating an existing Windows client description without changing MCP interfaces, service identities, protected ACLs or deadlines.

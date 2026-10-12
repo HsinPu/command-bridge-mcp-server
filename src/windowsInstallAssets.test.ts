@@ -9,7 +9,8 @@ import { spawn, spawnSync } from "node:child_process";
 const projectRoot = process.cwd();
 test("Windows client description restores exact bytes and ACLs and withholds restart on failed recovery", { skip: process.platform !== "win32" }, () => {
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(projectRoot, "scripts/windows/tests/client-setup.test.ps1")], { encoding: "utf8", windowsHide: true, timeout: 15_000 });
-  assert.equal(result.status, 0, JSON.stringify({ stage: 'client-description-publish-recovery', status: result.status, signal: result.signal, spawnFailed: Boolean(result.error) }));
+  const failure = result.stderr.match(/CLIENT_SETUP_FIXTURE_FAILURE phase=(candidate-acl|fresh-publication|replace|restore-client|restore-config|locked-publication|fresh-rollback|missing-snapshot|restart-refusal) kind=(UnauthorizedAccessException|IOException|ArgumentException|SecurityException|RuntimeException|unknown) hresult=(-?\d{1,11})/);
+  assert.equal(result.status, 0, JSON.stringify({ stage: 'client-description-publish-recovery', status: result.status, signal: result.signal, spawnFailed: Boolean(result.error), phase: failure?.[1], kind: failure?.[2], hresult: failure ? Number(failure[3]) : undefined }));
 });
 test("Windows UTF-8 configuration changes retain Chinese, BOM/newlines and exact rollback bytes", { skip: process.platform !== "win32" }, () => {
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolve(projectRoot, "scripts/windows/tests/encoding.tests.ps1")], { encoding: "utf8", windowsHide: true, timeout: 15_000 });

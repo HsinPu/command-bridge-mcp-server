@@ -1,6 +1,12 @@
 # Validation status
 
-The current package is 6.1.5, repairing Windows replacement of saved client descriptions while preserving test scheduling, Linux retry/service-entry repair and protected local info/setup. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+The current package is 6.1.6, repairing Windows replacement of saved client descriptions while preserving test scheduling, Linux retry/service-entry repair and protected local info/setup. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+
+## 6.1.6 validation (2026-10-12)
+
+PATCH: fixed fixture-phase, whitelisted exception-kind and numeric HRESULT diagnostics identify CI-only Windows failures while raw errors and private contents remain hidden. Native publication/ACL/recovery assertions and the 15-second budget are retained. Full native Windows npm test on Node.js 20.15.1 passed 177/213 with 36 skips and zero failures. A private forced ArgumentException confirmed that only fixed phase/kind/HRESULT output escapes, with the secret-bearing exception message suppressed. Script/XML and diff checks passed; hosted 6.1.6 results are pending.
+
+The pushed 6.1.5 CI run 38190996013 passed Linux general tests but failed the Windows client-description fixture before service jobs, with only status 1 and no diagnostic phase. Local 6.1.5 success did not reproduce that CI environment difference. Service/layout/publication gates were skipped and remain mandatory; no channel availability is claimed.
 
 ## 6.1.5 validation (2026-10-12)
 
