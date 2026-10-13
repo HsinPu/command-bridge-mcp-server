@@ -93,7 +93,7 @@ setup=$(node "$helper" print "$work/config.env" "$work/client.json" show)
 [[ "$setup" == *'[mcp_servers.cb_oracle_prod]'* ]]
 [[ "$setup" == *'bearer_token_env_var = "CB_ORACLE_PROD_TOKEN"'* ]]
 [[ "$setup" == *'Never overwrite the existing connection or its token.'* ]]
-[[ "$setup" == *'tool_timeout_sec = 360.0'* ]]
+[[ "$setup" == *'tool_timeout_sec = 480.0'* ]]
 saved_host=::1
 [[ "$(automatic_codex_url)" == 'http://[::1]:9900/mcp' ]]
 saved_host=127.0.0.1

@@ -11,6 +11,7 @@ import { FileTransferService } from "./fileTransferService.js";
 import { DiagnosticsService } from "./diagnosticsService.js";
 import { RecentDiagnosticRequests, type RecentDiagnosticRequest } from "./diagnosticTypes.js";
 import { BoundedAuditLog } from "./boundedAuditLog.js";
+import { auditTimeout, auditRequestTimeout } from "../config/auditTimeout.js";
 import { assertNoSelfModification, assertNoLocalAdminCommand } from "./selfProtection.js";
 import { assertGuardedCommand } from "./guardedPolicy.js";
 import type { TemporaryAccess } from "./temporaryAccess.js";
@@ -92,7 +93,7 @@ export class CommandExecutor {
     private readonly config: AppConfig,
     auditLog: AuditLog = createAuditLog(config)
   ) {
-    this.auditLog = auditLog instanceof BoundedAuditLog ? auditLog : new BoundedAuditLog(auditLog);
+    this.auditLog = auditLog instanceof BoundedAuditLog ? auditLog : new BoundedAuditLog(auditLog, auditTimeout(config));
     this.diagnostics = new DiagnosticsService(config, this.auditLog, () => ({
       accepting: !this.stopping && this.auditLog.available,
       mode: this.stopping ? "stopping" : this.auditLog.available ? "normal" : "diagnostic-only",
@@ -137,11 +138,13 @@ export class CommandExecutor {
     } finally { if (timer) clearTimeout(timer); }
   }
 
-  async readiness(): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
+  private completedReadiness?: { at: number; value: { ready: boolean; checks: Record<string, boolean> } };
+  async readiness(waitMs = 5_000): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
     if (this.stopping || !this.auditLog.available) return { ready: false, checks: { accepting: false, audit: this.auditLog.available } };
+    if (this.completedReadiness && performance.now() - this.completedReadiness.at < 2000) return this.completedReadiness.value;
     // Repeated probes share the actual operation if a filesystem call remains stuck.
     if (!this.pendingReadiness) {
-      const operation = this.readinessInternal();
+      const operation = this.readinessInternal().then(value => { this.completedReadiness = { at: performance.now(), value }; return value; });
       this.pendingReadiness = operation;
       void operation.finally(() => { if (this.pendingReadiness === operation) this.pendingReadiness = undefined; }).catch(() => undefined);
     }
@@ -149,12 +152,13 @@ export class CommandExecutor {
     try {
       return await Promise.race([this.pendingReadiness, new Promise<{ ready: boolean; checks: Record<string, boolean> }>(resolve => {
         timer = setTimeout(() => {
-          if(this.readinessDependencies) this.auditLog.expireReadiness();
           resolve({ ready:false, checks:{...this.readinessDependencies,accepting:!this.stopping && this.auditLog.available,audit:false,verification:false} });
-        }, 5_000);
+        }, waitMs);
       })]);
     } finally { if (timer) clearTimeout(timer); }
   }
+
+  startupReadiness() { return this.readiness(auditRequestTimeout(auditTimeout(this.config))); }
 
   private async readinessInternal(): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
     this.readinessDependencies=undefined;

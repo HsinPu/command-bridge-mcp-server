@@ -1,6 +1,13 @@
 import { isIP } from "node:net";
 import { parse } from "dotenv";
 import { decodeUtf8File } from "../services/textEncoding.js";
+import { parseAuditTimeout, auditRequestTimeout } from "../config/auditTimeout.js";
+
+// Shared installer probe budget: preserve quoted/duplicate dotenv semantics
+// and treat a genuinely absent optional setting as the new default.
+export function auditStartupBudget(bytes: Uint8Array): number {
+  return auditRequestTimeout(parseAuditTimeout(parseSavedConfiguration(bytes).COMMAND_BRIDGE_AUDIT_TIMEOUT_MS)) + 10_000;
+}
 
 export interface ClientSetup {
   schemaVersion: 1;
@@ -128,7 +135,7 @@ export function renderCodexSetup(connection: ReturnType<typeof resolveConnection
     `url = ${JSON.stringify(connection.connectionUrl)}`,
     `bearer_token_env_var = ${JSON.stringify(tokenEnv)}`,
     "startup_timeout_sec = 20.0",
-    "tool_timeout_sec = 360.0",
+    "tool_timeout_sec = 480.0",
     "4. Preserve unrelated settings and report whether Codex needs a restart.",
     `5. After restart, use /mcp to verify that ${name} is connected.`,
     "6. Do not repeat the bearer token in the final response.",

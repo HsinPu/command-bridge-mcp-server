@@ -22,7 +22,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Shared renderer failed.' }
   }
   $output = @(Print-CodexSetup)
-  if ($output -notcontains 'tool_timeout_sec = 360.0' -or $output -notcontains '[mcp_servers.cb_timeout_probe]') { throw 'Incorrect saved setup output.' }
+  if ($output -notcontains 'tool_timeout_sec = 480.0' -or $output -notcontains '[mcp_servers.cb_timeout_probe]') { throw 'Incorrect saved setup output.' }
   $hidden = @(& $node $helper print $ConfigFile $ClientSetupFile hidden)
   if (($hidden -join "`n").Contains(('0' * 64))) { throw 'Hidden output included a token.' }
   Write-Output 'Windows shared Codex setup checks passed.'

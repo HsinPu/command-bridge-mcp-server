@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FileAuditLog } from "./fileAuditLog.js";
 import type { AppConfig } from "../config/env.js";
+import { auditTimeout, DEFAULT_AUDIT_TIMEOUT_MS } from "../config/auditTimeout.js";
 import { AppError } from "../errors/AppError.js";
 import type { ExecutionMode, ShellKind } from "./commandPolicy.js";
 
@@ -70,17 +71,17 @@ export interface AuditEventList {
 
 export interface AuditLog {
   readonly storageDirectory?: string;
-  write(event: CommandAuditEvent): Promise<void>;
-  list(limit: number): Promise<AuditEventList>;
+  write(event: CommandAuditEvent, remainingMs?: number): Promise<void>;
+  list(limit: number, remainingMs?: number): Promise<AuditEventList>;
 }
 
 export interface LinuxJournalAuditLogDependencies {
   writeLine?: (line: string) => Promise<void>;
-  runReader?: () => Promise<string>;
+  runReader?: (remainingMs?: number) => Promise<string>;
 }
 
 export interface WindowsEventLogAuditLogDependencies {
-  runScript?: (scriptName: WindowsAuditScriptName, eventJson?: string) => Promise<string>;
+  runScript?: (scriptName: WindowsAuditScriptName, eventJson?: string, remainingMs?: number) => Promise<string>;
 }
 
 type WindowsAuditScriptName = "write-audit-event.ps1" | "read-audit-events.ps1";
@@ -91,9 +92,9 @@ export function effectiveAuditBackend(config: AppConfig): "file"|"journal"|"even
 
 export function createAuditLog(config: AppConfig): AuditLog {
   const backend = effectiveAuditBackend(config);
-  if (backend === "file") return new FileAuditLog();
-  if (backend === "eventlog" && process.platform === "win32") return new WindowsEventLogAuditLog();
-  if (backend === "journal" && process.platform === "linux") return new LinuxJournalAuditLog();
+  if (backend === "file") return new FileAuditLog(undefined, undefined, auditTimeout(config));
+  if (backend === "eventlog" && process.platform === "win32") return new WindowsEventLogAuditLog({}, auditTimeout(config));
+  if (backend === "journal" && process.platform === "linux") return new LinuxJournalAuditLog({}, auditTimeout(config));
   throw new Error("The selected audit backend is not supported on this platform.");
 }
 
@@ -233,9 +234,9 @@ export function parseWindowsEventLogLines(output: string): CommandAuditEvent[] {
 
 export class LinuxJournalAuditLog implements AuditLog {
   private readonly writeLine: (line: string) => Promise<void>;
-  private readonly runReader: () => Promise<string>;
+  private readonly runReader: (remainingMs?: number) => Promise<string>;
 
-  constructor(dependencies: LinuxJournalAuditLogDependencies = {}) {
+  constructor(dependencies: LinuxJournalAuditLogDependencies = {}, private readonly timeoutMs = DEFAULT_AUDIT_TIMEOUT_MS) {
     this.writeLine = dependencies.writeLine ?? writeLineToStderr;
     this.runReader = dependencies.runReader ?? runLinuxAuditReader;
   }
@@ -248,12 +249,12 @@ export class LinuxJournalAuditLog implements AuditLog {
     }
   }
 
-  async list(limit: number): Promise<AuditEventList> {
+  async list(limit: number, remainingMs = this.timeoutMs): Promise<AuditEventList> {
     const normalizedLimit = normalizeAuditEventLimit(limit);
     let output: string;
 
     try {
-      output = await this.runReader();
+      output = await this.runReader(remainingMs);
     } catch (error) {
       throw auditReadError(error);
     }
@@ -268,26 +269,26 @@ export class LinuxJournalAuditLog implements AuditLog {
 }
 
 export class WindowsEventLogAuditLog implements AuditLog {
-  private readonly runScript: (scriptName: WindowsAuditScriptName, eventJson?: string) => Promise<string>;
+  private readonly runScript: (scriptName: WindowsAuditScriptName, eventJson?: string, remainingMs?: number) => Promise<string>;
 
-  constructor(dependencies: WindowsEventLogAuditLogDependencies = {}) {
+  constructor(dependencies: WindowsEventLogAuditLogDependencies = {}, private readonly timeoutMs = DEFAULT_AUDIT_TIMEOUT_MS) {
     this.runScript = dependencies.runScript ?? runWindowsAuditScript;
   }
 
-  async write(event: CommandAuditEvent): Promise<void> {
+  async write(event: CommandAuditEvent, remainingMs = this.timeoutMs): Promise<void> {
     try {
-      await this.runScript("write-audit-event.ps1", serializeAuditEvent(event));
+      await this.runScript("write-audit-event.ps1", serializeAuditEvent(event), remainingMs);
     } catch (error) {
       throw auditWriteError(error);
     }
   }
 
-  async list(limit: number): Promise<AuditEventList> {
+  async list(limit: number, remainingMs = this.timeoutMs): Promise<AuditEventList> {
     const normalizedLimit = normalizeAuditEventLimit(limit);
     let output: string;
 
     try {
-      output = await this.runScript("read-audit-events.ps1");
+      output = await this.runScript("read-audit-events.ps1", undefined, remainingMs);
     } catch (error) {
       throw auditReadError(error);
     }
@@ -491,17 +492,18 @@ function writeLineToStderr(line: string): Promise<void> {
   });
 }
 
-function runLinuxAuditReader(): Promise<string> {
+function runLinuxAuditReader(remainingMs = DEFAULT_AUDIT_TIMEOUT_MS): Promise<string> {
   return runFixedProcess(
     "/usr/bin/sudo",
     ["-n", LINUX_AUDIT_READER],
-    { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LANG: "C" }
+    { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LANG: "C" }, true, remainingMs
   );
 }
 
 function runWindowsAuditScript(
   scriptName: WindowsAuditScriptName,
-  eventJson?: string
+  eventJson?: string,
+  remainingMs = DEFAULT_AUDIT_TIMEOUT_MS
 ): Promise<string> {
   const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
   if (!systemRoot) {
@@ -530,7 +532,7 @@ function runWindowsAuditScript(
       scriptPath
     ],
     environment,
-    scriptName === "read-audit-events.ps1"
+    scriptName === "read-audit-events.ps1", remainingMs
   );
 }
 
@@ -554,13 +556,16 @@ export function runFixedProcess(
   executable: string,
   args: string[],
   environment?: NodeJS.ProcessEnv,
-  captureStdout = true
+  captureStdout = true,
+  timeoutMs = 5_000
 ): Promise<string> {
+  if (timeoutMs <= 0) return Promise.reject(new AppError("AUDIT_HELPER_TIMEOUT", "Audit helper timed out."));
   return new Promise((resolvePromise, reject) => {
     let output = "";
     let outputBytes = 0;
     const decoder = createOutputDecoder("utf8");
     let settled = false;
+    let helperFailure: Error | undefined;
     const child = spawn(executable, args, {
       env: environment,
       windowsHide: true,
@@ -586,27 +591,28 @@ export function runFixedProcess(
         const killTimer = setTimeout(() => killer.kill(), 1000);
         killer.once("close", () => clearTimeout(killTimer));
       }
-      child.stdout?.destroy();
-      child.unref();
+      // Keep process/pipe handles referenced until close. The outer Audit
+      // deadline can respond while this actual helper termination is pending.
     };
     const timeout = setTimeout(() => {
+      helperFailure = new AppError("AUDIT_HELPER_TIMEOUT", "Audit helper timed out.");
       stopHelper();
-      fail(new AppError("AUDIT_HELPER_TIMEOUT", "Audit helper timed out."));
-    }, 5_000);
+    }, timeoutMs);
 
     child.once("error", fail);
     child.stdout?.on("data", (chunk: Buffer) => {
-      if (settled) return;
+      if (settled || helperFailure) return;
       outputBytes += chunk.length;
       if (outputBytes > MAX_AUDIT_READER_OUTPUT_BYTES) {
+        helperFailure = new AppError("AUDIT_READER_OUTPUT_LIMIT", "Fixed audit helper output exceeded its safe limit.");
         stopHelper();
-        fail(new AppError("AUDIT_READER_OUTPUT_LIMIT", "Fixed audit helper output exceeded its safe limit."));
         return;
       }
       try { output += decoder.decode(chunk, { stream: true }); }
-      catch { stopHelper(); fail(new AppError("AUDIT_READER_FAILED", "Fixed audit helper output is not valid UTF-8.")); }
+      catch { helperFailure = new AppError("AUDIT_READER_FAILED", "Fixed audit helper output is not valid UTF-8."); stopHelper(); }
     });
     child.once("close", (code) => {
+      if (helperFailure) { fail(helperFailure); return; }
       if (settled) {
         return;
       }

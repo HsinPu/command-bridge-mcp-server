@@ -15,17 +15,20 @@ const before = readFileSync(config);
 const { parseSavedConfiguration } = await import(pathToFileURL(join(release, 'dist/cli/connectionSetup.js')).href);
 const { readAccessStatus } = await import(pathToFileURL(join(release, 'dist/cli/access.js')).href);
 const values = parseSavedConfiguration(before);
+const { parseAuditTimeout, auditRequestTimeout } = await import(pathToFileURL(join(release, 'dist/config/auditTimeout.js')).href);
+const auditMs = parseAuditTimeout(values.COMMAND_BRIDGE_AUDIT_TIMEOUT_MS);
+const accessMs = 2 * auditRequestTimeout(auditMs) + 20000;
 const cli = (operation, minutes) => {
   const args = ['access', operation, ...(minutes ? ['--minutes', String(minutes)] : [])];
-  const call = windows ? spawnSync(runtime, [join(release, 'dist/cli/access.js'), ...args], { encoding: 'utf8', timeout: 20000 }) :
-    spawnSync('/usr/local/bin/command-bridge', args, { encoding: 'utf8', timeout: 20000 });
+  const call = windows ? spawnSync(runtime, [join(release, 'dist/cli/access.js'), ...args], { encoding: 'utf8', timeout: accessMs }) :
+    spawnSync('/usr/local/bin/command-bridge', args, { encoding: 'utf8', timeout: accessMs });
   if (call.status !== 0) {
     const code = (call.stderr ?? '').match(/CommandBridge access: (ACCESS_[A-Z_]+|ADMINISTRATOR_REQUIRED|TOKEN_INVALID|SERVICE_INSTALLATION_REQUIRED|INSTALLATION_UNSAFE)\b/)?.[1] ?? 'UNKNOWN';
     throw Error(`ACCESS_SMOKE_CLI_${operation.toUpperCase()} code=${code} exit=${call.status ?? -1}`);
   }
 };
 const probe = (command = 'hostname', expectation, stage = 'baseline') => {
-  const call = spawnSync(runtime, [join(release, 'scripts/verify-install.mjs'), config, command, ...(expectation ? [expectation] : [])], { encoding: 'utf8', timeout: 30000 });
+  const call = spawnSync(runtime, [join(release, 'scripts/verify-install.mjs'), config, command, ...(expectation ? [expectation] : [])], { encoding: 'utf8', timeout: auditRequestTimeout(auditMs, Number(values.COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS ?? 15000), 6) + 60000 });
   if (call.status !== 0) {
     const summary = (call.stderr ?? '').match(/VERIFIER_COMMAND_FAILURE code=[A-Z_]{1,64} error=[01] ok=[01] exit=(?:unknown|-?\d{1,10}) timeout=[01] truncated=[01]/)?.[0];
     if (summary) console.error(summary);

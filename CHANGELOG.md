@@ -1,5 +1,16 @@
 # Changelog
 
+## 6.3.0 — 2026-10-14
+
+MINOR: add configurable Audit waiting with a 30-second default while preserving command policy and execution limits.
+
+- Add COMMAND_BRIDGE_AUDIT_TIMEOUT_MS (integer 1000–60000); older installations without it adopt 30000, while explicit settings survive updates. Queue and backend share one operation budget and helpers receive its remaining time.
+- Keep actual helper/I/O work tracked after response deadlines, fail closed on true Audit faults, and retain output withholding, bounded admission and unique terminal records.
+- Keep /ready responses at five seconds without prematurely latching Audit failure; share pending checks and briefly cache completed results. Give startup, installer/MCP verification and temporary access confirmation their configured Audit budgets; lease reads still have five-second deadlines and late grants remain refused.
+- Separate transfer's unchanged 15-second I/O budget from initial/terminal Audit. Keep native updater control, command execution, diagnostics and 15-second shutdown limits unchanged.
+- Generate an eight-minute Codex tool timeout for standard long commands and supported Audit settings; existing client configuration is not edited. Read verification settings consistently as UTF-8 dotenv and retain all service/channel release gates.
+- Add queue-budget, slow-helper/readiness, slow-opening-Audit and transfer-phase behavior regressions; refresh platform guides, README and project rules. SELinux access-label handling is unchanged.
+
 ## 6.2.5 — 2026-10-12
 
 PATCH: restore the unchanged third-party jose lock entry after a root-version replacement accidentally changed it.

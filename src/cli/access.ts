@@ -11,6 +11,7 @@ import { CliError, parseSavedConfiguration, resolveConnection } from "./connecti
 import { readRecord, readFailure, fileIdentity } from "./managedFiles.js";
 import { writeAccessLease } from "./accessStorage.js";
 import { normalizeAllowedHosts } from "../config/allowedHosts.js";
+import { parseAuditTimeout, auditRequestTimeout, MAX_AUDIT_TIMEOUT_MS } from "../config/auditTimeout.js";
 
 export function parseAccessArgs(args: string[]) {
   if (args[0] !== "access" || !["open", "status", "close"].includes(args[1] ?? "")) throw new CliError("ACCESS_ARGUMENTS_INVALID", 2);
@@ -39,6 +40,7 @@ export async function readAccessStatus(values: Record<string, string>): Promise<
   const token = values.COMMAND_BRIDGE_BEARER_TOKEN;
   if (!token || !/^[A-Za-z0-9._~-]{32,}$/.test(token)) throw new CliError("TOKEN_INVALID");
   const allowed = normalizeAllowedHosts(values.COMMAND_BRIDGE_ALLOWED_HOSTS);
+  const confirmationMs = auditRequestTimeout(parseAuditTimeout(values.COMMAND_BRIDGE_AUDIT_TIMEOUT_MS));
   const header = allowed[0] ?? (host === "localhost" ? "localhost" : undefined);
   const call = (target: URL) => new Promise<AccessStatus>((resolve, reject) => {
     const challenge = randomBytes(32).toString("hex");
@@ -57,7 +59,7 @@ export async function readAccessStatus(values: Record<string, string>): Promise<
         } catch { reject(new CliError("ACCESS_SERVICE_UNAVAILABLE")); }
       });
     });
-    const timer = setTimeout(() => request.destroy(Error("deadline")), 4000);
+    const timer = setTimeout(() => request.destroy(Error("deadline")), confirmationMs);
     request.once("close", () => clearTimeout(timer)); request.once("error", () => reject(new CliError("ACCESS_SERVICE_UNAVAILABLE")));
   });
   if (host === "localhost") {
@@ -102,7 +104,9 @@ export async function runAccess(args: string[], paths: InstallationPaths) {
   return after;
 }
 if (isModuleEntry(import.meta.url)) {
-  const timer = setTimeout(() => { process.stderr.write("CommandBridge access: ACCESS_DEADLINE; inspect access status before retrying.\n", () => process.exit(1)); }, 15000);
+  // Two bounded status exchanges plus local validation/atomic storage. The
+  // per-exchange budget follows the protected setting; this is the hard cap.
+  const timer = setTimeout(() => { process.stderr.write("CommandBridge access: ACCESS_DEADLINE; inspect access status before retrying.\n", () => process.exit(1)); }, 2 * auditRequestTimeout(MAX_AUDIT_TIMEOUT_MS) + 20_000);
   const paths = () => installedPaths(resolve(dirname(fileURLToPath(import.meta.url)), "../.."));
   Promise.resolve().then(() => runAccess(process.argv.slice(2), paths())).then(status => {
     clearTimeout(timer); process.stdout.write(`Base mode: ${status.baseMode}\nEffective mode: ${status.effectiveMode}\nRemaining: ${status.remainingSeconds} seconds\nExpires: ${status.expiresAt ? new Date(status.expiresAt).toISOString() : "none"}\n`);

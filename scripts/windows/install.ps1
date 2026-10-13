@@ -443,6 +443,7 @@ function New-SecureConfiguration {
   $lines = @(
     "COMMAND_BRIDGE_TRANSPORT=http",
     "COMMAND_BRIDGE_AUDIT_BACKEND=eventlog",
+    "COMMAND_BRIDGE_AUDIT_TIMEOUT_MS=30000",
     "COMMAND_BRIDGE_POLICY_FILE=$(Join-Path $ConfigRoot 'policy.json')",
     "COMMAND_BRIDGE_BEARER_TOKEN=$token",
     "COMMAND_BRIDGE_HTTP_HOST=$httpHost",
@@ -671,7 +672,11 @@ function Wait-ForHealth {
   if ($LASTEXITCODE -ne 0) { throw 'Invalid allowed Host configuration.' }
   $hostHeader = ([string]$hostHeader).Trim()
   $lastFailure = 'UnexpectedContent'
-  for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+  $auditModule = ([Uri](Join-Path $InstallRoot "$ApplicationRelativePath\dist\cli\connectionSetup.js")).AbsoluteUri
+  $auditBudget = & (Join-Path $InstallRoot 'runtime\node.exe') -e 'import(process.argv[1]).then(async m=>console.log(m.auditStartupBudget((await import(process.argv[3])).readFileSync(process.argv[2]))))' $auditModule $ConfigFile 'node:fs'
+  if ($LASTEXITCODE -ne 0) { throw 'Invalid Audit timeout configuration.' }
+  $healthDeadline = [DateTime]::UtcNow.AddMilliseconds([int]$auditBudget)
+  while ([DateTime]::UtcNow -lt $healthDeadline) {
     try {
       $content = Invoke-LocalHealthRequest -Uri $uri -HostHeader $hostHeader
       if ($content -match '"status"\s*:\s*"ok"') {

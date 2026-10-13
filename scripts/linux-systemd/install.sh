@@ -1366,6 +1366,7 @@ install_configuration() {
     printf 'COMMAND_BRIDGE_TRANSFER_ROOT=%s\n' "${transfer_root}"
     printf 'COMMAND_BRIDGE_TRANSFER_MAX_BYTES=5242880\n'
     printf 'COMMAND_BRIDGE_AUDIT_BACKEND=%s\n' "${audit_backend}"
+    printf 'COMMAND_BRIDGE_AUDIT_TIMEOUT_MS=30000\n'
     printf 'COMMAND_BRIDGE_POLICY_FILE=%s/policy.json\n' "${CONFIG_DIR}"
     printf 'COMMAND_BRIDGE_BEARER_TOKEN=%s\n' "${token}"
     printf 'COMMAND_BRIDGE_HTTP_HOST=%s\n' "${host}"
@@ -1572,7 +1573,10 @@ install_and_start_service() {
     curl_options+=(--header "Host: ${health_host_header}")
   fi
   log "Waiting for ${url}..."
-  for (( attempt = 1; attempt <= 20; attempt++ )); do
+  local audit_budget health_deadline
+  audit_budget=$("${RUNTIME_LINK}/bin/node" -e 'import(process.argv[1]).then(async m=>console.log(m.auditStartupBudget((await import(process.argv[3])).readFileSync(process.argv[2]))))' "${CURRENT_LINK}/dist/cli/connectionSetup.js" "${CONFIG_FILE}" 'node:fs') || fail "Invalid Audit timeout configuration."
+  health_deadline=$((SECONDS + (audit_budget + 999) / 1000))
+  while (( SECONDS < health_deadline )); do
     if systemctl is-active --quiet "${SERVICE_NAME}.service" && \
       curl "${curl_options[@]}" "${url}" | \
         grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then

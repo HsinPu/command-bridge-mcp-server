@@ -4,6 +4,17 @@ import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { createAuditEvent } from "./auditLog.js";
 
 const event = () => createAuditEvent({ command: "diagnostic", phase: "attempted", executionMode: "allowlist", source: "stdio" });
+test("queued Audit passes only the remaining admission budget to its backend", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(r => { release = r; });
+  let remaining = 0;
+  const audit = new BoundedAuditLog({ async write() { await gate; }, async list(_limit, budget) { remaining = budget!; return { events: [], hasMore: false }; } }, 1000);
+  const first = audit.write(event()), second = audit.list(1);
+  try {
+    await new Promise(r => setTimeout(r, 100)); release(); await Promise.all([first, second]);
+    assert.ok(remaining > 0 && remaining < 950); assert.equal(audit.available, true);
+  } finally { release(); await audit.drain(); }
+});
 test("Audit deadlines stop queued operations while tracking actual unfinished I/O", async () => {
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });

@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.2.5. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.3.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -113,7 +113,7 @@ The installer performs these steps:
 
 ## Long command timeouts
 
-From 4.1.15, new configurations allow command requests up to 300 seconds, while omitted `timeoutMs` still uses 15 seconds. Codex setup prints `tool_timeout_sec = 360.0` so termination, Audit and response delivery have extra time. For a long command, request `timeoutMs: 300000`; values above the server maximum are clamped. Existing configured limits are preserved on reinstall: edit `COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000` in the service configuration from an administrator terminal and restart the service. On the Codex client, update only this connection's existing `[mcp_servers.<name>]` section in `~/.codex/config.toml` to `tool_timeout_sec = 360`, preserving URL/token settings, then restart Codex. A client timeout alone does not establish whether the remote operation completed; inspect Audit before repeating an operation.
+From 4.1.15, new configurations allow command requests up to 300 seconds, while omitted `timeoutMs` still uses 15 seconds. From 6.3.0, Codex setup prints `tool_timeout_sec = 480.0` so termination, Audit and response delivery have extra time. For a long command, request `timeoutMs: 300000`; values above the server maximum are clamped. Existing configured limits are preserved on reinstall: edit `COMMAND_BRIDGE_MAX_TIMEOUT_MS=300000` in the service configuration from an administrator terminal and restart the service. On the Codex client, update only this connection's existing `[mcp_servers.<name>]` section in `~/.codex/config.toml` to `tool_timeout_sec = 480`, preserving URL/token settings, then restart Codex. A client timeout alone does not establish whether the remote operation completed; inspect Audit before repeating an operation.
 
 For an existing default installation, run from the host administrator terminal (then update Codex as described above):
 
@@ -170,8 +170,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.2.5-<source-sha>
-├── releases/v6.2.5-<source-sha>/
+├── current -> releases/v6.3.0-<source-sha>
+├── releases/v6.3.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -407,7 +407,7 @@ Use `--guarded` (optionally with `--run-as-installer`) to permit general command
 
 ### Audit stalls and execution slots
 
-From 4.1.16, a confirmed finished command releases its execution slot before terminal Audit completes; output is still withheld until Audit succeeds. All runtime Audit reads/writes share a serialized guard with a five-second total wait (including queue time) and at most 64 outstanding operations. A deadline, backend failure or capacity failure makes Audit unavailable until service restart; new commands/transfers fail promptly and `/ready` is not ready. `/health` remains a liveness check. Readiness waits at most five seconds and coalesces an unfinished probe. A timed-out filesystem operation may still complete: it remains tracked, expired queued operations are not started, and shutdown waits for actual I/O within its existing 15-second budget. Resolve host storage problems before restarting and inspect the matching Audit lifecycle before retrying; absence of a reply does not prove the command did not run. Do not increase command parallelism to work around a stalled sink. No Docker daemon/container restart or additional process killing is performed.
+From 4.1.16, a confirmed finished command releases its execution slot before terminal Audit completes; output is still withheld until Audit succeeds. All runtime Audit reads/writes share a serialized guard with a configurable total wait (30 seconds by default, including queue time) and at most 64 outstanding operations. A deadline, backend failure or capacity failure makes Audit unavailable until service restart; new commands/transfers fail promptly and `/ready` is not ready. `/health` remains a liveness check. Readiness waits at most five seconds and coalesces an unfinished probe. A timed-out filesystem operation may still complete: it remains tracked, expired queued operations are not started, and shutdown waits for actual I/O within its existing 15-second budget. Resolve host storage problems before restarting and inspect the matching Audit lifecycle before retrying; absence of a reply does not prove the command did not run. Do not increase command parallelism to work around a stalled sink. No Docker daemon/container restart or additional process killing is performed.
 
 ## Check the installed version
 
@@ -456,3 +456,13 @@ New assets and the previous authorization are backed up before changes and resto
 ## Temporary administrator access
 
 Use sudo /usr/local/bin/command-bridge access open --minutes 5, access status or access close from the host terminal. Grants expire without changing permanent mode and are invalid after service restart. See [temporary access](temporary-access.md) for protected storage, Audit and root/free-shell limits.
+
+## Audit time budget (6.3.0)
+
+`COMMAND_BRIDGE_AUDIT_TIMEOUT_MS=30000` is the default; only integer values 1000–60000 are accepted. A missing setting in an older installation adopts this default; explicit settings survive update/reinstall. Change it in the protected service environment file from an administrator terminal, then restart the service. It changes Audit queue/backend/helper waiting, not command execution deadlines, diagnostics (five seconds) or shutdown (15 seconds). Audit failure still stops new work until restart after resolving the cause; extending the budget cannot fix full storage or permissions.
+
+An ordinary command can wait for attempted and terminal Audit, so use at least 120 seconds for ordinary client calls. The generated setup uses `tool_timeout_sec = 480` for the standard five-minute command limit plus two Audit waits (up to 60 seconds each). If you raise the command maximum, increase the client timeout accordingly. Setup output is a recommendation; it does not edit an existing Codex connection. Preserve URL and Token settings when updating that connection.
+
+`/ready` returns quickly while sharing its actual pending checks. Installation waits for the configured startup budget and real MCP/Audit verification before discarding backups. Neither a short readiness response nor a client timeout proves the command was not executed. File transfer's actual I/O budget remains 15 seconds, separately from attempted/terminal Audit; updater native control retains its own deadline and verifies acceptance separately from job completion.
+
+6.3.0 起預設 Audit 30 秒，可設定 1,000–60,000 整數毫秒。請由管理員修改受保護的服務環境檔後重啟；缺少新欄位的舊安裝使用新預設，明確設定保留。指令、診斷及停機時限維持原規則。一般用戶端建議至少等 120 秒；產生的 Codex 設定改為 480 秒，既有用戶端設定不會自動變更。等待超時不能證明指令沒執行；先查 Audit，避免重複操作。

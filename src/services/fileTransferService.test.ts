@@ -22,6 +22,18 @@ class MemoryAudit implements AuditLog {
 const config = (root: string): AppConfig => ({ transport: "stdio", httpHost: "127.0.0.1", httpPort: 8800, allowedHosts: [], executionMode: "unrestricted", allowedShells: ["sh"], allowedCommands: new Set(), allowedRoots: ["/"], defaultTimeoutMs: 1000, maxTimeoutMs: 1000, maxOutputChars: 1000, maxParallelCommands: 1, passthroughEnv: [], fileTransfer: { root, upload: true, download: true, maxBytes: 1024 } });
 const payload = (data: Buffer, path = "sample.bin") => ({ path, contentBase64: data.toString("base64"), sha256: createHash("sha256").update(data).digest("hex") });
 
+test("file I/O budget excludes slow attempted and terminal Audit waits", { skip: process.platform !== "linux" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-transfer-slow-audit-"));
+  const events: CommandAuditEvent[] = [];
+  const service = new FileTransferService(config(root), { async write(event) { await new Promise(r => setTimeout(r, 8000)); events.push(event); }, async list() { return { events, hasMore: false }; } });
+  try {
+    const data = Buffer.from("bounded I/O");
+    const result = await service.upload(payload(data));
+    assert.equal(result.ok, true); assert.deepEqual(await readFile(join(root, "sample.bin")), data);
+    assert.deepEqual(events.map(e => e.phase), ["attempted", "completed"]);
+  } finally { await service.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
 test("file transfer configuration is opt-in and rejects missing roots and excessive limits", () => {
   const saved = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("COMMAND_BRIDGE_")));
   for (const key of Object.keys(saved)) delete process.env[key];
@@ -138,6 +150,7 @@ test("Windows directory lease reports a failed native open and cleans its contro
 
 test("Linux transfer cancellation and terminal Audit failure withhold content and report committed uploads", { skip: process.platform !== "linux" }, async () => {
   const root = await mkdtemp(join(tmpdir(), "cb-files-failure-")), audit = new MemoryAudit(), files = new FileTransferService(config(root), audit);
+  const instances = [files];
   try {
     const controller = new AbortController(); controller.abort();
     await assert.rejects(files.upload(payload(Buffer.from("x")), controller.signal), /cancelled/);
@@ -145,14 +158,37 @@ test("Linux transfer cancellation and terminal Audit failure withhold content an
     audit.failure = "completed";
     await assert.rejects(files.upload(payload(Buffer.from("content"))), /committed.*Audit/);
     assert.deepEqual(await readdir(root), ["sample.bin"]);
-    await assert.rejects(files.download("sample.bin"), /withheld/);
+    await assert.rejects(files.download("sample.bin"), /Initial Audit unavailable/);
+    const afterRestart = new FileTransferService(config(root), audit); instances.push(afterRestart);
+    await assert.rejects(afterRestart.download("sample.bin"), /withheld/);
     audit.failure = undefined;
-    assert.equal((await files.download("sample.bin")).size, 7);
-    await files.shutdown(); await assert.rejects(files.download("sample.bin"), /cancelled/);
-  } finally { await rm(root, { recursive: true, force: true }); }
+    await assert.rejects(afterRestart.download("sample.bin"), /Initial Audit unavailable/);
+    const recovered = new FileTransferService(config(root), audit); instances.push(recovered);
+    assert.equal((await recovered.download("sample.bin")).size, 7);
+    await recovered.shutdown(); await assert.rejects(recovered.download("sample.bin"), /cancelled/);
+  } finally { await Promise.all(instances.map(service => service.shutdown())); await rm(root, { recursive: true, force: true }); }
 });
 
-test("Linux transfer keeps its slot until terminal Audit finishes and then releases it", { skip: process.platform !== "linux" }, async () => {
+test("Linux transfer admission blocks concurrent I/O and releases its slot after completion", { skip: process.platform !== "linux" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "cb-files-io-busy-")), audit = new MemoryAudit(), files = new FileTransferService(config(root), audit);
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(r => { release = r; }), reached = new Promise<void>(r => { entered = r; });
+  // Pause the real file action after root protection/admission, before its
+  // first write. Keep the public upload/download and actual filesystem work.
+  const original = (files as any).performInternal.bind(files);
+  Object.defineProperty(files, "performInternal", { value: (op: any, name: any, signal: any, action: any, begin: any, end: any) =>
+    original(op, name, signal, async (...args: any[]) => { entered(); await gate; return action(...args); }, begin, end) });
+  const pending = files.upload(payload(Buffer.from("data")));
+  try {
+    await reached; await assert.rejects(files.download("sample.bin"), { code: "FILE_TRANSFER_BUSY" });
+    assert.deepEqual(await readdir(root), []);
+    assert.equal(audit.events.filter(e => e.phase === "blocked" && e.errorCode === "FILE_TRANSFER_BUSY").length, 1);
+    release(); assert.equal((await pending).ok, true);
+    assert.equal((await files.download("sample.bin")).size, 4);
+  } finally { release(); await pending.catch(() => undefined); await files.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("Linux additional transfers cannot bypass pending terminal Audit and proceed after it finishes", { skip: process.platform !== "linux" }, async () => {
   const root = await mkdtemp(join(tmpdir(), "cb-files-busy-"));
   let release!: () => void, started!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
@@ -165,13 +201,20 @@ test("Linux transfer keeps its slot until terminal Audit finishes and then relea
   }
   const audit = new SlowAudit(), files = new FileTransferService(config(root), audit);
   const pending = files.upload(payload(Buffer.from("data")));
+  let download: Promise<unknown> | undefined;
   try {
     await reached;
-    await assert.rejects(files.download("sample.bin"), /already active/);
+    let finished = false;
+    download = files.download("sample.bin").then(result => { finished = true; return result; });
+    await new Promise(r => setTimeout(r, 20));
+    assert.equal(finished, false);
+    assert.equal(audit.events.filter(e => e.phase === "attempted").length, 1);
+    assert.deepEqual(await readdir(root), ["sample.bin"]);
     release(); await pending;
+    const result = await download as { size: number }; assert.equal(result.size, 4);
     assert.equal((await files.download("sample.bin")).size, 4);
-    assert.equal(audit.events.filter(e => e.phase === "blocked" && e.errorCode === "FILE_TRANSFER_BUSY").length, 1);
-  } finally { release(); await pending.catch(() => undefined); await files.shutdown(); await rm(root, { recursive: true, force: true }); }
+    assert.equal(audit.events.filter(e => e.phase === "completed").length, 3);
+  } finally { release(); await pending.catch(() => undefined); await download?.catch(() => undefined); await files.shutdown(); await rm(root, { recursive: true, force: true }); }
 });
 
 test("Linux HTTP MCP file transfer authenticates before parsing large bodies and returns matching Audit", { skip: process.platform !== "linux" }, async () => {

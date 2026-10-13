@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionMode } from "./commandPolicy.js";
+import { DEFAULT_AUDIT_TIMEOUT_MS, auditRequestTimeout } from "../config/auditTimeout.js";
 
 export interface AccessLease { schemaVersion: 1; instanceId: string; id: string; action: "open" | "close"; issuedAt: number; expiresAt: number }
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -23,9 +24,13 @@ export class TemporaryAccess {
   private generation = 0;
   private lifecycle = new Set<Promise<void>>();
   private lastWall: number;
+  private readDeadline?: NodeJS.Timeout;
+  private readFailure?: Promise<never>;
+  private failRead?: (error: Error) => void;
   constructor(readonly baseMode: ExecutionMode, private readonly readLease: () => Promise<string | null>,
     private readonly audit: (action: "opened" | "closed" | "expired" | "invalidated") => Promise<void>,
-    private readonly wall = Date.now, private readonly monotonic = () => performance.now(), instanceId = randomUUID()) {
+    private readonly wall = Date.now, private readonly monotonic = () => performance.now(), instanceId = randomUUID(),
+    private readonly auditTimeoutMs = DEFAULT_AUDIT_TIMEOUT_MS) {
     this.instanceId = instanceId; this.lastWall = wall();
   }
   mode(): ExecutionMode {
@@ -45,18 +50,27 @@ export class TemporaryAccess {
   async refresh(): Promise<ExecutionMode> {
     if (this.stopped) return this.baseMode;
     if (!this.pending) {
+      this.readFailure = new Promise<never>((_, reject) => { this.failRead = reject; });
+      void this.readFailure.catch(() => undefined);
       const operation = this.readAndApply(this.generation); this.pending = operation;
-      void operation.finally(() => { if (this.pending === operation) this.pending = undefined; }).catch(() => undefined);
+      void operation.finally(() => { if (this.pending === operation) { this.pending = undefined; this.readFailure = undefined; this.failRead = undefined; } }).catch(() => undefined);
     }
     let timer: NodeJS.Timeout | undefined;
-    try { await Promise.race([this.pending, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Error("Access read deadline")), 5000); })]); }
+    try { await Promise.race([this.pending, this.readFailure!, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Error("Access confirmation deadline")), auditRequestTimeout(this.auditTimeoutMs)); })]); }
     catch { this.generation++; this.invalidate("invalidated"); }
     finally { if (timer) clearTimeout(timer); }
     return this.mode();
   }
+  private async readWithinDeadline() {
+    // Retain the actual read in readAndApply/pending even after its response
+    // deadline; no second reader may be spawned while that I/O is unfinished.
+    this.readDeadline = setTimeout(() => { this.generation++; this.invalidate("invalidated"); this.failRead?.(Error("Access read deadline")); }, 5000);
+    try { return await this.readLease(); }
+    finally { clearTimeout(this.readDeadline); this.readDeadline = undefined; }
+  }
   private async readAndApply(generation: number) {
     try {
-      const text = await this.readLease();
+      const text = await this.readWithinDeadline();
       if (generation !== this.generation || this.stopped) {
         if (text) { try { this.revoked.add(parseAccessLease(text).id); } catch {} }
         return;
@@ -81,7 +95,7 @@ export class TemporaryAccess {
       if (this.stopped || generation !== this.generation || this.wall() >= lease.expiresAt || this.wall() < now || this.monotonic() >= deadline) return;
       // A concurrent administrator close/renew during Audit must win before
       // the grant becomes visible to commands or status callers.
-      const confirmed = await this.readLease();
+      const confirmed = await this.readWithinDeadline();
       if (confirmed !== text || this.stopped || generation !== this.generation || this.wall() >= lease.expiresAt || this.monotonic() >= deadline) {
         await this.audit("invalidated"); return;
       }

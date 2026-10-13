@@ -1,9 +1,11 @@
+import { parse } from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { decodeUtf8File } from '../dist/services/textEncoding.js';
-const config = Object.fromEntries(decodeUtf8File(readFileSync(process.argv[2])).split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
+import { parseAuditTimeout, auditRequestTimeout } from '../dist/config/auditTimeout.js';
+const config = parse(decodeUtf8File(readFileSync(process.argv[2])));
 let host = config.COMMAND_BRIDGE_HTTP_HOST;
 if (host === '0.0.0.0') host = '127.0.0.1';
 if (host === '::') host = '::1';
@@ -35,22 +37,24 @@ function failureCategory(result) {
   const reason = typeof error?.message === 'string' ? error.message.match(/^(?:Windows transfer ACL check failed|Could not lock the transfer directory|File operation failed) \((owner|readable|writable|query|startup|load|open|EACCES|EPERM|EIO|ENOENT|EBUSY|ENOSPC|unknown)\)/)?.[1] : undefined;
   return code + (reason ? `:${reason}` : '');
 }
-const timer = setTimeout(() => { console.error('File verification timed out.'); process.exit(1); }, 30000);
+const auditMs = parseAuditTimeout(config.COMMAND_BRIDGE_AUDIT_TIMEOUT_MS);
+const callTool = params => client.callTool(params, undefined, { timeout: auditRequestTimeout(auditMs, 15000) });
+const timer = setTimeout(() => { console.error('File verification timed out.'); process.exit(1); }, auditRequestTimeout(auditMs, 30000, 5));
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers }, fetch: serviceFetch }));
   const { randomUUID, createHash } = await import('node:crypto');
   const path = 'verify-' + randomUUID() + '.bin';
   const data = Buffer.from([0, 255, 128, 42]);
   const sha256 = createHash('sha256').update(data).digest('hex');
-  const upload = await client.callTool({ name: 'command_bridge_upload_file', arguments: { path, contentBase64: data.toString('base64'), sha256 } });
+  const upload = await callTool({ name: 'command_bridge_upload_file', arguments: { path, contentBase64: data.toString('base64'), sha256 } });
   if (upload.isError || !upload.structuredContent?.ok) {
     throw new Error(`Upload verification failed (${failureCategory(upload)}).`);
   }
-  const download = await client.callTool({ name: 'command_bridge_download_file', arguments: { path } });
+  const download = await callTool({ name: 'command_bridge_download_file', arguments: { path } });
   if (download.isError || download.structuredContent?.sha256 !== sha256 || download.structuredContent?.contentBase64 !== data.toString('base64')) {
     throw new Error(`Download verification failed (${failureCategory(download)}).`);
   }
-  const audit = await client.callTool({ name: 'command_bridge_list_audit_events', arguments: { limit: 100 } });
+  const audit = await callTool({ name: 'command_bridge_list_audit_events', arguments: { limit: 100 } });
   for (const id of [upload.structuredContent.auditId, download.structuredContent.auditId]) {
     const events = (audit.structuredContent?.events ?? []).filter(e => e.auditId === id);
     if (events.length !== 2 || !events.some(e => e.phase === 'attempted') || !events.some(e => e.phase === 'completed' && e.fileTransfer?.sha256 === sha256)) throw new Error('File Audit lifecycle missing.');

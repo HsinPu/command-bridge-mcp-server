@@ -68,7 +68,7 @@ case "${1:-}" in
         source "$FIXTURE/common.sh"; trap - EXIT ERR
         mkdir -p "$TEMP_DIR" "$RUNTIME_LINK/bin"
         printf candidate > "$TEMP_DIR/$SERVICE_NAME.service"
-        printf "#!/usr/bin/env bash\nprintf fixture-host\\n" > "$RUNTIME_LINK/bin/node"
+        printf "#!/usr/bin/env bash\nif [[ \"\$*\" == *auditStartupBudget* ]]; then printf 90000; else printf fixture-host; fi\n" > "$RUNTIME_LINK/bin/node"
         chmod 0755 "$RUNTIME_LINK/bin/node"
         LEGACY_MIGRATION=$LEGACY_CASE
         systemctl() { printf "%s\n" "$*" >> "$FIXTURE/service-events"; if [[ "$1" == is-active ]]; then [[ -e "$FIXTURE/started" ]]; return; fi; if [[ "$1" == start ]]; then touch "$FIXTURE/started"; fi; return 0; }

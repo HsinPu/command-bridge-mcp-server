@@ -3,7 +3,10 @@ import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { summarizeUpdateFailure } from './update-failure-summary.mjs';
-const config = Object.fromEntries(readFileSync(process.argv[2], 'utf8').split(/\r?\n/).filter(line => /^[A-Z_]+=/.test(line)).map(line => { const i = line.indexOf('='); return [line.slice(0, i), line.slice(i + 1)]; }));
+import { parse } from 'dotenv';
+const config = parse(new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(process.argv[2])));
+const auditMs = Number(config.COMMAND_BRIDGE_AUDIT_TIMEOUT_MS ?? 30000);
+if (!Number.isInteger(auditMs) || auditMs < 1000 || auditMs > 60000) throw Error('Invalid Audit verification budget');
 let host = config.COMMAND_BRIDGE_HTTP_HOST;
 if (host === '0.0.0.0') host = '127.0.0.1';
 if (host === '::') host = '::1';
@@ -64,7 +67,7 @@ async function call(name, args = {}) {
   const client = new Client({ name: 'managed-update-verifier', version: '1.0.0' });
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers }, fetch: serviceFetch }));
-    return await client.callTool({ name, arguments: args });
+    return await client.callTool({ name, arguments: args }, undefined, { timeout: 2 * auditMs + Number(config.COMMAND_BRIDGE_DEFAULT_TIMEOUT_MS ?? 15000) + 20000 });
   } finally { await client.close(); }
 }
 async function terminal(id) {

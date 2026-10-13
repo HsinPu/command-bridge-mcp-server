@@ -31,6 +31,10 @@ Linux installs a root-owned no-argument reader plus an exact numeric service-UID
 
 ## Audit failure and recovery
 
+From 6.3.0 `COMMAND_BRIDGE_AUDIT_TIMEOUT_MS` defaults to 30000 and accepts integer milliseconds from 1000 to 60000. One serialized Audit operation shares that budget across queue and backend/helper time; unfinished real I/O remains tracked after a response timeout. The five-second diagnostics limit is independent. `/ready` still returns within five seconds, but an unfinished readiness probe no longer disables a valid longer Audit operation; completed checks are briefly cached for subsequent polls. True Audit timeout/failure still latches unavailable until restart.
+
+6.3.0 起 Audit 預設 30 秒，設定範圍為 1,000–60,000 整數毫秒，包含排隊及後端。診斷仍限五秒；/ready 短暫回報未就緒不代表 Audit 已故障。真正超時或失敗後仍停止新作業，先保存首次故障診斷、排除儲存／權限問題，再重啟服務。這不會自動解除既有的故障狀態，也不證明現場磁碟故障已修復。
+
 If configuration, policies, roots and shells pass but Audit fails during startup, the server can start in diagnostic-only mode. Existing Bearer Token and Host validation still apply. `/health` reports liveness; `/ready` remains 503. Commands, transfers and new update requests still require initial Audit, and captured command/download output still requires terminal Audit. No fallback execution backend or automatic Audit reset is introduced. The installer requires real readiness, hostname/Audit and managed-reader verification, so diagnostic-only startup cannot make a failed deployment appear successful.
 
 Ask the connected client: 「請使用 command_bridge_get_diagnostics，查看首次 Audit 故障原因、尚未完成的 I/O 與最近指令摘要，不要執行修復指令。」 Inspect `noSpace`, `permissionDenied`, `helperTimeout`, `deadlineExceeded`, `queueFull` or `unknown` as categories, not proof of a particular root cause. Use a separate administrator terminal to verify host storage, access and fixed reader assets; restart after resolving the fault. The first fault and volatile command summaries reset on restart, while durable Audit retention is unchanged.

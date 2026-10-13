@@ -2,6 +2,7 @@ import "./validateEnvEncoding.js";
 import "dotenv/config";
 import { delimiter, resolve, isAbsolute } from "node:path";
 import { z } from "zod";
+import { DEFAULT_AUDIT_TIMEOUT_MS } from "./auditTimeout.js";
 import { normalizeAllowedHosts } from "./allowedHosts.js";
 import type { ExecutionMode, ShellKind } from "../services/commandPolicy.js";
 import { loadCommandProfiles, validateEnabledProfiles, type CommandProfile } from "../services/commandProfiles.js";
@@ -10,6 +11,7 @@ const rawEnvSchema = z.object({
   COMMAND_BRIDGE_MCP_UPDATE_ENABLED: z.enum(["true", "false"]).default("true"),
   COMMAND_BRIDGE_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
   COMMAND_BRIDGE_AUDIT_BACKEND: z.enum(["auto", "journal", "eventlog", "file"]).default("auto"),
+  COMMAND_BRIDGE_AUDIT_TIMEOUT_MS: z.union([z.string().regex(/^\d+$/), z.number()]).transform(Number).pipe(z.number().int().min(1000).max(60000)).default(DEFAULT_AUDIT_TIMEOUT_MS),
   COMMAND_BRIDGE_POLICY_FILE: z.string().min(1).optional(),
   COMMAND_BRIDGE_BEARER_TOKEN: z.preprocess(v => v === "" ? undefined : v, z.string().min(32).optional()).optional(),
   COMMAND_BRIDGE_HTTP_HOST: z.string().min(1).default("127.0.0.1"),
@@ -36,6 +38,7 @@ export interface AppConfig {
   commandProfiles?: Map<string, CommandProfile>;
   policyFile?: string;
   auditBackend?: "auto" | "journal" | "eventlog" | "file";
+  auditTimeoutMs?: number;
   transport: "stdio" | "http";
   bearerToken?: string;
   httpHost: string;
@@ -113,6 +116,7 @@ export function loadConfig(): AppConfig {
     commandProfiles,
     policyFile: raw.COMMAND_BRIDGE_POLICY_FILE,
     auditBackend: raw.COMMAND_BRIDGE_AUDIT_BACKEND,
+    auditTimeoutMs: raw.COMMAND_BRIDGE_AUDIT_TIMEOUT_MS,
     transport: raw.COMMAND_BRIDGE_TRANSPORT,
     bearerToken: raw.COMMAND_BRIDGE_BEARER_TOKEN,
     httpHost: raw.COMMAND_BRIDGE_HTTP_HOST,

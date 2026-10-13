@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
 import { AppError } from "../errors/AppError.js";
 import type { AppConfig } from "../config/env.js";
+import { auditTimeout } from "../config/auditTimeout.js";
+import { BoundedAuditLog } from "./boundedAuditLog.js";
 import { createAuditEvent, runFixedProcess, type AuditLog, type FileTransferAudit } from "./auditLog.js";
 
 export interface UploadFileRequest { path: string; contentBase64: string; sha256: string; overwrite?: boolean; expectedSha256?: string }
@@ -19,7 +21,10 @@ export class FileTransferService {
   private active = false;
   private stopping = false;
   private readonly pending = new Set<Promise<unknown>>();
-  constructor(private readonly config: AppConfig, private readonly audit: AuditLog) {}
+  private readonly audit: AuditLog;
+  constructor(private readonly config: AppConfig, audit: AuditLog) {
+    this.audit = audit instanceof BoundedAuditLog ? audit : new BoundedAuditLog(audit, auditTimeout(config));
+  }
   async shutdown() { this.stopping = true; await Promise.allSettled([...this.pending]); }
 
   upload(request: UploadFileRequest, signal?: AbortSignal) {
@@ -83,23 +88,27 @@ export class FileTransferService {
     const controller = new AbortController();
     const cancel = () => controller.abort();
     if (signal?.aborted) cancel(); else signal?.addEventListener("abort", cancel, { once: true });
-    const operationPromise = this.performInternal(operation, path, controller.signal, action);
+    let timer: NodeJS.Timeout | undefined;
+    let rejectDeadline!: (error: Error) => void;
+    const deadline = new Promise<never>((_, reject) => { rejectDeadline = reject; });
+    const beginIo = () => { timer = setTimeout(() => { cancel(); rejectDeadline(new AppError("FILE_TIMEOUT", "Transfer timed out; an upload may exist. Cleanup and Audit continue while storage finishes.")); }, 15000); };
+    const endIo = () => { if (timer) { clearTimeout(timer); timer = undefined; } };
+    const operationPromise = this.performInternal(operation, path, controller.signal, action, beginIo, endIo);
     this.pending.add(operationPromise);
-    let timer: NodeJS.Timeout;
-    const deadline = new Promise<never>((_, reject) => { timer = setTimeout(() => { cancel(); reject(new AppError("FILE_TIMEOUT", "Transfer timed out; an upload may exist. Cleanup and Audit continue while storage finishes.")); }, 15000); });
     void operationPromise.finally(() => this.pending.delete(operationPromise)).catch(() => undefined);
-    return Promise.race([operationPromise, deadline]).finally(() => { clearTimeout(timer); signal?.removeEventListener("abort", cancel); });
+    return Promise.race([operationPromise, deadline]).finally(() => { endIo(); signal?.removeEventListener("abort", cancel); });
   }
 
   private async performInternal<T>(operation: "upload" | "download", path: string, signal: AbortSignal | undefined,
-    action: (base: string, check: () => void, metadata: FileTransferAudit) => Promise<T>): Promise<T & { auditId: string; ok: true }> {
+    action: (base: string, check: () => void, metadata: FileTransferAudit) => Promise<T>, beginIo: () => void, endIo: () => void): Promise<T & { auditId: string; ok: true }> {
     const auditId = randomUUID(), started = Date.now();
     const metadata: FileTransferAudit = { schemaVersion: 1, operation, path: validName(path) ? path : null, size: null, sha256: null, committed: false };
     const event = (phase: "attempted" | "blocked" | "completed" | "failed", errorCode: string | null = null) => createAuditEvent({ auditId, phase, command: "File " + operation, executionMode: this.config.executionMode, source: this.config.transport === "http" ? "http-bearer" : "stdio", durationMs: Date.now() - started, errorCode, fileTransfer: { ...metadata } });
     try { await this.audit.write(event("attempted")); }
     catch { throw new AppError("FILE_AUDIT_FAILED", "Initial Audit unavailable; no file operation was performed."); }
+    const ioStarted = Date.now(); beginIo();
     let acquired = false, terminal = false;
-    const check = () => { if (signal?.aborted || this.stopping) throw new AppError("FILE_CANCELLED", "Transfer cancelled; an upload may already have been committed."); if (Date.now() - started > 15000) throw new AppError("FILE_TIMEOUT", "Transfer exceeded its time budget."); };
+    const check = () => { if (signal?.aborted || this.stopping) throw new AppError("FILE_CANCELLED", "Transfer cancelled; an upload may already have been committed."); if (Date.now() - ioStarted > 15000) throw new AppError("FILE_TIMEOUT", "Transfer exceeded its time budget."); };
     try {
       if (!this.config.fileTransfer?.[operation]) throw new AppError("FILE_TRANSFER_DISABLED", "This file transfer operation is disabled.");
       if (!validName(path)) throw new AppError("FILE_PATH_BLOCKED", "Use a single safe filename; directories, reserved names and control characters are forbidden.");
@@ -141,10 +150,12 @@ export class FileTransferService {
         await lease?.release(); lease = undefined;
         await directory?.close(); directory = undefined;
         terminal = true;
+        endIo();
         try { await this.audit.write(event("completed")); } catch { throw new AppError(metadata.committed ? "FILE_COMMITTED_AUDIT_FAILED" : "FILE_AUDIT_FAILED", metadata.committed ? "File was committed but terminal Audit failed; do not assume rollback." : "Terminal Audit failed; download content was withheld."); }
         return { ...result, ok: true, auditId };
       } finally { try { await directory?.close(); } finally { await lease?.release(); } }
     } catch (error) {
+      endIo();
       const code = error instanceof AppError ? error.code : "FILE_IO_FAILED";
       const blocked = !metadata.committed && ["FILE_TRANSFER_DISABLED", "FILE_PATH_BLOCKED", "FILE_ROOT_UNSAFE", "FILE_TYPE_BLOCKED", "FILE_EXISTS", "FILE_TOO_LARGE", "FILE_ENCODING_INVALID", "FILE_HASH_MISMATCH", "FILE_OVERWRITE_DISABLED", "FILE_TRANSFER_BUSY", "FILE_DIRECTORY_LIMIT", "FILE_TEMP_REMAINS"].includes(code);
       if (!terminal) { terminal = true; try { await this.audit.write(event(blocked ? "blocked" : "failed", code)); } catch { throw new AppError("FILE_AUDIT_FAILED", "Terminal Audit failed; an upload may already exist."); } }

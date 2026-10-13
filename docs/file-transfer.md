@@ -50,3 +50,9 @@ Cancellation, timeout or a failed response **does not prove an upload was rolled
 每次進入傳輸流程先寫 `attempted`，再嘗試唯一終結事件 `blocked`、`completed` 或 `failed`。初始 Audit 失敗不操作檔案。既有 schemaVersion 1 事件新增選用 `fileTransfer` 欄位：operation、安全檔名、大小、SHA-256、committed；不記錄 Base64 或檔案內容。尚未通過 MCP 輸入 schema 的請求不會進入傳輸 Audit。Audit 不是不可竄改或內容備份。
 
 The Bearer Token authorizes all enabled operations; there are no per-user transfer roles. Use private HTTPS routing for sensitive files, or a trusted LAN/VPN for the native HTTP listener. The installer does not provide TLS or open firewall rules. Never disable certificate verification. Normal uninstall preserves managed transfer data with other state; purge follows the platform's managed-directory deletion rules. Custom roots are not automatically removed. Read [Linux](linux-systemd.md) and [Windows](windows-service.md) lifecycle guidance before purge.
+
+## Audit waiting (6.3.0)
+
+The 15-second transfer I/O deadline starts after attempted Audit and stops before terminal Audit. Each Audit operation separately uses `COMMAND_BRIDGE_AUDIT_TIMEOUT_MS` (30000 by default, integer 1000–60000), including queue time. Actual unfinished I/O retains its slot; a timed-out upload may exist, and terminal Audit failure still withholds download contents. This does not enlarge the transfer size limit or change Windows directory-lock startup/cleanup limits.
+
+傳輸實際 I/O 仍限 15 秒，前後的 Audit 各依設定等待，預設各 30 秒；排隊也計入。真正 I/O 尚未完成時仍保留名額，逾時上傳可能已存在，終結 Audit 失敗不回傳下載內容。傳輸權限、大小、Windows 目錄鎖及清理時限維持原規則。

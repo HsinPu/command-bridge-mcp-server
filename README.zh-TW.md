@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.2.5-blue)
+![Version](https://img.shields.io/badge/version-6.3.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -231,7 +231,7 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 | 輸出限制 | 50,000 字元 |
 | 同時執行數 | 2 |
 
-長指令需明確指定 `timeoutMs: 300000`（最多五分鐘）；安裝輸出的 Codex 設定等待六分鐘（`tool_timeout_sec = 360`）。升級會保留既有逾時設定；請依平台指南同步調整服務與用戶端。
+長指令需明確指定 `timeoutMs: 300000`（最多五分鐘）；安裝輸出的 Codex 設定等待八分鐘（`tool_timeout_sec = 480`）。升級會保留既有逾時設定；請依平台指南同步調整服務與用戶端。
 
 ## 唯讀診斷
 
@@ -257,7 +257,9 @@ Audit 不保存 stdout／stderr，指令中的常見秘密格式會遮罩。初�
 
 本機 stdio 預設使用使用者資料目錄內的私有 JSONL 檔案，每檔 10 MiB、保留五份；服務依模式選用 journal、Event Log 或 Linux 安裝者帳號的檔案後端。需驗證 Token 的 `/ready` 會檢查服務依賴；安裝器還會透過真實 MCP 執行指令並核對 Audit lifecycle，通過後才移除升級備份。
 
-4.1.16 起，程序結束就釋放指令名額；終結 Audit 成功前仍不回傳輸出。Audit 等待最多五秒，失敗後停止接受新指令與檔案傳輸，`/ready` 回報未就緒。逾時不代表底層磁碟操作已取消；應先排除儲存問題，再重啟服務並確認紀錄。
+4.1.16 起，程序結束就釋放指令名額；終結 Audit 成功前仍不回傳輸出。6.3.0 起 Audit 預設等待 30 秒，可用 COMMAND_BRIDGE_AUDIT_TIMEOUT_MS 設定 1,000–60,000 毫秒，失敗後停止接受新指令與檔案傳輸，`/ready` 回報未就緒。逾時不代表底層磁碟操作已取消；應先排除儲存問題，再重啟服務並確認紀錄。
+
+Audit 時限包含排隊。一次指令可能另需兩次 Audit 等待；一般用戶端呼叫建議至少等 120 秒。產生的 Codex 設定使用 480 秒，涵蓋預設五分鐘指令上限與最高 60 秒 Audit 設定。延長等待不會修復磁碟滿或權限問題；恢復方式見平台指南。
 
 ## 一鍵解除安裝
 

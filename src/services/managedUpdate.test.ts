@@ -33,7 +33,7 @@ test("disabled, stopping and cancelled requests never reach the privileged adapt
   }
 });
 test("initial Audit failure prevents update and terminal Audit failure reports an accepted job may exist", async () => {
-  const first = fixture(1); await assert.rejects(new ManagedUpdateService(cfg, first.audit, first.adapter).start(), /Audit rejected/); assert.equal(first.calls(), 0);
+  const first = fixture(1); await assert.rejects(new ManagedUpdateService(cfg, first.audit, first.adapter).start(), { code: "AUDIT_LOG_WRITE_FAILED" }); assert.equal(first.calls(), 0);
   const final = fixture(2); const service = new ManagedUpdateService(cfg, final.audit, final.adapter);
   await assert.rejects(service.start(), /may already be running/); assert.equal(final.calls(), 1); assert.deepEqual(await service.status(), final.job);
 });

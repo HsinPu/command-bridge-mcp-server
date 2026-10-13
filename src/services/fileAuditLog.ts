@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { decodeUtf8File } from "./textEncoding.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { DEFAULT_AUDIT_TIMEOUT_MS } from "../config/auditTimeout.js";
+import { AppError } from "../errors/AppError.js";
 import { buildWindowsAuditEnvironment, normalizeAuditEventLimit, serializeAuditEvent, parseWindowsEventLogLines, type AuditLog, type CommandAuditEvent, type AuditEventList } from "./auditLog.js";
 
 const exec = promisify(execFile);
@@ -12,25 +14,32 @@ export class FileAuditLog implements AuditLog {
   private queue: Promise<unknown> = Promise.resolve();
   constructor(
     private readonly directory = join(process.platform === "win32" ? process.env.LOCALAPPDATA ?? homedir() : process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "CommandBridgeMCP", "audit"),
-    private readonly maxBytes = 10 * 1024 * 1024
+    private readonly maxBytes = 10 * 1024 * 1024,
+    private readonly timeoutMs = DEFAULT_AUDIT_TIMEOUT_MS
   ) {}
 
   get storageDirectory(): string { return this.directory; }
 
-  private async prepare(): Promise<void> {
+  private remaining(deadline: number): number {
+    const remaining = Math.ceil(deadline - performance.now());
+    if (remaining <= 0) throw new AppError("AUDIT_HELPER_TIMEOUT", "Audit helper timed out.");
+    return remaining;
+  }
+  private async prepare(deadline: number): Promise<void> {
+    this.remaining(deadline);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const stat = await lstat(this.directory);
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Unsafe audit directory.");
     if (process.platform === "win32") {
       const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
       const environment = buildWindowsAuditEnvironment(systemRoot);
-      const { stdout } = await exec(join(systemRoot, "System32", "whoami.exe"), ["/user", "/fo", "csv", "/nh"], { windowsHide: true, timeout: 5000, env: environment });
+      const { stdout } = await exec(join(systemRoot, "System32", "whoami.exe"), ["/user", "/fo", "csv", "/nh"], { windowsHide: true, timeout: this.remaining(deadline), env: environment });
       const sid = stdout.match(/S-1-5-(?:\d+-)*\d+/)?.[0];
       if (!sid) throw new Error("Cannot determine audit owner.");
       // Replace all rules, including explicit rules on an existing directory.
       const script = "$acl = [Security.AccessControl.DirectorySecurity]::new(); $acl.SetAccessRuleProtection($true,$false); $sid = [Security.Principal.SecurityIdentifier]::new($env:COMMAND_BRIDGE_AUDIT_SID); $acl.SetOwner($sid); $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'); $acl.AddAccessRule($rule); [IO.Directory]::SetAccessControl($env:COMMAND_BRIDGE_AUDIT_DIRECTORY,$acl)";
       const protectFiles = "; foreach ($path in [IO.Directory]::GetFiles($env:COMMAND_BRIDGE_AUDIT_DIRECTORY)) { if (([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Unsafe audit file' }; $fileAcl = [Security.AccessControl.FileSecurity]::new(); $fileAcl.SetAccessRuleProtection($true,$false); $fileAcl.SetOwner($sid); $fileRule = [Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','Allow'); $fileAcl.AddAccessRule($fileRule); [IO.File]::SetAccessControl($path,$fileAcl) }";
-      await exec(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; " + script + protectFiles], { windowsHide: true, timeout: 5000, env: { ...environment, COMMAND_BRIDGE_AUDIT_DIRECTORY: this.directory, COMMAND_BRIDGE_AUDIT_SID: sid } });
+      await exec(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; " + script + protectFiles], { windowsHide: true, timeout: this.remaining(deadline), env: { ...environment, COMMAND_BRIDGE_AUDIT_DIRECTORY: this.directory, COMMAND_BRIDGE_AUDIT_SID: sid } });
     } else {
       if (stat.uid !== process.getuid?.()) throw new Error("Audit directory belongs to another user.");
       await chmod(this.directory, 0o700);
@@ -43,9 +52,10 @@ export class FileAuditLog implements AuditLog {
     return next;
   }
 
-  write(event: CommandAuditEvent): Promise<void> {
+  write(event: CommandAuditEvent, remainingMs = this.timeoutMs): Promise<void> {
+    const deadline = performance.now() + remainingMs;
     return this.serialize(async () => {
-      await this.prepare();
+      await this.prepare(deadline);
       const line = serializeAuditEvent(event) + "\n";
       if (Buffer.byteLength(line) > this.maxBytes) throw new Error("Audit event exceeds file limit.");
       const path = join(this.directory, "events.jsonl");
@@ -68,10 +78,11 @@ export class FileAuditLog implements AuditLog {
     });
   }
 
-  list(limit: number): Promise<AuditEventList> {
+  list(limit: number, remainingMs = this.timeoutMs): Promise<AuditEventList> {
+    const deadline = performance.now() + remainingMs;
     return this.serialize(async () => {
       const count = normalizeAuditEventLimit(limit);
-      await this.prepare();
+      await this.prepare(deadline);
       const events: CommandAuditEvent[] = [];
       for (let i = 0; i < 5; i++) {
         const path = join(this.directory, "events.jsonl" + (i ? "." + i : ""));

@@ -148,6 +148,24 @@ test("HTTP readiness and MCP fail promptly when an Audit operation remains unfin
   }
 });
 
+test("a short HTTP readiness response does not expire a slower valid Audit helper", async () => {
+  let writes = 0;
+  const cfg = config();
+  const audit = new BoundedAuditLog({
+    async write(_event, remaining) { writes++; await runFixedProcess(process.execPath, ["-e", "setTimeout(()=>{},6000)"], undefined, false, remaining); },
+    async list() { return { events: [], hasMore: false }; }
+  });
+  const executor = new CommandExecutor(cfg, audit), server = await startHttpTransport(cfg, executor);
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    const response = await fetch(base + "/ready", { headers: { Authorization: `Bearer ${cfg.bearerToken}` }, signal: AbortSignal.timeout(10000) });
+    assert.equal(response.status, 503); await response.json();
+    assert.equal(audit.available, true); assert.equal(audit.snapshot().firstFailure, null);
+    assert.equal((await executor.startupReadiness()).ready, true);
+    assert.equal((await executor.readiness()).ready, true); assert.equal(writes, 1);
+  } finally { await executor.shutdown(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); }
+});
+
 test("readiness fails closed when audit storage is unavailable", async () => {
   const audit: AuditLog = { async write() { throw new Error("private storage path"); }, async list() { throw new Error("unavailable"); } };
   const result = await new CommandExecutor(config(), audit).readiness();

@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import { BoundedAuditLog } from "./boundedAuditLog.js";
+import { auditTimeout } from "../config/auditTimeout.js";
 import { createAuditEvent, buildWindowsAuditEnvironment, type AuditLog } from "./auditLog.js";
 
 export const updateJobSchema = z.object({
@@ -86,7 +88,10 @@ export class ManagedUpdateService {
   private pending?: Promise<UpdateJob>;
   private stopping = false;
   private readonly operations = new Set<Promise<UpdateJob>>();
-  constructor(private readonly config: AppConfig, private readonly audit: AuditLog, private readonly adapter = nativeUpdateAdapter()) {}
+  private readonly audit: AuditLog;
+  constructor(private readonly config: AppConfig, audit: AuditLog, private readonly adapter = nativeUpdateAdapter()) {
+    this.audit = audit instanceof BoundedAuditLog ? audit : new BoundedAuditLog(audit, auditTimeout(config));
+  }
   stop(): void { this.stopping = true; }
   async shutdown(): Promise<void> { this.stop(); await Promise.allSettled([...this.operations]); }
   status(jobId?: string): Promise<UpdateJob> { return this.adapter.status(jobId); }

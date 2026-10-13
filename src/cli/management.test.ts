@@ -80,7 +80,7 @@ test("info and hidden setup are read-only, secret-free and independent of invali
     assert.equal(parsed.schemaVersion, 1); assert.equal(parsed.installed.sourceSha, sha); assert.equal(parsed.executionMode, "guarded");
     assert.equal(parsed.connection.listenerUrl, "http://[::1]:8800/mcp"); assert.equal(parsed.connection.connectionUrl, saved.explicitUrl);
     const setup = await runInstalledManagement(["setup", "--codex-name", "cb_output"], f.paths, f.deps);
-    assert.ok(!setup.output.includes(token)); assert.match(setup.output, /mcp_servers.cb_output/); assert.match(setup.output, /tool_timeout_sec = 360.0/);
+    assert.ok(!setup.output.includes(token)); assert.match(setup.output, /mcp_servers.cb_output/); assert.match(setup.output, /tool_timeout_sec = 480.0/);
     await assert.rejects(runInstalledManagement(["setup", "--show-token"], f.paths, f.deps), { code: "ADMINISTRATOR_REQUIRED" });
     const admin = { ...f.deps, service: async (p: InstallationPaths) => ({ ...await f.deps.service(p), administrator: true }) };
     assert.ok((await runInstalledManagement(["setup", "--show-token"], f.paths, admin)).output.includes(token));

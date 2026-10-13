@@ -30,7 +30,7 @@ async function main(): Promise<void> {
   ]);
   const config = loadConfig();
   const executor = new CommandExecutor(config);
-  const readiness = await executor.readiness();
+  const readiness = await executor.startupReadiness();
   if (!permitsDiagnosticStartup(readiness)) throw new Error("Startup dependency checks failed: " + Object.entries(readiness.checks).filter(([, ok]) => !ok).map(([name]) => name).join(", "));
 
   if (!readiness.ready) console.error("CommandBridge diagnostic-only startup: Audit unavailable; new operations remain blocked.");
@@ -41,7 +41,8 @@ async function main(): Promise<void> {
     try { installedPaths(resolve(dirname(fileURLToPath(import.meta.url)), "..")); managed = true; } catch { /* npm/dev deployments have no admin lease. */ }
     if (managed) {
       const [{ TemporaryAccess }, { readAccessLease }] = await Promise.all([import("./services/temporaryAccess.js"), import("./cli/accessStorage.js")]);
-      executor.enableTemporaryAccess(new TemporaryAccess(config.executionMode, readAccessLease, action => executor.auditAccess(action)));
+      const { auditTimeout } = await import("./config/auditTimeout.js");
+      executor.enableTemporaryAccess(new TemporaryAccess(config.executionMode, readAccessLease, action => executor.auditAccess(action), undefined, undefined, undefined, auditTimeout(config)));
     }
     const httpServer = await startHttpTransport(config, executor);
     console.error(

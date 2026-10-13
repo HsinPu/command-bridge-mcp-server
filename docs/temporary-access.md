@@ -1,4 +1,4 @@
-# Temporary command access / 臨時指令授權 (6.2.5)
+# Temporary command access / 臨時指令授權 (6.3.0)
 
 Only an administrator on a service-installed host can run the local open/status/close commands. The grant applies to this entire service and every authenticated client during the window, not one Codex conversation. It changes command execution from the configured `allowlist` or `guarded` mode to `unrestricted` for a bounded period. It does not add sudo rights, enable file transfers, change working roots, skip Audit or edit permanent configuration. npm/stdio installations do not expose this feature.
 
@@ -37,6 +37,10 @@ Each service startup creates a new in-memory identity. A grant must match that i
 The Host-protected HTTP `GET /access` endpoint (Bearer authentication for ordinary readers, or a scoped HMAC proof derived from the same Token for the local CLI) exposes only a boot identity and fixed status fields. It cannot create, extend or close a grant: only protected administrator-written storage can authorize a change. The local CLI contacts the saved local IP/loopback HTTP listener directly, bypassing proxy settings and ignoring a saved external HTTPS URL. It sends a random-challenge HMAC proof instead of the raw Token and verifies a signed response, so another process occupying the local port cannot receive the Token or forge status. localhost is pinned to loopback rather than DNS; other DNS listener names are refused. It refuses nonlocal listener addresses and does not accept user-supplied URLs, paths, modes or shell code. An unavailable listener is an error; there is no fallback to rewriting configuration or restarting the service.
 
 ## Boundary / 安全邊界
+
+From 6.3.0 opening Audit can use two configured Audit budgets (30 seconds each by default). Each lease read still has a five-second response deadline and shares the actual unfinished read; it cannot grant later after timeout. Local status verification budgets include Audit confirmation, while the CLI has a hard cap based on the maximum allowed setting. The lease starts at its issued time, so slow Audit reduces its remaining window; a lease expiring during approval is never activated. This changes waiting, not storage permissions or SELinux handling.
+
+6.3.0 起，開啟授權的兩筆 Audit 各使用設定時限，預設各 30 秒；授權檔讀取仍限五秒。CLI 等待涵蓋確認過程，但授權仍從申請時間起算；Audit 太慢而到期時拒絕生效，不延後或補發授權。此調整不改動 SELinux 工具呼叫或檔案權限。
 
 Recognizable direct `access` CLI calls, literal sudo/shell wrappers and fixed implementation helpers are blocked through MCP in every execution mode, with attempted/blocked Audit. Protected-lease writes are also included in direct self-modification protection. This is the existing prevention of direct mistakes, not a sandbox against arbitrary scripts or a caller already able to execute arbitrary root code. A client with free shell commands and unrestricted passwordless sudo remains trusted; external root can change service files. During temporary access, deletion and system-management commands may run within the account's existing privileges.
 

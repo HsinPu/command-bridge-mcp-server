@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.2.5-blue)
+![Version](https://img.shields.io/badge/version-6.3.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -231,7 +231,7 @@ Service installation defaults:
 | Output limit | 50,000 characters |
 | Concurrent commands | 2 |
 
-Long commands must explicitly request `timeoutMs: 300000` (up to five minutes). Printed Codex setup waits six minutes (`tool_timeout_sec = 360`). Existing timeout settings are preserved on upgrade; see the platform guides to update both the service and client settings.
+Long commands must explicitly request `timeoutMs: 300000` (up to five minutes). Printed Codex setup waits eight minutes (`tool_timeout_sec = 480`). Existing timeout settings are preserved on upgrade; see the platform guides to update both the service and client settings.
 
 ## Read-only diagnostics
 
@@ -257,7 +257,9 @@ Audit events do not store stdout/stderr, and common secret patterns in commands 
 
 Local stdio defaults to private JSONL files in the user's data directory, rotating at 10 MiB per file with five files retained. Services select journal, Event Log, or the Linux installer-account file backend. The authenticated `/ready` endpoint checks service dependencies; installation also verifies a real MCP command and matching audit lifecycle before discarding upgrade backups.
 
-From 4.1.16, finished processes release command slots even while terminal Audit is pending. Audit waits are limited to five seconds; a failure stops new commands and file transfers and makes `/ready` fail. Output still requires successful terminal Audit. An underlying disk operation may continue after timeout; resolve storage faults and restart the service before retrying.
+From 4.1.16, finished processes release command slots even while terminal Audit is pending. From 6.3.0 Audit waits default to 30 seconds and accept COMMAND_BRIDGE_AUDIT_TIMEOUT_MS=1000..60000; a failure stops new commands and file transfers and makes `/ready` fail. Output still requires successful terminal Audit. An underlying disk operation may continue after timeout; resolve storage faults and restart the service before retrying.
+
+Audit timeouts include queue time. Each command can require two Audit waits in addition to execution; use at least 120 seconds for ordinary client calls. Generated Codex setup uses 480 seconds for the standard five-minute command maximum and Audit settings up to 60 seconds. A longer wait does not repair full storage or permission failures; see the platform guides for recovery.
 
 ## One-command uninstall
 

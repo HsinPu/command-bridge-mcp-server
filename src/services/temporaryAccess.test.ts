@@ -62,6 +62,15 @@ test("corruption, changed grant contents, backward clocks and failed Audit resto
     assert.equal(await denied.refresh(), "allowlist"); await denied.stop();
   } finally { await f.control.stop(); }
 });
+test("opening Audit can exceed five seconds while lease reads remain bounded", async () => {
+  let control!: TemporaryAccess;
+  const issuedAt = Date.now(), id = randomUUID();
+  control = new TemporaryAccess("guarded", async () => JSON.stringify({ schemaVersion: 1, instanceId: control.instanceId, id, action: "open", issuedAt, expiresAt: issuedAt + 60000 }),
+    async action => { if (action === "opened") await new Promise(r => setTimeout(r, 6000)); });
+  try { assert.equal(await control.refresh(), "unrestricted"); assert.equal(control.status().grantId, id); }
+  finally { await control.stop(); }
+});
+
 test("stuck storage reads coalesce and late completion cannot activate a timed-out grant", async () => {
   let release!: (s: string) => void, reads = 0;
   const wait = new Promise<string>(r => { release = r; });
