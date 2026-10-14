@@ -416,8 +416,6 @@ function normalizeAuditEvent(value: unknown): CommandAuditEvent | undefined {
     transfer = { schemaVersion: 1, operation: item.operation as "upload" | "download", path: item.path as string | null, size: item.size as number | null, sha256: item.sha256 as string | null, committed: item.committed };
   }
   return {
-    ...(job ? { job } : {}),
-    ...(transfer ? { fileTransfer: transfer } : {}),
     schemaVersion: AUDIT_SCHEMA_VERSION,
     event: AUDIT_EVENT_NAME,
     auditId,
@@ -433,7 +431,9 @@ function normalizeAuditEvent(value: unknown): CommandAuditEvent | undefined {
     durationMs,
     timedOut: value.timedOut,
     truncated: value.truncated,
-    errorCode
+    errorCode,
+    ...(job ? { job } : {}),
+    ...(transfer ? { fileTransfer: transfer } : {})
   };
 }
 

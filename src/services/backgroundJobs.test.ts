@@ -54,6 +54,7 @@ test("background acceptance survives request abort, uses independent timeout and
     await assert.rejects(f.executor.jobs.start({ ...input, command: "hostname" }), /different arguments/);
     const result = await finished(f.executor, job.jobId);
     assert.equal(result.state, "completed"); assert.equal(result.exitCode, 0); assert.equal(result.timedOut, false);
+    assert.ok(result.outputBytes >= 8);
     assert.equal((await f.executor.jobs.output(job.jobId)).text.trim(), "job-safe");
     const events = f.audit.events.filter(e => e.job?.jobId === job.jobId);
     assert.deepEqual(events.map(e => e.phase), ["attempted", "completed"]);
@@ -160,6 +161,7 @@ test("background output caps keep draining without killing the finite process", 
     const result = await finished(f.executor, job.jobId);
     assert.equal(result.exitCode, 0); assert.equal(result.timedOut, false); assert.equal(result.truncated, true);
     assert.equal(result.state, "completed");
+    assert.ok(result.outputBytes >= 6 * 1024 * 1024);
     const page = await f.executor.jobs.output(job.jobId);
     assert.ok(Buffer.byteLength(JSON.stringify(page)) <= 65536); assert.equal(page.text.length, 8000);
     assert.equal(f.executor.availableCommandSlots, 1);

@@ -26,6 +26,36 @@ const rawSecretValues = [
   "powershell-environment-value"
 ];
 
+test("optional Audit metadata retains the native reader's stable event prefix", () => {
+  const job = { schemaVersion: 1 as const, jobId: "8c2647c8-6aa3-4e22-bb74-99728192c008" };
+  const fileTransfer = { schemaVersion: 1 as const, operation: "upload" as const, path: "safe.bin", size: 1, sha256: "a".repeat(64), committed: true };
+  const line = serializeAuditEvent(createAuditEvent({ phase: "completed", command: "hostname", executionMode: "allowlist", source: "http-bearer", job, fileTransfer }));
+  assert.ok(line.startsWith('{"schemaVersion":1,"event":"command_bridge.audit",'));
+  assert.deepEqual(parseLinuxJournalLines(line)[0].job, job);
+  assert.deepEqual(parseWindowsEventLogLines(line)[0].fileTransfer, fileTransfer);
+});
+
+test("packaged Linux Audit reader returns both background lifecycle events with job metadata", { skip: process.platform !== "linux" }, async () => {
+  const fs = await import("node:fs/promises"), os = await import("node:os"), path = await import("node:path"), child = await import("node:child_process");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "cb-job-reader-"));
+  try {
+    const job = { schemaVersion: 1 as const, jobId: "8c2647c8-6aa3-4e22-bb74-99728192c008" };
+    const data = path.join(root, "events");
+    await fs.writeFile(data, ["attempted", "completed"].map(phase => serializeAuditEvent(createAuditEvent({ phase: phase as "attempted" | "completed", auditId: job.jobId, command: "hostname", executionMode: "allowlist", source: "http-bearer", job }))).join("\n") + "\n", { mode: 0o600 });
+    const journal = path.join(root, "journalctl"), reader = path.join(root, "reader");
+    await fs.writeFile(journal, '#!/bin/sh\ncase "$*" in *"--unit command-bridge.service"*) cat "$CB_READER_DATA" ;; *) exit 8 ;; esac\n', { mode: 0o700 });
+    await fs.writeFile(reader, (await fs.readFile("packaging/linux/audit-reader", "utf8")).replace("/usr/bin/journalctl", '"' + journal + '"'));
+    const result = child.spawnSync("bash", [reader], { encoding: "utf8", timeout: 15000, env: { ...process.env, CB_READER_DATA: data } });
+    assert.equal(result.status, 0, result.stderr);
+    const events = parseLinuxJournalLines(result.stdout);
+    assert.deepEqual(events.map(event => event.phase), ["attempted", "completed"]);
+    assert.ok(events.every(event => event.job?.jobId === job.jobId));
+  } finally {
+    if (!path.resolve(root).startsWith(path.resolve(os.tmpdir()) + path.sep + "cb-job-reader-")) throw new Error("Unsafe private reader cleanup.");
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("redactCommand removes common command credential forms", () => {
   const command = [
     "COMMAND_BRIDGE_BEARER_TOKEN=super-secret-token",

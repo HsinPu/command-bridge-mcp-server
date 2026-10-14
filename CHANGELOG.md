@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.4.1 — 2026-10-14
+
+PATCH: preserve the native Audit event prefix when serializing optional background-job or transfer metadata.
+
+- Keep schemaVersion/event first so the fixed Linux journal reader retains background attempted/terminal events instead of filtering them out. Preserve metadata, masking and exact lifecycle verification.
+- Restore the planned safe output-byte progress counter in job metadata, without exposing running output; retain saved records lacking the counter with a zero default.
+- Add stable-prefix serialization and actual packaged Linux reader regressions; retain all CI service/channel gates. CI 38523008111 exposed this in real Linux installation verification; 6.4.0 was not published by that failed workflow.
+
 ## 6.4.0 — 2026-10-14
 
 MINOR: add compatible, policy-controlled finite background command jobs without changing synchronous command interfaces or deadlines.

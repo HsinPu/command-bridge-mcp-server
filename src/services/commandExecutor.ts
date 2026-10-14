@@ -509,7 +509,6 @@ export class CommandExecutor {
 
       const appendOutput = (current: string, text: string): string => {
         if (!text) return current;
-        background?.activity();
         if (background) {
           const remainingBytes = 10 * 1024 * 1024 - storedOutputBytes;
           const remainingChars = 5 * 1024 * 1024 - stdout.length - stderr.length;
@@ -558,8 +557,8 @@ export class CommandExecutor {
           return "";
         }
       };
-      child.stdout.on("data", (chunk: Buffer) => { stdout = appendOutput(stdout, decode(stdoutDecoder, chunk)); });
-      child.stderr.on("data", (chunk: Buffer) => { stderr = appendOutput(stderr, decode(stderrDecoder, chunk)); });
+      child.stdout.on("data", (chunk: Buffer) => { stdout = appendOutput(stdout, decode(stdoutDecoder, chunk)); background?.activity(chunk.length, truncated); });
+      child.stderr.on("data", (chunk: Buffer) => { stderr = appendOutput(stderr, decode(stderrDecoder, chunk)); background?.activity(chunk.length, truncated); });
       child.stdout.once("end", () => { stdout = appendOutput(stdout, decode(stdoutDecoder)); });
       child.stderr.once("end", () => { stderr = appendOutput(stderr, decode(stderrDecoder)); });
 

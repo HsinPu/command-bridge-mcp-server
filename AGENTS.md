@@ -221,3 +221,5 @@ npm start
 - job metadata 沿用 Audit schemaVersion 1；每工作 attempted 與唯一終結事件。終結 Audit 與安全保存成功前不公開 stdout/stderr，執行中僅回報 metadata。輸出有編碼、5 Mi 字元／10 MiB 序列化容量限制，超限持續排空而不殺正常工作；總配額 100 MiB，保留 24 小時，分頁回應小於 64 KiB。
 - Linux /var/lib/command-bridge-jobs 與 Windows ProgramData/CommandBridgeMCP/jobs 使用私有權限、平台 ACL／SELinux 與固定 UUID 檔名；Linux 管理父目錄 root:root 0755、各數值 UID 子目錄 0700，切換成功後刪除舊專用帳號前只封存其目錄 metadata 為 root 私有以防 UID 重用；拒絕連結、非預期檔案或其他實例紀錄。一般卸載保留，purge 先預檢再刪除；自訂位置由管理員自行管理。
 - MCP 更新遇到未完成背景工作拒絕。管理員重啟／更新可中斷工作；取消程序不代表 Docker 或其他外部服務工作停止。共用 Token 不提供不同對話隔離；既有 guarded／自我保護不升級為完整 root／任意腳本沙箱。
+
+- 6.4.1 起，Audit 序列化固定以 schemaVersion／event 作為 JSON 前綴，job／fileTransfer 選用 metadata 置於固定欄位之後；需測試實際 Linux 包裝 reader 能讀取完整背景工作 lifecycle，不以記憶體 Audit 模擬取代原生篩選驗證。

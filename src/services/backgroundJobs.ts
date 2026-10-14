@@ -10,7 +10,7 @@ import { JobStore } from "./jobStore.js";
 export interface BackgroundExecution {
   attempted: CommandAuditEvent;
   mode: AppConfig["executionMode"];
-  activity(): void;
+  activity(bytes: number, truncated: boolean): void;
   finalizing(): void;
   releaseSlot(): void;
 }
@@ -28,10 +28,11 @@ const recordSchema = z.object({
   createdAt: z.number().int().nonnegative(), startedAt: z.number().int().nonnegative().nullable(), endedAt: z.number().int().nonnegative().nullable(),
   auditId: z.string().uuid(), auditStatus: z.enum(["pending", "confirmed", "unavailable", "unknown"]),
   errorCode: z.string().max(100).nullable(), terminationStatus: z.enum(["not_requested", "requested", "confirmed", "unknown"]),
+  outputBytes: z.number().int().nonnegative().default(0),
   result: z.object({ ok: z.boolean(), shell: z.enum(["bash", "sh", "powershell", "cmd"]), cwd: z.string().max(4096), exitCode: z.number().int().nullable(), signal: z.string().nullable(), stdout: z.string().max(5242880), stderr: z.string().max(5242880), timedOut: z.boolean(), truncated: z.boolean(), durationMs: z.number().nonnegative() }).strict().nullable()
 }).strict();
 type Record = z.infer<typeof recordSchema>;
-interface Active { request: CommandRequest; event: CommandAuditEvent; controller: AbortController; queuedAt: number; activityAt: number | null; operation?: Promise<void> }
+interface Active { request: CommandRequest; event: CommandAuditEvent; controller: AbortController; queuedAt: number; activityAt: number | null; truncated: boolean; operation?: Promise<void> }
 const live = (record: Record) => ["queued", "starting", "running", "finalizing"].includes(record.state);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -95,7 +96,7 @@ export class BackgroundJobService {
       createdAt: new Date(record.createdAt).toISOString(), startedAt: record.startedAt === null ? null : new Date(record.startedAt).toISOString(),
       endedAt: record.endedAt === null ? null : new Date(record.endedAt).toISOString(), auditId: record.auditId, auditStatus: record.auditStatus,
       outputAvailable: !publishing && record.auditStatus === "confirmed" && record.result !== null,
-      exitCode: record.result?.exitCode ?? null, timedOut: record.result?.timedOut ?? false, truncated: record.result?.truncated ?? false,
+      exitCode: record.result?.exitCode ?? null, timedOut: record.result?.timedOut ?? false, truncated: record.result?.truncated ?? this.active.get(record.jobId)?.truncated ?? false, outputBytes: record.outputBytes,
       terminationStatus: record.terminationStatus, errorCode: record.errorCode,
       durationMs: record.result?.durationMs ?? (record.startedAt === null ? 0 : Math.max(0, (record.endedAt ?? Date.now()) - record.startedAt)),
       lastActivityAt: this.active.get(record.jobId)?.activityAt ?? null };
@@ -140,9 +141,9 @@ export class BackgroundJobService {
       throw error;
     }
     const record: Record = { schemaVersion: 1, jobId, requestId, fingerprint, binding: this.binding, state: "queued", mode, createdAt: Date.now(), startedAt: null, endedAt: null,
-      auditId: event.auditId, auditStatus: "pending", errorCode: null, terminationStatus: "not_requested", result: null };
+      auditId: event.auditId, auditStatus: "pending", errorCode: null, terminationStatus: "not_requested", result: null, outputBytes: 0 };
     this.records.set(jobId, record);
-    this.active.set(jobId, { request, event, controller: new AbortController(), queuedAt: performance.now(), activityAt: null });
+    this.active.set(jobId, { request, event, controller: new AbortController(), queuedAt: performance.now(), activityAt: null, truncated: false });
     try { await this.store!.operation(async () => { await this.cleanup(); await this.store!.save(jobId, record); }); }
     catch (error) {
       this.active.delete(jobId); this.records.delete(jobId); this.fault = true;
@@ -182,7 +183,7 @@ export class BackgroundJobService {
       await this.store!.operation(() => this.store!.save(record.jobId, record));
       enteredExecutor = true;
       const result = await this.executor.executeJob(active.request, active.controller.signal, { attempted: active.event, mode: record.mode,
-        activity: () => { active.activityAt = Date.now(); },
+        activity: (bytes, truncated) => { active.activityAt = Date.now(); active.truncated = truncated; record.outputBytes = Math.min(Number.MAX_SAFE_INTEGER, record.outputBytes + bytes); },
         releaseSlot,
         finalizing: () => { record.state = "finalizing"; } });
       record.result = result; record.state = result.timedOut ? "timed_out" : result.ok ? "completed" : "failed"; record.auditStatus = "confirmed";

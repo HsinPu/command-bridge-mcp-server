@@ -1,4 +1,4 @@
-# Background command jobs / 通用背景工作 (6.4.0)
+# Background command jobs / 通用背景工作 (6.4.1)
 
 Background jobs run finite, non-interactive commands without holding one MCP call open for their entire duration. They are available on Linux and Windows under the same service account and command policies as synchronous execution. No root worker or additional sudo permission is installed.
 
@@ -59,7 +59,7 @@ Background and synchronous commands share `COMMAND_BRIDGE_MAX_PARALLEL_COMMANDS`
 
 ## Output and storage / 輸出與保存
 
-Running jobs expose metadata, elapsed time and last output activity, not live output text. Output is available only after terminal Audit and result storage succeed. Raw stdout/stderr are never written to Audit and may contain secrets; protected output is readable by authenticated clients and authorized host administrators.
+Running jobs expose metadata, elapsed time, raw pipe output byte count and last output activity, not live output text. Output is available only after terminal Audit and result storage succeed. Raw stdout/stderr are never written to Audit and may contain secrets; protected output is readable by authenticated clients and authorized host administrators.
 
 Each job retains at most 5 Mi UTF-16 code units and 10 MiB of serialized output, combined across stdout/stderr. At the cap, `truncated=true`: the service continues draining pipes instead of killing the finite command. Exit success with truncated output remains a completed job. Invalid selected encoding still fails and withholds output. Page cursors use UTF-16 offsets and never split surrogate pairs; serialized pages stay below 64 KiB.
 
