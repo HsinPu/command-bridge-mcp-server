@@ -27,6 +27,7 @@ export type AuditPhase = "attempted" | "blocked" | "completed" | "failed";
 export type AuditSource = "http-bearer" | "stdio";
 
 export interface CommandAuditEvent {
+  job?: { schemaVersion: 1; jobId: string };
   fileTransfer?: FileTransferAudit;
   schemaVersion: typeof AUDIT_SCHEMA_VERSION;
   event: typeof AUDIT_EVENT_NAME;
@@ -47,6 +48,7 @@ export interface CommandAuditEvent {
 }
 
 export interface CreateAuditEventInput {
+  job?: { schemaVersion: 1; jobId: string };
   fileTransfer?: FileTransferAudit;
   auditId?: string;
   timestamp?: string;
@@ -100,6 +102,7 @@ export function createAuditLog(config: AppConfig): AuditLog {
 
 export function createAuditEvent(input: CreateAuditEventInput): CommandAuditEvent {
   return {
+    ...(input.job ? { job: input.job } : {}),
     ...(input.fileTransfer ? { fileTransfer: input.fileTransfer } : {}),
     schemaVersion: AUDIT_SCHEMA_VERSION,
     event: AUDIT_EVENT_NAME,
@@ -399,6 +402,11 @@ function normalizeAuditEvent(value: unknown): CommandAuditEvent | undefined {
   }
 
   let transfer: FileTransferAudit | undefined;
+  let job: CommandAuditEvent["job"];
+  if (value.job !== undefined) {
+    if (!isRecord(value.job) || value.job.schemaVersion !== 1 || typeof value.job.jobId !== "string" || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value.job.jobId)) return undefined;
+    job = { schemaVersion: 1, jobId: value.job.jobId };
+  }
   if (value.fileTransfer !== undefined) {
     const item = value.fileTransfer;
     if (!isRecord(item) || item.schemaVersion !== 1 || (item.operation !== "upload" && item.operation !== "download") ||
@@ -408,6 +416,7 @@ function normalizeAuditEvent(value: unknown): CommandAuditEvent | undefined {
     transfer = { schemaVersion: 1, operation: item.operation as "upload" | "download", path: item.path as string | null, size: item.size as number | null, sha256: item.sha256 as string | null, committed: item.committed };
   }
   return {
+    ...(job ? { job } : {}),
     ...(transfer ? { fileTransfer: transfer } : {}),
     schemaVersion: AUDIT_SCHEMA_VERSION,
     event: AUDIT_EVENT_NAME,

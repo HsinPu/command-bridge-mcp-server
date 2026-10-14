@@ -56,6 +56,7 @@ test("Linux bootstrap replaces legacy uninstallers before mutation and trusts sa
     // Redirect every managed host location, including privileged assets, to this fixture.
     const bootstrap = join(directory, "bootstrap.sh");
     writeFileSync(bootstrap, readFileSync("scripts/bootstrap.sh", "utf8")
+      .replaceAll("/var/lib/command-bridge-jobs", join(directory, "jobs"))
       .replaceAll("/opt/command-bridge-mcp-server", join(directory, "legacy"))
       .replaceAll("/opt/command-bridge", old).replaceAll("/usr/local/lib/command-bridge", app)
       .replaceAll("/etc/systemd/system/", `${directory}/units/`)
@@ -133,6 +134,7 @@ else [[ "\${FAIL_ARCHIVE:-0}" == 0 ]] || exit 22; cp "$FIXTURE/archive.tar.gz" "
     chmodSync(join(bin, "curl"), 0o755); chmodSync(join(bin, "stat"), 0o755);
     const bootstrap = join(directory, "bootstrap.sh");
     writeFileSync(bootstrap, readFileSync("scripts/bootstrap.sh", "utf8")
+      .replaceAll("/var/lib/command-bridge-jobs", join(directory, "jobs"))
       .replaceAll("/opt/command-bridge-mcp-server", legacy).replaceAll("/opt/command-bridge", old)
       .replaceAll("/usr/local/lib/command-bridge", app).replaceAll("/etc/systemd/system/", `${directory}/units/`)
       .replaceAll("/usr/local/libexec/", `${directory}/helpers/`).replaceAll("/etc/sudoers.d/", `${directory}/sudoers/`));

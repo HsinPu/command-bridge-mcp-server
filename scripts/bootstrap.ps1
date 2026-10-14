@@ -25,7 +25,11 @@ foreach ($key in @('Yes', 'Purge', 'DryRun', 'PrintCodexSetup', 'CodexUrl', 'Cod
   if ($PSBoundParameters.ContainsKey($key)) { $arguments[$key] = $PSBoundParameters[$key] }
 }
 $installed = Join-Path $env:ProgramFiles 'CommandBridgeMCP\uninstall.ps1'
-if ($Uninstall -and (Test-Path -LiteralPath $installed)) { & $installed @arguments; exit }
+$jobRoot = Join-Path $env:ProgramData 'CommandBridgeMCP\jobs'
+if ($Uninstall -and (Test-Path -LiteralPath $installed)) {
+  $hasJobPreflight = [IO.File]::ReadAllText($installed).Contains('Unsafe background job purge path')
+  if (-not $Purge -or -not (Test-Path -LiteralPath $jobRoot) -or $hasJobPreflight) { & $installed @arguments; exit }
+}
 $work = Join-Path $env:TEMP ('command-bridge-bootstrap-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
@@ -49,6 +53,7 @@ try {
   [IO.File]::WriteAllText((Join-Path $root '.command-bridge-source-sha'), $fields[0])
   [IO.File]::WriteAllText((Join-Path $root '.command-bridge-source-version'), $fields[1])
   $entry = if ($Uninstall) { 'uninstall.ps1' } else { 'install.ps1' }
+  if ($Uninstall -and $Purge -and (Test-Path -LiteralPath $jobRoot) -and -not ([IO.File]::ReadAllText((Join-Path $root "scripts\windows\$entry"))).Contains('Unsafe background job purge path')) { throw 'Verified uninstaller cannot validate job storage; no service changes were made.' }
   & (Join-Path $root "scripts\windows\$entry") @arguments
 } finally {
   $resolved = [IO.Path]::GetFullPath($work)

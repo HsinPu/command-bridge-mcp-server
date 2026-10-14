@@ -133,6 +133,15 @@ acquire_lock() {
   flock -n 9 || fail "Another CommandBridge install or uninstall operation is running."
 }
 
+validate_background_job_removal() {
+  [[ "${PURGE}" == 1 ]] || return 0
+  if [[ -e /var/lib/command-bridge-jobs || -L /var/lib/command-bridge-jobs ]]; then
+    [[ -d /var/lib/command-bridge-jobs && ! -L /var/lib/command-bridge-jobs && "$(stat -c %u /var/lib/command-bridge-jobs)" == 0 && "$(stat -c %a /var/lib/command-bridge-jobs)" == 755 ]] || fail "Unsafe background job parent; nothing was removed."
+    assert_admin_path /var/lib
+    assert_no_program_mounts /var/lib/command-bridge-jobs
+  fi
+}
+
 print_plan() {
   printf '\n'
   log "Planned removal:"
@@ -197,7 +206,7 @@ confirm_removal() {
 
 assert_safe_tree_path() {
   case "$1" in
-    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-diagnostics" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update" | "/var/lib/command-bridge-recovery")
+    "${INSTALL_ROOT}" | "${CONFIG_DIR}" | "${STATE_DIR}" | "${INSTALLER_STATE_DIR}" | "${SERVICE_HOME}" | "/usr/local/libexec/command-bridge-diagnostics" | "/usr/local/libexec/command-bridge-update" | "/var/lib/command-bridge-update" | "/var/lib/command-bridge-recovery" | "/var/lib/command-bridge-jobs")
       ;;
     "$PREVIOUS_INSTALL_ROOT" | "$LEGACY_INSTALL_ROOT" | "$INSTALL_ROOT.migration-backup" | "$PREVIOUS_INSTALL_ROOT.migration-backup" | "$LEGACY_INSTALL_ROOT.migration-backup" | "$LEGACY_CONFIG_DIR" | "$LEGACY_STATE_DIR") ;;
     *)
@@ -540,6 +549,7 @@ main() {
 
   assert_tree_is_not_mounted "${INSTALL_ROOT}"
   if [[ "${PURGE}" == "1" ]]; then
+    validate_background_job_removal
     if [[ -e "${CONFIG_DIR}/client-setup.json" || -L "${CONFIG_DIR}/client-setup.json" ]]; then
       assert_admin_path "${CONFIG_DIR}/client-setup.json"
       [[ -f "${CONFIG_DIR}/client-setup.json" && ! -L "${CONFIG_DIR}/client-setup.json" ]] || fail "Unsafe client description; no files were removed."
@@ -575,12 +585,14 @@ main() {
     remove_tree "${SERVICE_HOME}"
     remove_tree /var/lib/command-bridge-update
     remove_tree /var/lib/command-bridge-recovery
+    remove_tree /var/lib/command-bridge-jobs
     remove_tree "$LEGACY_CONFIG_DIR"
     remove_tree "$LEGACY_STATE_DIR"
   fi
 
   print_summary
   log "Update task records in /var/lib/command-bridge-update are preserved unless --purge is used."
+  log "Background job records in /var/lib/command-bridge-jobs are preserved unless --purge is used."
   log "Private installer recovery records in /var/lib/command-bridge-recovery are preserved unless --purge is used."
 }
 

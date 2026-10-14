@@ -75,7 +75,7 @@ export PATH="$work/bin:$PATH"
 sed -e "s|/usr/local/lib/command-bridge|$app|g" -e "s|/opt/command-bridge-mcp-server|$legacy|g" \
     -e "s|/opt/command-bridge|$old|g" -e "s|/etc/systemd/system/|$work/units/|g" \
     -e "s|/usr/local/libexec/|$work/helpers/|g" -e "s|/etc/sudoers.d/|$work/sudoers/|g" \
-    -e "s|/var/lib/command-bridge-recovery|$work/recovery|g" \
+    -e "s|/var/lib/command-bridge-recovery|$work/recovery|g" -e "s|/var/lib/command-bridge-jobs|$work/jobs|g" \
     scripts/bootstrap.sh > "$work/bootstrap.sh"
 archive_modern() {
   cp "$work/modern.sh" "$work/source/scripts/linux-systemd/uninstall.sh"

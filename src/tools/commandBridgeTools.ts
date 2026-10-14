@@ -7,9 +7,11 @@ import { DEFAULT_AUDIT_EVENT_LIMIT, MAX_AUDIT_EVENT_LIMIT } from "../services/au
 import { CommandExecutor } from "../services/commandExecutor.js";
 import { getSystemInfo } from "../services/systemInfoService.js";
 import { outputEncodings } from "../services/textEncoding.js";
+import { jobRequestSchema } from "../services/backgroundJobs.js";
 
 const shellSchema = z.enum(["bash", "sh", "powershell", "cmd"]);
 const auditEventSchema = z.object({
+  job: z.object({ schemaVersion: z.literal(1), jobId: z.string().uuid() }).optional(),
   fileTransfer: z.object({ schemaVersion: z.literal(1), operation: z.enum(["upload", "download"]), path: z.string().nullable(), size: z.number().nullable(), sha256: z.string().nullable(), committed: z.boolean() }).optional(),
   schemaVersion: z.literal(1),
   event: z.literal("command_bridge.audit"),
@@ -34,6 +36,26 @@ export function registerCommandBridgeTools(
   config: AppConfig,
   executor: CommandExecutor
 ): void {
+  server.registerTool("command_bridge_start_job", {
+    title: "Submit background command", description: "Submit a finite non-interactive command under the current policies and service account. Returns acceptance, not completion. Use a unique requestId and reuse it after a lost response. Disconnect does not cancel accepted jobs. Disabled unless configured; output is withheld until terminal Audit succeeds.",
+    inputSchema: jobRequestSchema, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
+  }, async (input, extra) => { try { return toToolResult(await executor.jobs.start(input, extra.signal)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_get_job", {
+    title: "Get background job", description: "Read retained job status without command text or output. A shared Bearer token grants access to all jobs in this service.", inputSchema: z.object({ jobId: z.string().uuid() }).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, async ({ jobId }) => { try { return toToolResult(await executor.jobs.get(jobId)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_list_jobs", {
+    title: "List background jobs", description: "List bounded job metadata; records expire after 24 hours and are not a durable Audit replacement.", inputSchema: z.object({ offset: z.number().int().min(0).max(100).default(0), limit: z.number().int().min(1).max(50).default(20) }).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, async ({ offset, limit }) => { try { return toToolResult(await executor.jobs.list(offset, limit)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_read_job_output", {
+    title: "Read background job output", description: "Read one bounded stdout/stderr page only after terminal Audit and storage succeed. Output may contain sensitive data; not available during execution.", inputSchema: z.object({ jobId: z.string().uuid(), stream: z.enum(["stdout", "stderr"]).default("stdout"), cursor: z.number().int().min(0).max(5242880).default(0), maxChars: z.number().int().min(1).max(8000).default(8000) }).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, async ({ jobId, stream, cursor, maxChars }) => { try { return toToolResult(await executor.jobs.output(jobId, stream, cursor, maxChars)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
+  server.registerTool("command_bridge_cancel_job", {
+    title: "Cancel background job", description: "Cancel queued work or request process-tree termination. Requested is not confirmed termination; Docker and other external daemons may continue remote work.", inputSchema: z.object({ jobId: z.string().uuid() }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+  }, async ({ jobId }) => { try { return toToolResult(await executor.jobs.cancel(jobId)); } catch (error) { return toToolResult(toErrorPayload(error), true); } });
   server.registerTool("command_bridge_update", {
     title: "Update this CommandBridge service",
     description: "Request an independent managed update from the fixed verified CI channel. Enabled by default for service installations. Returns acceptance and a job ID, not installation success. The MCP connection may disconnect during restart; reconnect and query update status. No URL, shell, version or installer arguments are accepted.",
@@ -80,6 +102,7 @@ export function registerCommandBridgeTools(
         totalMemoryMb: z.number().int(),
         freeMemoryMb: z.number().int(),
         executionMode: z.enum(["allowlist", "guarded", "unrestricted"]),
+        backgroundJobs: z.object({ enabled: z.boolean(), defaultTimeoutMs: z.number().int(), maxTimeoutMs: z.number().int() }).optional(),
         managedUpdate: z.object({ enabled: z.boolean(), serviceInstallationRequired: z.literal(true) }).optional(),
         fileTransfer: z.object({ uploadEnabled: z.boolean(), downloadEnabled: z.boolean(), maxBytes: z.number().int(), overwrite: z.literal(false) }).optional(),
         allowedShells: z.array(shellSchema),

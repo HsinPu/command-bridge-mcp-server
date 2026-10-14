@@ -212,3 +212,12 @@ npm start
 - 4.6.1 起，拋棄式 Linux 測試共用受環境限制的父目錄準備，涵蓋 `/opt`、`/usr/local`、`/usr/local/bin`、`/usr/local/lib`；不得為了 CI 放寬正式部署的所有權或寫入檢查。三個固定程式根目錄的 `.migration-backup` 也納入直接自改攔截，不以任意前綴匹配擴大保護範圍。新版本機卸載器缺少 `layout.sh` 時使用已驗證 SHA 後備，包含 help／dry-run；既有 helper、連結或父目錄不安全時仍須拒絕，不可把不安全當成缺失後略過檢查。
 - 4.6.2 起，相容連結須先檢查原路徑父目錄，不能只檢查解析後目標。bootstrap 也須檢查原路徑祖先與實際目標，執行已驗證的實際腳本／Runtime 路徑；卸載前檢查全部既有根目錄／備份的父目錄。舊版缺少完整預檢或 channel／下載／新版 helper 失敗時不得先停掉舊服務，須有兩帳號模式的真實服務保留及 MCP／Audit 驗證。
 - 5.0.0 起，Linux layout service 驗證須涵蓋一般具 sudo 權限的 CI 執行者；受保護的服務／測試帳號工作目錄使用固定 `sudo test` 檢查，不放寬正式目錄權限。失敗只輸出固定模式／階段與行號，不輸出原始指令、設定或 Token。重裝來源以已驗證 channel 為準；成功後兩個舊程式路徑必須不存在，不能把留下相容連結當作完成。
+
+## 通用背景工作（6.4.0 起）
+
+- 新增 start_job/get_job/list_jobs/read_job_output/cancel_job 五個 command_bridge MCP 工具；保留同步指令介面與時限。新服務安裝預設啟用，舊設定缺欄位與開發環境維持停用；須由管理員明確啟用並準備私有儲存。
+- 背景工作預設 30 分鐘、上限 60 分鐘，可由管理員設定至一天；提交超限明確拒絕。與同步指令共用名額，啟動保留及釋放各一次，執行前重驗政策、實際 cwd、自我保護及模式；模式與提交時不同拒絕重用。
+- 受管理服務帳號與 sudo 不變；UUID requestId 去重只在紀錄保存期間有效。斷線不取消已接受工作；重啟未完成紀錄標記 interrupted，不自動重跑、不憑保存 PID 殺程序。停止仍限 15 秒。
+- job metadata 沿用 Audit schemaVersion 1；每工作 attempted 與唯一終結事件。終結 Audit 與安全保存成功前不公開 stdout/stderr，執行中僅回報 metadata。輸出有編碼、5 Mi 字元／10 MiB 序列化容量限制，超限持續排空而不殺正常工作；總配額 100 MiB，保留 24 小時，分頁回應小於 64 KiB。
+- Linux /var/lib/command-bridge-jobs 與 Windows ProgramData/CommandBridgeMCP/jobs 使用私有權限、平台 ACL／SELinux 與固定 UUID 檔名；Linux 管理父目錄 root:root 0755、各數值 UID 子目錄 0700，切換成功後刪除舊專用帳號前只封存其目錄 metadata 為 root 私有以防 UID 重用；拒絕連結、非預期檔案或其他實例紀錄。一般卸載保留，purge 先預檢再刪除；自訂位置由管理員自行管理。
+- MCP 更新遇到未完成背景工作拒絕。管理員重啟／更新可中斷工作；取消程序不代表 Docker 或其他外部服務工作停止。共用 Token 不提供不同對話隔離；既有 guarded／自我保護不升級為完整 root／任意腳本沙箱。

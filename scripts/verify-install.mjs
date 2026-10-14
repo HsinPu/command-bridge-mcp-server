@@ -1,6 +1,7 @@
 import { parse } from 'dotenv';
 import { readFileSync } from 'node:fs';
 import { request } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { normalizeAllowedHosts } from '../dist/config/allowedHosts.js';
 import { decodeUtf8File } from '../dist/services/textEncoding.js';
 import { commandVerificationSummary } from '../dist/services/verificationSummary.js';
@@ -66,6 +67,29 @@ try {
     if (!matched) await new Promise(resolve => setTimeout(resolve, 250));
   }
   if (!matched) throw new Error('Matching audit lifecycle was not returned.');
+  if (!expectedError && config.COMMAND_BRIDGE_JOBS_ENABLED === 'true') {
+    const requestId = randomUUID();
+    const submitted = await callTool({ name: 'command_bridge_start_job', arguments: { requestId, command: 'hostname' } });
+    const jobId = submitted.structuredContent?.jobId;
+    if (submitted.isError || !jobId) throw new Error('Background job submission failed.');
+    const duplicate = await callTool({ name: 'command_bridge_start_job', arguments: { requestId, command: 'hostname' } });
+    if (duplicate.isError || duplicate.structuredContent?.jobId !== jobId) throw new Error('Background job deduplication failed.');
+    const deadline = performance.now() + requestMs;
+    let job;
+    do {
+      const response = await callTool({ name: 'command_bridge_get_job', arguments: { jobId } });
+      if (response.isError) throw new Error('Background job query failed.');
+      job = response.structuredContent;
+      if (!['queued','starting','running','finalizing'].includes(job?.state)) break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } while (performance.now() < deadline);
+    if (job?.state !== 'completed' || job.auditStatus !== 'confirmed' || job.exitCode !== 0) throw new Error('Background job completion failed.');
+    const output = await callTool({ name: 'command_bridge_read_job_output', arguments: { jobId } });
+    if (output.isError || !output.structuredContent?.text?.trim()) throw new Error('Background job output verification failed.');
+    const audits = await callTool({ name: 'command_bridge_list_audit_events', arguments: { limit: 100 } });
+    const events = audits.structuredContent?.events?.filter(e => e.job?.jobId === jobId) ?? [];
+    if (events.filter(e => e.phase === 'attempted').length !== 1 || events.filter(e => e.phase === 'completed').length !== 1) throw new Error('Background job Audit lifecycle verification failed.');
+  }
   const diagnostics = await callTool({name:'command_bridge_get_diagnostics',arguments:{limit:20}});
   const summary = diagnostics.structuredContent;
   if(diagnostics.isError || !summary?.audit?.available || summary.mode!=='normal') throw new Error('Independent diagnostics verification failed.');

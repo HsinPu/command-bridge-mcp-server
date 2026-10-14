@@ -87,14 +87,20 @@ export function nativeUpdateAdapter(): UpdateAdapter {
 export class ManagedUpdateService {
   private pending?: Promise<UpdateJob>;
   private stopping = false;
+  private accepted = false;
+  get busy(): boolean { return this.accepted || this.operations.size > 0; }
   private readonly operations = new Set<Promise<UpdateJob>>();
   private readonly audit: AuditLog;
-  constructor(private readonly config: AppConfig, audit: AuditLog, private readonly adapter = nativeUpdateAdapter()) {
+  constructor(private readonly config: AppConfig, audit: AuditLog, private readonly adapter = nativeUpdateAdapter(), private readonly jobsActive = () => false) {
     this.audit = audit instanceof BoundedAuditLog ? audit : new BoundedAuditLog(audit, auditTimeout(config));
   }
   stop(): void { this.stopping = true; }
   async shutdown(): Promise<void> { this.stop(); await Promise.allSettled([...this.operations]); }
-  status(jobId?: string): Promise<UpdateJob> { return this.adapter.status(jobId); }
+  async status(jobId?: string): Promise<UpdateJob> {
+    const job = await this.adapter.status(jobId);
+    if (!jobId && ["succeeded", "failed", "interrupted"].includes(job.state)) this.accepted = false;
+    return job;
+  }
   start(signal?: AbortSignal): Promise<UpdateJob> {
     const operation = this.startInternal(signal);
     this.operations.add(operation);
@@ -115,7 +121,9 @@ export class ManagedUpdateService {
     let job: UpdateJob;
     try {
       if (this.stopping || signal?.aborted || this.config.mcpUpdateEnabled === false) throw new AppError("UPDATE_DISABLED", "Managed update requests are disabled or stopping.", "An administrator can enable COMMAND_BRIDGE_MCP_UPDATE_ENABLED.");
+      if (this.jobsActive()) throw new AppError("UPDATE_JOBS_ACTIVE", "Wait for background jobs to finish or cancel them before updating.");
       job = await this.dispatch();
+      this.accepted = true;
     } catch (error) {
       await this.audit.write({ ...event, timestamp: new Date().toISOString(), phase: error instanceof AppError && error.code === "UPDATE_DISABLED" ? "blocked" : "failed", errorCode: error instanceof AppError ? error.code : "UPDATE_CONTROL_FAILED" });
       throw error;

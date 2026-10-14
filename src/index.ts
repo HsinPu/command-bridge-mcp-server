@@ -30,6 +30,7 @@ async function main(): Promise<void> {
   ]);
   const config = loadConfig();
   const executor = new CommandExecutor(config);
+  await executor.jobs.initialize();
   const readiness = await executor.startupReadiness();
   if (!permitsDiagnosticStartup(readiness)) throw new Error("Startup dependency checks failed: " + Object.entries(readiness.checks).filter(([, ok]) => !ok).map(([name]) => name).join(", "));
 

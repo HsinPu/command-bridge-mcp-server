@@ -8,6 +8,11 @@ import { parseAuditTimeout, auditRequestTimeout } from "../config/auditTimeout.j
 export function auditStartupBudget(bytes: Uint8Array): number {
   return auditRequestTimeout(parseAuditTimeout(parseSavedConfiguration(bytes).COMMAND_BRIDGE_AUDIT_TIMEOUT_MS)) + 10_000;
 }
+export function jobStorageSettings(bytes: Uint8Array): { enabled: boolean; root: string | null } {
+  const values = parse(decodeUtf8File(bytes));
+  if (values.COMMAND_BRIDGE_JOBS_ENABLED !== undefined && !["true", "false"].includes(values.COMMAND_BRIDGE_JOBS_ENABLED)) throw new Error("Invalid background job enablement.");
+  return { enabled: values.COMMAND_BRIDGE_JOBS_ENABLED === "true", root: values.COMMAND_BRIDGE_JOBS_ROOT ?? null };
+}
 
 export interface ClientSetup {
   schemaVersion: 1;

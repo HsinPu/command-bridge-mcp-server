@@ -216,7 +216,7 @@ JS
   sudo test -f "$retained/snapshots/update-assets-backup/complete"
   stage=purge
   sudo bash "$work/bootstrap.sh" --uninstall --purge --yes > "$work/purge-$mode.log" 2>&1 || { tail -n 30 "$work/purge-$mode.log"; exit 1; }
-  for path in /etc/command-bridge /var/lib/command-bridge /var/lib/command-bridge-installer /var/lib/command-bridge-update /var/lib/command-bridge-recovery; do sudo test ! -e "$path"; done
+  for path in /etc/command-bridge /var/lib/command-bridge /var/lib/command-bridge-installer /var/lib/command-bridge-update /var/lib/command-bridge-recovery /var/lib/command-bridge-jobs; do sudo test ! -e "$path"; done
   getent passwd "$account" >/dev/null
   echo "Real $mode migration, activation evidence, rollback, MCP update and complete uninstall passed."
 done

@@ -64,6 +64,14 @@ if ($updateTask -and $updateTask.State -eq 'Running') { throw 'A managed update 
 $service = Get-ManagedService
 Assert-ManagedServicePath $service
 if ($Purge) {
+  $jobRoot = Join-Path $ConfigRoot 'jobs'
+  if (Get-Item -LiteralPath $jobRoot -Force -ErrorAction SilentlyContinue) {
+    if ((Get-Item -LiteralPath $jobRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unsafe background job purge path; no service changes were made.' }
+    foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries($jobRoot)) {
+      $item = Get-Item -LiteralPath $entry -Force
+      if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unsafe background job record; no service changes were made.' }
+    }
+  }
   $description = Join-Path $ConfigRoot 'client-setup.json'
   if (Get-Item -LiteralPath $description -Force -ErrorAction SilentlyContinue) {
     . (Join-Path $PSScriptRoot 'installation-paths.ps1')

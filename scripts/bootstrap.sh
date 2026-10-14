@@ -85,6 +85,10 @@ if [[ "$mode" == uninstall ]]; then
           break
         fi
         [[ -f "$helper" && ! -L "$helper" ]] && trusted_installed_path "$helper" || { echo 'Installed layout helper is unsafe.' >&2; exit 1; }
+        if [[ ( -e /var/lib/command-bridge-jobs || -L /var/lib/command-bridge-jobs ) ]] && ! grep -Fq 'validate_background_job_removal()' "$saved_uninstaller"; then
+          echo 'Installed uninstaller cannot validate retained job storage; using the verified channel uninstaller.' >&2
+          break
+        fi
         if [[ ( -e /var/lib/command-bridge-recovery || -L /var/lib/command-bridge-recovery ) ]] && ! grep -Fq 'validate_installer_recovery()' "$helper"; then
           echo 'Installed uninstaller cannot inspect retained recovery records; using the verified channel uninstaller.' >&2
           break
@@ -145,6 +149,9 @@ printf '%s\n' "$sha" > "$work/source/.command-bridge-source-sha"
 printf '%s\n' "${fields[1]}" > "$work/source/.command-bridge-source-version"
 if [[ "$mode" == uninstall ]]; then
   uninstaller="$work/source/scripts/linux-systemd/uninstall.sh"
+  if [[ ( -e /var/lib/command-bridge-jobs || -L /var/lib/command-bridge-jobs ) ]] && ! grep -Fq 'validate_background_job_removal()' "$uninstaller"; then
+    echo 'Verified uninstaller cannot validate retained job storage; no changes were made.' >&2; exit 1
+  fi
   if grep -Fq 'remove_all_program_roots' "$uninstaller"; then
     [[ -f "${uninstaller%/*}/layout.sh" && ! -L "${uninstaller%/*}/layout.sh" ]] || { echo 'Verified uninstaller layout helper is missing or invalid; no changes were made.' >&2; exit 1; }
     if [[ ( -e /var/lib/command-bridge-recovery || -L /var/lib/command-bridge-recovery ) ]] && ! grep -Fq 'validate_installer_recovery()' "${uninstaller%/*}/layout.sh"; then

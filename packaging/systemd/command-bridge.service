@@ -33,7 +33,7 @@ MemoryMax=512M
 
 StateDirectory=command-bridge
 StateDirectoryMode=0750
-ReadWritePaths=/var/lib/command-bridge/work /var/lib/command-bridge-update
+ReadWritePaths=/var/lib/command-bridge/work /var/lib/command-bridge-update -/var/lib/command-bridge-jobs
 
 # Root-owned, no-argument Audit and update-request helpers are authorized by
 # separate restricted sudoers rules. Updates run in a separate systemd unit.

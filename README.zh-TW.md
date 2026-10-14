@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.3.0-blue)
+![Version](https://img.shields.io/badge/version-6.4.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -181,6 +181,11 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 | 工具 | 功能 |
 | --- | --- |
+| `command_bridge_start_job` | 提交受政策限制的背景指令，使用 UUID 防止重試重複執行。 |
+| `command_bridge_get_job` | 查詢工作狀態及稽核／終止狀態。 |
+| `command_bridge_list_jobs` | 分頁列出有限數量的工作摘要。 |
+| `command_bridge_read_job_output` | 終結稽核與安全保存成功後分頁讀取輸出。 |
+| `command_bridge_cancel_job` | 取消排隊工作或要求終止程序樹。 |
 | `command_bridge_get_diagnostics` | 唯讀查詢服務／Audit 故障資訊及近期指令摘要；Audit 無法使用時仍可查詢。 |
 | `command_bridge_get_system_info` | 取得主機資訊及目前的 Shell、指令白名單、工作目錄與並行限制。 |
 | `command_bridge_run_command` | 執行一個指令，回傳 stdout、stderr、exit code、耗時與逾時／截斷狀態。 |
@@ -207,6 +212,12 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 > 執行 hostname，並告訴我結果。
 >
 > 列出最近 20 筆操作紀錄，指出哪些指令被拒絕或執行失敗。
+
+## 通用背景工作
+
+6.4.0 新增適用於建置、測試及其他有限時間指令的背景工作。使用 `command_bridge_start_job` 提交，再由對應工作工具查詢、列出、讀取輸出及取消。已接受工作在用戶端斷線後繼續執行，沿用相同指令政策、服務帳號及共用並行名額。新服務安裝預設啟用，舊設定需管理員準備私有儲存並明確開啟。
+
+預設執行 30 分鐘，主機上限預設一小時。執行中可查狀態，終結稽核與安全保存成功後才可讀取輸出；服務重啟會中斷，不自動重跑。取消不保證 Docker 等外部服務的工作停止。共用 Token 可以存取同一服務的所有工作。工具、重試 ID、設定及安全限制詳見[背景工作指南](docs/background-jobs.md)。
 
 ## 指令限制與安全邊界
 

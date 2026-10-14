@@ -444,6 +444,10 @@ function New-SecureConfiguration {
     "COMMAND_BRIDGE_TRANSPORT=http",
     "COMMAND_BRIDGE_AUDIT_BACKEND=eventlog",
     "COMMAND_BRIDGE_AUDIT_TIMEOUT_MS=30000",
+    "COMMAND_BRIDGE_JOBS_ENABLED=true",
+    "COMMAND_BRIDGE_JOBS_ROOT=$(Join-Path $ConfigRoot 'jobs')",
+    "COMMAND_BRIDGE_JOBS_DEFAULT_TIMEOUT_MS=1800000",
+    "COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS=3600000",
     "COMMAND_BRIDGE_POLICY_FILE=$(Join-Path $ConfigRoot 'policy.json')",
     "COMMAND_BRIDGE_BEARER_TOKEN=$token",
     "COMMAND_BRIDGE_HTTP_HOST=$httpHost",
@@ -533,6 +537,24 @@ function Copy-ApplicationPayload {
 function Set-RestrictedAcl {
   param([string]$StagedInstallRoot)
   $icacls = Join-Path $env:SystemRoot "System32\icacls.exe"
+  $jobRoot = Join-Path $ConfigRoot 'jobs'
+  $jobsEnabled = $false
+  if ([IO.File]::Exists($ConfigFile) -and [IO.File]::ReadAllText($ConfigFile) -match '(?m)^COMMAND_BRIDGE_JOBS_ENABLED=') {
+    $jobModule = ([Uri](Join-Path $StagedInstallRoot "$ApplicationRelativePath\dist\cli\connectionSetup.js")).AbsoluteUri
+    $jobSettings = & (Join-Path $StagedInstallRoot 'runtime\node.exe') -e 'import(process.argv[1]).then(async m=>console.log(JSON.stringify(m.jobStorageSettings((await import(process.argv[3])).readFileSync(process.argv[2])))))' $jobModule $ConfigFile 'node:fs'
+    if ($LASTEXITCODE -ne 0) { throw 'Invalid background job configuration.' }
+    $jobSettings = $jobSettings | ConvertFrom-Json
+    $jobsEnabled = $jobSettings.enabled -and $jobSettings.root -eq $jobRoot
+  }
+  if ($jobsEnabled) {
+    if (Test-Path -LiteralPath $jobRoot) {
+      if ((Get-Item -LiteralPath $jobRoot -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Unsafe background job storage.' }
+    } else {
+      New-Item -ItemType Directory -Path $jobRoot | Out-Null
+      Invoke-External $icacls @($jobRoot, '/inheritance:r', '/grant:r', '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-19:(OI)(CI)M')
+      Invoke-External $icacls @($jobRoot, '/setowner', '*S-1-5-32-544')
+    }
+  }
   # Public CLI/check assets contain no saved Token; grant read/execute, never write.
   Invoke-External $icacls @($StagedInstallRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX", "*S-1-5-32-545:(OI)(CI)RX")
   Invoke-External $icacls @($ConfigRoot, "/inheritance:r", "/grant:r", "SYSTEM:(OI)(CI)F", "Administrators:(OI)(CI)F", "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX")

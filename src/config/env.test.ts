@@ -1,6 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadConfig } from "./env.js";
+import { jobStorageSettings } from "../cli/connectionSetup.js";
+
+test("background configuration stays opt-in for old configs and parses saved quoted values", () => {
+  const saved = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("COMMAND_BRIDGE_")));
+  for (const key of Object.keys(saved)) delete process.env[key];
+  try {
+    assert.equal(loadConfig().jobs!.enabled, false);
+    assert.deepEqual(jobStorageSettings(Buffer.from('COMMAND_BRIDGE_JOBS_ENABLED="true"\nCOMMAND_BRIDGE_JOBS_ROOT="/private jobs"\n')), { enabled: true, root: "/private jobs" });
+    process.env.COMMAND_BRIDGE_JOBS_ENABLED = "true";
+    assert.throws(loadConfig, /absolute/);
+    process.env.COMMAND_BRIDGE_JOBS_ROOT = process.cwd();
+    assert.equal(loadConfig().jobs!.enabled, true);
+    process.env.COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS = "1000";
+    assert.throws(loadConfig, /below/);
+    assert.throws(() => jobStorageSettings(Buffer.from("COMMAND_BRIDGE_JOBS_ENABLED=unexpected\n")), /Invalid/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (key.startsWith("COMMAND_BRIDGE_")) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
 
 test("long command limits retain the ordinary default and explicit host overrides", () => {
   const saved = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("COMMAND_BRIDGE_")));

@@ -13,6 +13,7 @@ export interface SelfProtectionOptions {
   platform?: NodeJS.Platform;
   protectedPaths?: string[];
   policyFile?: string;
+  additionalProtectedPaths?: string[];
 }
 
 export function protectedApplicationPaths(options: SelfProtectionOptions = {}): string[] {
@@ -20,11 +21,12 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
   if (options.protectedPaths) return options.protectedPaths;
   const app = fileURLToPath(new URL("../../", import.meta.url));
   const paths = [app];
+  paths.push(...(options.additionalProtectedPaths ?? []));
   if (options.policyFile) paths.push(options.policyFile);
   const dotenv = process.env.DOTENV_CONFIG_PATH;
   if (dotenv && dotenv !== "/dev/null") paths.push(resolve(dotenv));
   if (platform === "linux") paths.push(
-    "/var/lib/command-bridge-recovery",
+    "/var/lib/command-bridge-recovery", "/var/lib/command-bridge-jobs",
     "/usr/local/libexec/command-bridge-diagnostics", "/etc/sudoers.d/command-bridge-diagnostics",
     "/usr/local/libexec/command-bridge-update", "/var/lib/command-bridge-update", "/etc/sudoers.d/command-bridge-update", "/etc/systemd/system/command-bridge-update.service",
     "/etc/command-bridge", "/usr/local/lib/command-bridge", "/opt/command-bridge", "/usr/local/libexec/command-bridge", "/usr/local/bin/command-bridge",
@@ -37,7 +39,7 @@ export function protectedApplicationPaths(options: SelfProtectionOptions = {}): 
     const data = join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeMCP");
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeUpdate"), join(process.env.ProgramData ?? "C:\\ProgramData", "CommandBridgeUpdate"));
     paths.push(join(process.env.ProgramFiles ?? "C:\\Program Files", "CommandBridgeMCP"),
-      join(data, "command-bridge.env"), join(data, "policy.json"), join(data, "client-setup.json"), join(data, "access-lease.json"));
+      join(data, "command-bridge.env"), join(data, "policy.json"), join(data, "client-setup.json"), join(data, "access-lease.json"), join(data, "jobs"));
   }
   return paths;
 }

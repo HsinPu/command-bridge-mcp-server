@@ -37,7 +37,7 @@ readonly LEGACY_AUDIT_SUDOERS_FILE="/etc/sudoers.d/command-bridge-mcp-server-aud
 SOURCE_REF=""
 readonly NODE_VERSION="24.18.0"
 readonly NODE_RELEASE_BASE="https://nodejs.org/download/release/v${NODE_VERSION}"
-readonly SYSTEMD_UNIT_SHA256="638af9cc2c06d2bacfef2e4723e19970e74069d0692dda445153c9985891e149"
+readonly SYSTEMD_UNIT_SHA256="c6f42b75ce750ef9eea868f0793737d402d17ca48eee7c7c610a9aaa2211b456"
 readonly INSTALLER_UNIT_SHA256="6e5976866fea3846f2632828e699d539f9597399bc6852d5ddb1ff2cfb9519c1"
 readonly AUDIT_READER_SHA256="7e193ae6d90ab2097ecfecdf1529ce6ec165bd3ac2dd51fe778885c1b4418e6e"
 readonly DIAGNOSTIC_READER_SHA256="a6192101cbf82506a56f5d939bbeee09c35ef5ac1dcc0b7eb6245cf7aea86a47"
@@ -902,6 +902,16 @@ remove_unused_service_account() {
     process_status=$?
     [[ "${process_status}" == 1 ]] || fail "Could not check old service-account processes; the account was kept."
   fi
+  local old_jobs="/var/lib/command-bridge-jobs/${uid}"
+  if [[ -e "$old_jobs" || -L "$old_jobs" ]]; then
+    assert_admin_path /var/lib/command-bridge-jobs
+    [[ -d "$old_jobs" && ! -L "$old_jobs" && ( "$(stat -c %u "$old_jobs")" == "$uid" || "$(stat -c %u "$old_jobs")" == 0 ) && "$(stat -c %a "$old_jobs")" == 700 ]] || fail "Old job storage is unsafe; the old service account was kept."
+    assert_no_program_mounts "$old_jobs"
+    # Archive only the directory metadata after verified switching/no processes.
+    # Never recursively chown service-written entries. Prevent UID reuse reads.
+    chown root:root "$old_jobs" || fail "Could not archive old job storage; account kept."
+    chmod 0700 "$old_jobs" || fail "Could not protect archived job storage; account kept."
+  fi
   userdel "${SERVICE_USER}" || fail "Verified service is active, but the old service account could not be removed."
   # Some shadow-utils configurations also remove a same-name primary group.
   if ! getent group "${SERVICE_GROUP}" >/dev/null; then
@@ -1367,6 +1377,10 @@ install_configuration() {
     printf 'COMMAND_BRIDGE_TRANSFER_MAX_BYTES=5242880\n'
     printf 'COMMAND_BRIDGE_AUDIT_BACKEND=%s\n' "${audit_backend}"
     printf 'COMMAND_BRIDGE_AUDIT_TIMEOUT_MS=30000\n'
+    printf 'COMMAND_BRIDGE_JOBS_ENABLED=true\n'
+    printf 'COMMAND_BRIDGE_JOBS_ROOT=/var/lib/command-bridge-jobs\n'
+    printf 'COMMAND_BRIDGE_JOBS_DEFAULT_TIMEOUT_MS=1800000\n'
+    printf 'COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS=3600000\n'
     printf 'COMMAND_BRIDGE_POLICY_FILE=%s/policy.json\n' "${CONFIG_DIR}"
     printf 'COMMAND_BRIDGE_BEARER_TOKEN=%s\n' "${token}"
     printf 'COMMAND_BRIDGE_HTTP_HOST=%s\n' "${host}"
@@ -1649,6 +1663,35 @@ print_codex_setup() {
   "${RUNTIME_LINK}/bin/node" "${CURRENT_LINK}/dist/cli/clientSetupInstaller.js" print "${CONFIG_FILE}" "${CLIENT_SETUP_FILE}" show
 }
 
+prepare_background_jobs() {
+  # Missing old settings remain disabled. Never rewrite an existing job tree's
+  # ownership, walk service-writable children as root, or follow a link.
+  local root=/var/lib/command-bridge-jobs uid gid settings leaf
+  settings=$("${TEMP_DIR}/node-runtime/bin/node" -e 'import(process.argv[1]).then(async m=>{const s=m.jobStorageSettings((await import(process.argv[3])).readFileSync(process.argv[2]));console.log(s.enabled);console.log(s.root??"");})' "${TEMP_DIR}/source/dist/cli/connectionSetup.js" "${CONFIG_FILE}" node:fs) || fail "Invalid background job configuration."
+  [[ "${settings%%$'\n'*}" == true ]] || return 0
+  [[ "${settings#*$'\n'}" == "$root" ]] || return 0
+  if [[ "${RUN_AS_INSTALLER}" == 1 ]]; then uid=${INSTALLER_UID}; gid=${INSTALLER_GID};
+  else uid=$(id -u "${SERVICE_USER}"); gid=$(id -g "${SERVICE_USER}"); fi
+  assert_admin_path /var/lib
+  if [[ -e "$root" || -L "$root" ]]; then
+    [[ -d "$root" && ! -L "$root" && "$(stat -c %u "$root")" == 0 && "$(stat -c %a "$root")" == 755 ]] || fail "Existing background job parent has unsafe ownership or permissions; service unchanged."
+    assert_no_program_mounts "$root"
+    if [[ "${SELINUX_ACTIVE}" == 1 ]]; then matchpathcon -V "$root" >/dev/null || fail "Existing job storage labels require administrator repair."; fi
+  else
+    install -d -m 0755 -o root -g root "$root"
+    restore_selinux_path "$root" || fail "Could not prepare job storage labels."
+  fi
+  leaf="${root}/${uid}"
+  if [[ -e "$leaf" || -L "$leaf" ]]; then
+    [[ -d "$leaf" && ! -L "$leaf" && "$(stat -c %u "$leaf")" == "$uid" && "$(stat -c %a "$leaf")" == 700 ]] || fail "Existing or archived job data needs administrator review; service unchanged."
+    assert_no_program_mounts "$leaf"
+    if [[ "${SELINUX_ACTIVE}" == 1 ]]; then matchpathcon -V "$leaf" >/dev/null || fail "Job directory labels need administrator repair."; fi
+  else
+    install -d -m 0700 -o "$uid" -g "$gid" "$leaf"
+    restore_selinux_path "$leaf" || fail "Could not prepare private job directory labels."
+  fi
+}
+
 main() {
   source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/layout.sh"
   source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/program-migration.sh"
@@ -1700,6 +1743,7 @@ main() {
   ensure_service_account
   ensure_installer_state
   install_configuration
+  prepare_background_jobs
   install_client_setup
   DOTENV_CONFIG_PATH="${CONFIG_FILE}" "${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/checkConfig.js"
   install_runtime_and_release "${node_arch}"

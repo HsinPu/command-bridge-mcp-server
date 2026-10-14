@@ -250,3 +250,7 @@ An ordinary command can wait for attempted and terminal Audit, so use at least 1
 `/ready` returns quickly while sharing its actual pending checks. Installation waits for the configured startup budget and real MCP/Audit verification before discarding backups. Neither a short readiness response nor a client timeout proves the command was not executed. File transfer's actual I/O budget remains 15 seconds, separately from attempted/terminal Audit; updater native control retains its own deadline and verifies acceptance separately from job completion.
 
 6.3.0 起預設 Audit 30 秒，可設定 1,000–60,000 整數毫秒。請由管理員修改受保護的服務環境檔後重啟；缺少新欄位的舊安裝使用新預設，明確設定保留。指令、診斷及停機時限維持原規則。一般用戶端建議至少等 120 秒；產生的 Codex 設定改為 480 秒，既有用戶端設定不會自動變更。等待超時不能證明指令沒執行；先查 Audit，避免重複操作。
+
+## Background jobs (6.4.0)
+
+新服務安裝預設啟用通用背景工作；舊設定缺欄位保持停用。背景工作與同步指令共用權限及並行名額，但使用獨立時限。開啟、私有儲存準備、取消與重啟限制見 [背景工作指南](background-jobs.md)。管理員更新前先等待或取消工作；MCP 更新有未完成工作時拒絕。一般卸載保留工作紀錄及輸出，purge 先安全預檢再刪除。

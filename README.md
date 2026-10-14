@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.3.0-blue)
+![Version](https://img.shields.io/badge/version-6.4.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -181,6 +181,11 @@ Windows: run `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update -
 
 | Tool | Purpose |
 | --- | --- |
+| `command_bridge_start_job` | Submit a policy-controlled background command with a retry UUID. |
+| `command_bridge_get_job` | Read retained job state and Audit/termination status. |
+| `command_bridge_list_jobs` | List bounded pages of job metadata. |
+| `command_bridge_read_job_output` | Read output pages after terminal Audit and storage succeed. |
+| `command_bridge_cancel_job` | Cancel queued work or request process-tree termination. |
 | `command_bridge_get_diagnostics` | Read bounded service/Audit failure metadata and recent command summaries, even when Audit is unavailable. |
 | `command_bridge_get_system_info` | Read host information and effective shell, command, working-directory, and concurrency policies. |
 | `command_bridge_run_command` | Execute one command and return stdout, stderr, exit code, duration, and timeout/truncation status. |
@@ -207,6 +212,12 @@ Example requests for a connected client:
 > Run hostname and tell me the result.
 >
 > List the last 20 operation records and identify rejected or failed commands.
+
+## Background command jobs
+
+6.4.0 adds general background jobs for builds, tests and other finite commands. Submit with `command_bridge_start_job`, then query/list/read output/cancel with the corresponding job tools. Accepted jobs continue after client disconnect; they use the same command policies, service identity and shared parallel limits. New service installations enable jobs; older configurations remain disabled until an administrator provisions private storage and enables them.
+
+Jobs default to 30 minutes with a one-hour host maximum. Running jobs expose status; output is available after terminal Audit and safe storage succeed. Restart interrupts jobs without automatically rerunning them. Cancellation does not guarantee Docker or another external daemon stops its work. Shared tokens can access all jobs in the service. See [background jobs](docs/background-jobs.md) for tools, retry IDs, setup, output limits and security boundaries.
 
 ## Command restrictions and security boundaries
 

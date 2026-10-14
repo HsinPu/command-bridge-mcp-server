@@ -8,6 +8,10 @@ import type { ExecutionMode, ShellKind } from "../services/commandPolicy.js";
 import { loadCommandProfiles, validateEnabledProfiles, type CommandProfile } from "../services/commandProfiles.js";
 
 const rawEnvSchema = z.object({
+  COMMAND_BRIDGE_JOBS_ENABLED: z.enum(["true", "false"]).default("false"),
+  COMMAND_BRIDGE_JOBS_ROOT: z.string().min(1).optional(),
+  COMMAND_BRIDGE_JOBS_DEFAULT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(86400000).default(1800000),
+  COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS: z.coerce.number().int().min(1000).max(86400000).default(3600000),
   COMMAND_BRIDGE_MCP_UPDATE_ENABLED: z.enum(["true", "false"]).default("true"),
   COMMAND_BRIDGE_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
   COMMAND_BRIDGE_AUDIT_BACKEND: z.enum(["auto", "journal", "eventlog", "file"]).default("auto"),
@@ -33,6 +37,7 @@ const rawEnvSchema = z.object({
 });
 
 export interface AppConfig {
+  jobs?: { enabled: boolean; root?: string; defaultTimeoutMs: number; maxTimeoutMs: number };
   mcpUpdateEnabled?: boolean;
   fileTransfer?: { upload: boolean; download: boolean; root?: string; maxBytes: number };
   commandProfiles?: Map<string, CommandProfile>;
@@ -68,6 +73,8 @@ export function loadConfig(): AppConfig {
   }
 
   const raw = result.data;
+  if (raw.COMMAND_BRIDGE_JOBS_ENABLED === "true" && (!raw.COMMAND_BRIDGE_JOBS_ROOT || !isAbsolute(raw.COMMAND_BRIDGE_JOBS_ROOT))) throw new Error("Enabled jobs require an absolute COMMAND_BRIDGE_JOBS_ROOT.");
+  if (raw.COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS < raw.COMMAND_BRIDGE_JOBS_DEFAULT_TIMEOUT_MS) throw new Error("Job maximum timeout must not be below its default.");
   if ((raw.COMMAND_BRIDGE_UPLOAD_ENABLED === "true" || raw.COMMAND_BRIDGE_DOWNLOAD_ENABLED === "true") &&
       (!raw.COMMAND_BRIDGE_TRANSFER_ROOT || !isAbsolute(raw.COMMAND_BRIDGE_TRANSFER_ROOT))) throw new Error("Enabled file transfer requires an absolute COMMAND_BRIDGE_TRANSFER_ROOT.");
   const allowedHosts = normalizeAllowedHosts(raw.COMMAND_BRIDGE_ALLOWED_HOSTS);
@@ -111,6 +118,7 @@ export function loadConfig(): AppConfig {
   const commandProfiles = loadCommandProfiles(raw.COMMAND_BRIDGE_POLICY_FILE);
   if (raw.COMMAND_BRIDGE_EXECUTION_MODE === "allowlist") validateEnabledProfiles(commandProfiles, allowedCommands, allowedShells);
   return {
+    jobs: { enabled: raw.COMMAND_BRIDGE_JOBS_ENABLED === "true", root: raw.COMMAND_BRIDGE_JOBS_ROOT, defaultTimeoutMs: raw.COMMAND_BRIDGE_JOBS_DEFAULT_TIMEOUT_MS, maxTimeoutMs: raw.COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS },
     mcpUpdateEnabled: raw.COMMAND_BRIDGE_MCP_UPDATE_ENABLED === "true",
     fileTransfer: { upload: raw.COMMAND_BRIDGE_UPLOAD_ENABLED === "true", download: raw.COMMAND_BRIDGE_DOWNLOAD_ENABLED === "true", root: raw.COMMAND_BRIDGE_TRANSFER_ROOT, maxBytes: raw.COMMAND_BRIDGE_TRANSFER_MAX_BYTES },
     commandProfiles,

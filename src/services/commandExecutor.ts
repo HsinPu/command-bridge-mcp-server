@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
 import { ManagedUpdateService } from "./managedUpdate.js";
+import { BackgroundJobService, type BackgroundExecution } from "./backgroundJobs.js";
 import { FileTransferService } from "./fileTransferService.js";
 import { DiagnosticsService } from "./diagnosticsService.js";
 import { RecentDiagnosticRequests, type RecentDiagnosticRequest } from "./diagnosticTypes.js";
@@ -81,7 +82,9 @@ export class CommandExecutor {
   private readonly diagnosticStartTimes = new WeakMap<CommandAuditEvent, string>();
   readonly files: FileTransferService;
   readonly updates: ManagedUpdateService;
+  readonly jobs: BackgroundJobService;
   private activeCommands = 0;
+  private reservedCommands = 0;
   private stopping = false;
   private readonly running = new Set<() => void>();
   private readonly pending = new Set<Promise<CommandResult>>();
@@ -98,10 +101,12 @@ export class CommandExecutor {
       accepting: !this.stopping && this.auditLog.available,
       mode: this.stopping ? "stopping" : this.auditLog.available ? "normal" : "diagnostic-only",
       activeCommands: this.activeCommands, maxParallelCommands: this.config.maxParallelCommands,
+      backgroundJobs: this.jobs?.snapshot() ?? { enabled: false, storageAvailable: true, queued: 0, active: 0 },
       recentRequests: this.recentDiagnostics.list(undefined,100)
     }));
     this.files = new FileTransferService(config, this.auditLog);
-    this.updates = new ManagedUpdateService(config, this.auditLog);
+    this.jobs = new BackgroundJobService(config, this);
+    this.updates = new ManagedUpdateService(config, this.auditLog, undefined, () => this.jobs.hasActive());
   }
 
   private temporaryAccess?: TemporaryAccess;
@@ -122,6 +127,7 @@ export class CommandExecutor {
   }
 
   async shutdown(): Promise<void> {
+    const jobShutdown = this.jobs.shutdown();
     const fileShutdown = this.files.shutdown();
     const updateShutdown = this.updates.shutdown();
     this.stopping = true;
@@ -132,7 +138,7 @@ export class CommandExecutor {
     let timer: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
-        Promise.allSettled([...this.pending, fileShutdown, updateShutdown, accessShutdown, this.diagnostics.drain(), ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
+        Promise.allSettled([...this.pending, jobShutdown, fileShutdown, updateShutdown, accessShutdown, this.diagnostics.drain(), ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
     } finally { if (timer) clearTimeout(timer); }
@@ -141,6 +147,7 @@ export class CommandExecutor {
   private completedReadiness?: { at: number; value: { ready: boolean; checks: Record<string, boolean> } };
   async readiness(waitMs = 5_000): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
     if (this.stopping || !this.auditLog.available) return { ready: false, checks: { accepting: false, audit: this.auditLog.available } };
+    if (this.config.jobs?.enabled && !this.jobs.snapshot().storageAvailable) return { ready: false, checks: { accepting: true, audit: true, backgroundJobs: false } };
     if (this.completedReadiness && performance.now() - this.completedReadiness.at < 2000) return this.completedReadiness.value;
     // Repeated probes share the actual operation if a filesystem call remains stuck.
     if (!this.pendingReadiness) {
@@ -196,11 +203,38 @@ export class CommandExecutor {
     return { ready: Object.values(checks).every(Boolean), checks };
   }
 
-  private async executeInternal(request: CommandRequest, signal?: AbortSignal): Promise<CommandResult> {
+  get availableCommandSlots(): number { return this.stopping || !this.auditLog.available ? 0 : this.config.maxParallelCommands - this.activeCommands - this.reservedCommands; }
+  reserveJobSlot(): (() => void) | undefined {
+    if (this.availableCommandSlots <= 0) return undefined;
+    this.reservedCommands++;
+    let released = false;
+    return () => { if (!released) { released = true; this.reservedCommands--; } };
+  }
+  get acceptingCommands(): boolean { return !this.stopping && this.auditLog.available; }
+  get backgroundUpdatePending(): boolean { return this.updates.busy; }
+  validateJob(request: CommandRequest, executionMode: AppConfig["executionMode"]): void {
+    const shell = request.shell ?? this.config.allowedShells[0];
+    if (!shell) throw new AppError("NO_SHELL_CONFIGURED", "No shell is configured.");
+    assertOutputEncoding(request.outputEncoding ?? "utf8");
+    assertNoLocalAdminCommand(request.command, process.platform, request.cwd ?? this.config.allowedRoots[0] ?? process.cwd());
+    assertCommandAllowed({ ...this.config, executionMode }, shell, request.command);
+    const cwd = resolveWorkingDirectory(this.config.allowedRoots, request.cwd);
+    assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile, additionalProtectedPaths: this.config.jobs?.root ? [this.config.jobs.root] : [] });
+    if (executionMode === "guarded") assertGuardedCommand(request.command, cwd);
+  }
+  writeJobAudit(event: CommandAuditEvent): Promise<void> { return this.writeAuditEvent(event); }
+  executeJob(request: CommandRequest, signal: AbortSignal, background: BackgroundExecution): Promise<CommandResult> {
+    const operation = this.executeInternal(request, signal, background);
+    this.pending.add(operation);
+    void operation.finally(() => this.pending.delete(operation)).catch(() => undefined);
+    return operation;
+  }
+
+  private async executeInternal(request: CommandRequest, signal?: AbortSignal, background?: BackgroundExecution): Promise<CommandResult> {
     let executionMode = await this.effectiveExecutionMode();
     const requestedShell = request.shell ?? this.config.allowedShells[0] ?? null;
     const requestedCwd = request.cwd ?? this.config.allowedRoots[0] ?? null;
-    const attempted = createAuditEvent({
+    const attempted = background?.attempted ?? createAuditEvent({
       phase: "attempted",
       command: request.command,
       shell: requestedShell,
@@ -211,15 +245,16 @@ export class CommandExecutor {
 
     // This is intentionally before policy checks and before spawn. Without the attempt
     // record, CommandBridge must not start a process.
-    await this.writeAuditEvent(attempted);
+    if (!background) await this.writeAuditEvent(attempted);
 
     let shell: ShellKind;
     let cwd: string;
     let timeoutMs: number;
 
     try {
+      background?.releaseSlot();
       if (this.stopping || signal?.aborted) throw new AppError("COMMAND_CANCELLED", "The command was cancelled or the service is stopping.");
-      if (this.activeCommands >= this.config.maxParallelCommands) {
+      if (this.availableCommandSlots <= 0) {
         throw new AppError(
           "COMMAND_CONCURRENCY_LIMIT",
           "The maximum number of parallel commands is already running.",
@@ -240,11 +275,12 @@ export class CommandExecutor {
       assertNoLocalAdminCommand(request.command, process.platform, requestedCwd ?? process.cwd());
       // Audit admission may consume the remaining lease; recheck before policy/spawn.
       executionMode = this.temporaryAccess?.mode() ?? this.config.executionMode;
+      if (background && executionMode !== background.mode) throw new AppError("JOB_POLICY_CHANGED", "Execution mode changed while queued; submit a new job.");
       assertCommandAllowed({ ...this.config, executionMode }, shell, request.command);
       cwd = resolveWorkingDirectory(this.config.allowedRoots, request.cwd);
-      assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile });
+      assertNoSelfModification(request.command, cwd, { policyFile: this.config.policyFile, additionalProtectedPaths: this.config.jobs?.root ? [this.config.jobs.root] : [] });
       if (executionMode === "guarded") assertGuardedCommand(request.command, cwd);
-      timeoutMs = clampTimeout(
+      timeoutMs = background ? request.timeoutMs! : clampTimeout(
         request.timeoutMs,
         this.config.defaultTimeoutMs,
         this.config.maxTimeoutMs
@@ -264,8 +300,9 @@ export class CommandExecutor {
     this.activeCommands += 1;
     try {
       let result: CommandResult;
-      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8", executionMode); }
+      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8", executionMode, background); }
       finally { this.activeCommands -= 1; }
+      background?.finalizing();
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "completed", {
           executionMode,
@@ -333,6 +370,7 @@ export class CommandExecutor {
       timedOut: overrides.timedOut ?? false,
       truncated: overrides.truncated ?? false,
       errorCode: overrides.errorCode ?? null
+      , ...(attempted.job ? { job: attempted.job } : {})
     });
     this.diagnosticStartTimes.set(event, attempted.timestamp);
     return event;
@@ -372,7 +410,8 @@ export class CommandExecutor {
     timeoutMs: number,
     signal?: AbortSignal,
     outputEncoding: OutputEncoding = "utf8",
-    executionMode = this.config.executionMode
+    executionMode = this.config.executionMode,
+    background?: BackgroundExecution
   ): Promise<CommandResult> {
     let invocation: ShellInvocation;
     const environment = buildChildEnvironment(this.config.passthroughEnv);
@@ -433,6 +472,7 @@ export class CommandExecutor {
       let termination: Promise<void> | undefined;
       let closeDeadline: NodeJS.Timeout | undefined;
       let cancellation = false;
+      let storedOutputBytes = 0;
       const finishFailure = (error: Error) => {
         if (settled) return;
         settled = true;
@@ -469,19 +509,35 @@ export class CommandExecutor {
 
       const appendOutput = (current: string, text: string): string => {
         if (!text) return current;
-        const remaining = this.config.maxOutputChars - stdout.length - stderr.length;
+        background?.activity();
+        if (background) {
+          const remainingBytes = 10 * 1024 * 1024 - storedOutputBytes;
+          const remainingChars = 5 * 1024 * 1024 - stdout.length - stderr.length;
+          let prefix = text.slice(0, Math.max(0, remainingChars));
+          if (prefix.length < text.length) { truncated = true; prefix = prefix.replace(/[\uD800-\uDBFF]$/, ""); }
+          const size = (value: string) => Buffer.byteLength(JSON.stringify(value)) - 2;
+          if (size(prefix) > remainingBytes) {
+            truncated = true;
+            let lo = 0, hi = prefix.length;
+            while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if (size(prefix.slice(0, mid)) <= remainingBytes) lo = mid; else hi = mid - 1; }
+            prefix = prefix.slice(0, lo).replace(/[\uD800-\uDBFF]$/, "");
+          }
+          storedOutputBytes += size(prefix);
+          return current + prefix;
+        }
+        const remaining = (background ? 5 * 1024 * 1024 : this.config.maxOutputChars) - stdout.length - stderr.length;
 
         if (remaining <= 0) {
           if (!truncated) {
             truncated = true;
-            terminate();
+            if (!background) terminate();
           }
           return current;
         }
 
         if (text.length > remaining) {
           truncated = true;
-          terminate();
+          if (!background) terminate();
           const prefix = text.slice(0, remaining);
           // Do not return half of a UTF-16 surrogate pair at the character cap.
           return current + prefix.replace(/[\uD800-\uDBFF]$/, "");
@@ -534,7 +590,7 @@ export class CommandExecutor {
         if (cancellation) { reject(new AppError("COMMAND_CANCELLED", "The command was cancelled.")); return; }
         if (outputFailure) { reject(outputFailure); return; }
         resolve({
-          ok: exitCode === 0 && !timedOut && !truncated,
+          ok: exitCode === 0 && !timedOut && (!truncated || !!background),
           shell,
           cwd,
           exitCode,

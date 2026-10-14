@@ -1,5 +1,11 @@
 # Validation status
 
+## 6.4.0 validation (2026-10-14)
+
+MINOR: general finite background command jobs with unchanged synchronous limits and shared execution capacity. Full native Windows Node 20.15.1 tests passed 209/250, with 41 platform skips and no failures/cancellations. Ubuntu WSL Node 24.18.0 tests passed 218/250, with 32 platform skips and no failures/cancellations. Real private-process and HTTP MCP tests cover disconnect/reconnect, deduplication, policies, queue mode changes, cancellation, timeout, output caps, initial/terminal Audit failures, interrupted recovery, retention and exclusive storage ownership. Early debugging corrected private Windows fixture ancestors, native PowerShell argument quoting, a missing optional fixture config and Windows-produced Bash CRLF; no policy, Audit, command or shutdown assertion was removed. Linux managed job storage is split by service UID; verified account deletion archives only old directory metadata to prevent UID reuse access. Hosted service tests additionally assert that archive and purge, and installer verification performs a real background hostname/Audit round trip. Final targeted tests passed 16/22 on Windows (six platform skips) and 22/22 on WSL, plus the private installer-account fixture; local fixtures do not establish hosted service success.
+
+All Bash scripts/launchers, Windows PowerShell 5.1 script parsing, WinSW XML, Node script syntax, package/lock root versions, unchanged third-party lock entries, README bootstrap commands/document links and git diff checks are required before commit. Hosted CI/channel publication is pending at this commit; its final result and exact source SHA must be checked after push. Oracle Linux Enforcing, actual host reboot, a real 20-minute Docker build and external-daemon cancellation have not been tested locally. Old configurations remain opt-in, and preserved output may contain secrets.
+
 The current package is 6.3.0, adding configurable Audit waiting while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
 
 ## 6.3.0 validation (2026-10-14)

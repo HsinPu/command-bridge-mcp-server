@@ -152,8 +152,11 @@ sudo test -f /etc/sudoers.d/command-bridge-audit-reader
 getent passwd command-bridge >/dev/null
 
 # A successful switch removes the now-unused user only after real MCP/Audit.
+old_job_uid=$(id -u command-bridge)
 sudo bash "$root/scripts/linux-systemd/install.sh" --run-as-installer
 if getent passwd command-bridge >/dev/null; then echo 'Unused dedicated user survived the switch.'; exit 1; fi
+[[ "$(sudo stat -c %u "/var/lib/command-bridge-jobs/$old_job_uid")" == 0 ]]
+[[ "$(sudo stat -c %a "/var/lib/command-bridge-jobs/$old_job_uid")" == 700 ]]
 getent group command-bridge >/dev/null
 sudo test -f "$work/preserved"
 sudo "$node" /usr/local/lib/command-bridge/current/scripts/verify-install.mjs "$config"
@@ -225,4 +228,5 @@ sudo bash /usr/local/lib/command-bridge/current/uninstall.sh --purge --yes
 sudo test ! -e /usr/local/libexec/command-bridge-diagnostics
 sudo test ! -e /etc/sudoers.d/command-bridge-diagnostics
 sudo test ! -e /var/lib/command-bridge-installer
+sudo test ! -e /var/lib/command-bridge-jobs
 [[ "$(id -u)" == "$login_uid" ]]

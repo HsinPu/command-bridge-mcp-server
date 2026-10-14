@@ -1,5 +1,16 @@
 # Changelog
 
+## 6.4.0 — 2026-10-14
+
+MINOR: add compatible, policy-controlled finite background command jobs without changing synchronous command interfaces or deadlines.
+
+- Add submit/status/list/output/cancel MCP tools with UUID retry deduplication, bounded queue and shared command capacity. Accepted jobs continue after client disconnect; restart marks unfinished records interrupted without replay.
+- Recheck execution mode and all command/cwd/self-protection policies at launch; retain the service identity, existing sudo rules, temporary-access expiry and Audit-before-execution requirements.
+- Keep one attempted and one terminal job Audit event, tagged with job ID. Withhold output until terminal Audit and durable result storage succeed; raw output is never Audit content.
+- Default jobs to 30 minutes, maximum one hour (administrator configurable up to one day); keep synchronous 15-second/five-minute limits, diagnostics and shutdown deadlines unchanged.
+- Protect platform job storage, cap output and quota, page results, retain records for 24 hours and preserve them on normal uninstall. New service installs enable jobs; old configurations and local development remain disabled until explicitly provisioned.
+- Refuse MCP managed updates while jobs are pending. Add real process, cancellation, policy, Audit, restart and HTTP reconnect tests and installed-service job/Audit verification. Docker and other external daemon work is not guaranteed cancelled when their client exits.
+
 ## 6.3.0 — 2026-10-14
 
 MINOR: add configurable Audit waiting with a 30-second default while preserving command policy and execution limits.

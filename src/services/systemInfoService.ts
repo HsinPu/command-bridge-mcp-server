@@ -12,6 +12,7 @@ export function getSystemInfo(config: AppConfig) {
     totalMemoryMb: toMegabytes(os.totalmem()),
     freeMemoryMb: toMegabytes(os.freemem()),
     executionMode: config.executionMode,
+    backgroundJobs: { enabled: config.jobs?.enabled ?? false, defaultTimeoutMs: config.jobs?.defaultTimeoutMs ?? 1800000, maxTimeoutMs: config.jobs?.maxTimeoutMs ?? 3600000 },
     managedUpdate: { enabled: config.mcpUpdateEnabled !== false, serviceInstallationRequired: true },
     fileTransfer: { uploadEnabled: config.fileTransfer?.upload ?? false, downloadEnabled: config.fileTransfer?.download ?? false, maxBytes: config.fileTransfer?.maxBytes ?? 5242880, overwrite: false },
     allowedShells: config.allowedShells,
