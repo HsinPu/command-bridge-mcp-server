@@ -1,4 +1,4 @@
-# Background command jobs / 通用背景工作 (6.5.1)
+# Background command jobs / 通用背景工作 (6.5.2)
 
 Background jobs run finite, non-interactive commands without holding one MCP call open for their entire duration. They are available on Linux and Windows under the same service account and command policies as synchronous execution. No root worker or additional sudo permission is installed.
 

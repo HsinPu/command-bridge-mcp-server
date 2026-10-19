@@ -1,5 +1,11 @@
 # Validation status
 
+## 6.5.2 validation (2026-10-19)
+
+PATCH: both CI 39199964697 service jobs were canceled at their 45-minute aggregate job budget. Their latest source-suite summaries had zero failures and successful service verification continued up to cancellation; the Linux lifecycle had reached uninstall, with its later 1.x migration step still required. Historical successful CI 38525077448 took 42.8 minutes for Linux and 38.4 for Windows. Only the service-smoke job budget changes to 75 minutes; all steps, assertions, publication dependencies and runtime execution/Audit/termination deadlines remain in force. CI 39201494450 has already passed both general suites and the corrected layout gate; its service jobs were still pending when this follow-up was prepared.
+
+Full native Windows Node 20.15.1 passed 217/263 with 46 platform skips and no failures/cancellations (221 seconds). Ubuntu WSL Node 24.18.0 passed 231/263 with 32 skips and no failures/cancellations (143 seconds). Exact workflow comparison confirmed only the service job budget changed; steps/dependencies, dependency locks and runtime files are preserved. Version/README command/link and git diff checks passed. Hosted service/channel validation for this corrective SHA remains pending; Oracle Enforcing, actual reboot and production Docker/26pv execution are not verified.
+
 ## 6.5.1 validation (2026-10-19)
 
 PATCH: CI 39199964697 passed Windows/Linux general suites but failed layout-service-smoke at dedicated/terminal-migration line 144. The installed service was active; the old assertion expected an unchanged configuration despite the intended addition of missing jobs defaults. The corrected gate independently compares exact original bytes plus the four fixed defaults, then retains exact hashes for subsequent operations. Original-byte rollback assertions remain unchanged. Regression mutations cover Token/mode changes, wrong or missing defaults, unrelated additions and private failure output.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.5.2 — 2026-10-19
+
+PATCH: give complete service integration jobs sufficient aggregate CI time without changing runtime deadlines or publication requirements.
+
+- CI 39199964697 canceled both service jobs at the 45-minute job budget while source suites and real service verification were still completing successfully. The previous successful 6.4.1 Linux service job already took 42.8 minutes.
+- Increase only the service-smoke job budget to 75 minutes. Keep every install, source test, rollback, update, transfer, access, uninstall and legacy migration check mandatory, with the same channel dependencies and runtime command/Audit/termination limits.
+
 ## 6.5.1 — 2026-10-19
 
 PATCH: correct the legacy layout service verification for the supported missing-jobs configuration migration; no runtime policy or deadline changes.
