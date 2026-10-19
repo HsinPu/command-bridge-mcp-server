@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.5.1 — 2026-10-19
+
+PATCH: correct the legacy layout service verification for the supported missing-jobs configuration migration; no runtime policy or deadline changes.
+
+- CI 39199964697 passed both general suites but its layout gate rejected the successful terminal migration because it still required an unchanged configuration hash.
+- Independently require exact original configuration bytes plus only the four expected job defaults before establishing the migrated baseline. Keep exact rollback checks and all later update/uninstall preservation assertions.
+- Keep snapshots private, emit only fixed verification results, and reject token/mode changes, incorrect defaults, missing fields or unrelated additions in dedicated regression tests.
+
 ## 6.5.0 — 2026-10-19
 
 MINOR: add compatible termination quarantine/recovery diagnostics and managed-upgrade background-job defaults; preserve explicit configuration and existing synchronous execution contracts.

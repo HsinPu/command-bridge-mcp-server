@@ -55,6 +55,7 @@ for mode in ${LAYOUT_TEST_MODES:-dedicated installer}; do
   old_target=$(readlink "$old_root/current")
   info_hash=$(sudo sha256sum "$old_root/current/install-info.json" | cut -d' ' -f1)
   config_hash=$(sudo sha256sum "$config" | cut -d' ' -f1)
+  sudo cp -- "$config" "$work/original-config-$mode.env"
   data_root=$(sudo awk -F= '$1 == "COMMAND_BRIDGE_ALLOWED_ROOTS" { print substr($0, index($0, "=") + 1) }' "$config")
   data_root=${data_root%%:*}
   # The CI caller cannot traverse dedicated/fixture-account private data.
@@ -141,7 +142,8 @@ JS
   sudo env SUDO_USER="$account" SUDO_UID="$account_uid" SUDO_GID="$account_gid" bash "$work/terminal-update-$mode.sh" --update > "$work/terminal-update-$mode.log" 2>&1 || { tail -n 30 "$work/terminal-update-$mode.log"; exit 1; }
   [[ -d "$new_root" && ! -L "$new_root" ]]
   for path in "$old_root" /opt/command-bridge-mcp-server; do [[ ! -e "$path" && ! -L "$path" && ! -e "$path.migration-backup" ]]; done
-  [[ "$(sudo sha256sum "$config" | cut -d' ' -f1)" == "$config_hash" ]]
+  sudo "$test_node" scripts/tests/verify-legacy-jobs-migration.mjs "$work/original-config-$mode.env" "$config"
+  config_hash=$(sudo sha256sum "$config" | cut -d' ' -f1)
   sudo test -f "$data_root/layout-preserved"
   sudo "$new_root/runtime/current/bin/node" "$new_root/current/scripts/verify-install.mjs" "$config"
   [[ "$(/usr/local/bin/command-bridge --version)" == "$version" ]]

@@ -1,5 +1,11 @@
 # Validation status
 
+## 6.5.1 validation (2026-10-19)
+
+PATCH: CI 39199964697 passed Windows/Linux general suites but failed layout-service-smoke at dedicated/terminal-migration line 144. The installed service was active; the old assertion expected an unchanged configuration despite the intended addition of missing jobs defaults. The corrected gate independently compares exact original bytes plus the four fixed defaults, then retains exact hashes for subsequent operations. Original-byte rollback assertions remain unchanged. Regression mutations cover Token/mode changes, wrong or missing defaults, unrelated additions and private failure output.
+
+Full native Windows Node 20.15.1 passed 217/263 with 46 platform skips and no failures/cancellations (222 seconds). Ubuntu WSL Node 24.18.0 passed 231/263 with 32 skips and no failures/cancellations (143 seconds). Changed Bash and Node syntax, version/lock consistency, unchanged third-party entries, README bootstrap commands/links and git diff checks passed. Hosted service/layout/channel validation for this corrective SHA remains pending; Oracle Enforcing, actual reboot and production Docker/26pv execution are not verified.
+
 ## 6.5.0 validation (2026-10-19)
 
 MINOR: compatible command quarantine/recovery evidence and managed jobs-default migration. GitHub main was checked at 14280baa38c3fe9988183014b39a7bc1a6ffc94c before implementation; that source had no later fix.
