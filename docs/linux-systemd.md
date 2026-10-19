@@ -1,6 +1,6 @@
 # Linux systemd installation
 
-Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.4.1. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
+Version 2.0.0 shortened the Linux service and installation paths to `command-bridge`; the current package is 6.5.0. Version 2.1.0 added an opt-in installer-account service mode; 2.1.2 completed rollback when that candidate fails before Audit-reader changes. Version 2.2.0 adds a host-specific name to the printed Codex client setup. The GitHub repository, npm package, Windows service and MCP tool names are unchanged. The 2.0.3 Oracle Linux SELinux repair remains in place.
 
 6.1.0 adds terminal-only `info [--json]` and `setup [--show-token]`. The saved client description contains no Token, survives reinstall/update and is restored on failed activation. Ordinary uninstall preserves it; purge validates ownership before removing it. See [local administration and permissions](local-administration.md).
 
@@ -170,8 +170,8 @@ Disposable-runner tests require evidence from the deployed test SHA before accep
 
 ```text
 /usr/local/lib/command-bridge/
-├── current -> releases/v6.4.1-<source-sha>
-├── releases/v6.4.1-<source-sha>/
+├── current -> releases/v6.5.0-<source-sha>
+├── releases/v6.5.0-<source-sha>/
 └── runtime/
     ├── current -> node-v24.18.0-linux-{x64|arm64}
     └── node-v24.18.0-linux-{x64|arm64}/
@@ -469,4 +469,4 @@ An ordinary command can wait for attempted and terminal Audit, so use at least 1
 
 ## Background jobs (6.4.0)
 
-新服務安裝預設啟用通用背景工作；舊設定缺欄位保持停用。背景工作與同步指令共用權限及並行名額，但使用獨立時限。開啟、私有儲存準備、取消與重啟限制見 [背景工作指南](background-jobs.md)。管理員更新前先等待或取消工作；MCP 更新有未完成工作時拒絕。一般卸載保留工作紀錄及輸出，purge 先安全預檢再刪除。
+新服務安裝預設啟用通用背景工作；6.5.0 起受管理安裝／更新會補齊缺少的欄位並準備私有儲存，明確 true／false 保留。背景工作與同步指令共用權限及並行名額，但使用獨立時限。開啟、私有儲存準備、取消與重啟限制見 [背景工作指南](background-jobs.md)。管理員更新前先等待或取消工作；MCP 更新有未完成工作時拒絕。一般卸載保留工作紀錄及輸出，purge 先安全預檢再刪除。

@@ -11,12 +11,13 @@ The default returns up to 20 recent command summaries. `{"limit":100}` requests 
 | Field | Meaning |
 | --- | --- |
 | `version`, `startedAt`, `observedAt`, `processUptimeSeconds` | This process's package version and timing, not a GitHub publication or reboot claim. |
-| `accepting`, `mode` | `normal`, `diagnostic-only` after Audit fails, or `stopping`. |
+| `accepting`, `mode` | `normal`, `diagnostic-only` after Audit fails, `degraded` after unconfirmed command termination, or `stopping` during service shutdown. |
 | `activeCommands`, `maxParallelCommands` | Actual execution-slot usage. A finished process awaiting terminal Audit no longer occupies a command slot. |
+| `quarantinedCommands` | Slots reserved for unconfirmed termination. Free capacity remains usable; fully occupied quarantine rejects commands with `COMMAND_TERMINATION_UNCONFIRMED`. Confirmation restores capacity without replaying the failed command. |
 | `audit.backend`, `audit.available` | Effective file/journal/eventlog backend and the runtime failure latch. |
 | `audit.firstFailure` | First failure time, read/write operation, queued/backend/admission stage and a classified reason. Later rejected calls do not overwrite it. |
 | `audit.pendingIo`, `audit.queued` | Outstanding backend promises and queued work; a timed-out underlying disk operation may still finish. This is not a complete OS process inventory; a rejected native helper can still be ending. |
-| `recentRequests` | At most 100 volatile summaries: Audit ID, start time, phase, elapsed time when known, exit code, timeout and safe error code. No command text or output. |
+| `recentRequests` | At most 100 volatile summaries: Audit ID, start time, phase, elapsed time when known, exit code, timeout and safe error code. Optional `execution` gives the termination trigger, effective limits, output counts, real flags, classified cause and confirmation stage. No command text or output. |
 | `probes`, `partial` | Fixed source status, probe observation time, safe metadata or unavailable reason. `pending` tracks unfinished underlying work; cached data may be older than the top-level observation time. |
 
 The summary includes **no command text, cwd, stdout/stderr, environment/configuration, Token, raw exception/stack/log messages or complete internal paths**. Helpers parse only known typed diagnostic codes, not arbitrary lines with regex redaction. Storage names are resource categories; unavailable numeric measurements remain null rather than zero. OS metadata and log classification are best effort and not tamper-proof.

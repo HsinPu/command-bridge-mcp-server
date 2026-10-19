@@ -6,6 +6,7 @@ import { delimiter, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AppConfig } from "../config/env.js";
 import { AppError } from "../errors/AppError.js";
+import { CommandExecutionError, CommandQuarantine, ProcessTerminationError, terminationConfirmed, type ExecutionEvidence } from "./commandTermination.js";
 import { ManagedUpdateService } from "./managedUpdate.js";
 import { BackgroundJobService, type BackgroundExecution } from "./backgroundJobs.js";
 import { FileTransferService } from "./fileTransferService.js";
@@ -86,6 +87,7 @@ export class CommandExecutor {
   private activeCommands = 0;
   private reservedCommands = 0;
   private stopping = false;
+  private readonly quarantine = new CommandQuarantine();
   private readonly running = new Set<() => void>();
   private readonly pending = new Set<Promise<CommandResult>>();
   private readonly auditLog: BoundedAuditLog;
@@ -98,15 +100,16 @@ export class CommandExecutor {
   ) {
     this.auditLog = auditLog instanceof BoundedAuditLog ? auditLog : new BoundedAuditLog(auditLog, auditTimeout(config));
     this.diagnostics = new DiagnosticsService(config, this.auditLog, () => ({
-      accepting: !this.stopping && this.auditLog.available,
-      mode: this.stopping ? "stopping" : this.auditLog.available ? "normal" : "diagnostic-only",
+      accepting: this.acceptingCommands && this.quarantine.size < this.config.maxParallelCommands,
+      mode: this.stopping ? "stopping" : !this.auditLog.available ? "diagnostic-only" : this.quarantine.size ? "degraded" : "normal",
+      quarantinedCommands: this.quarantine.size,
       activeCommands: this.activeCommands, maxParallelCommands: this.config.maxParallelCommands,
       backgroundJobs: this.jobs?.snapshot() ?? { enabled: false, storageAvailable: true, queued: 0, active: 0 },
       recentRequests: this.recentDiagnostics.list(undefined,100)
     }));
     this.files = new FileTransferService(config, this.auditLog);
     this.jobs = new BackgroundJobService(config, this);
-    this.updates = new ManagedUpdateService(config, this.auditLog, undefined, () => this.jobs.hasActive());
+    this.updates = new ManagedUpdateService(config, this.auditLog, undefined, () => this.jobs.hasActive() || this.quarantine.size > 0);
   }
 
   private temporaryAccess?: TemporaryAccess;
@@ -127,10 +130,10 @@ export class CommandExecutor {
   }
 
   async shutdown(): Promise<void> {
+    this.stopping = true;
     const jobShutdown = this.jobs.shutdown();
     const fileShutdown = this.files.shutdown();
     const updateShutdown = this.updates.shutdown();
-    this.stopping = true;
     const accessShutdown = this.temporaryAccess?.stop();
     this.diagnostics.stop();
     this.updates.stop();
@@ -141,11 +144,12 @@ export class CommandExecutor {
         Promise.allSettled([...this.pending, jobShutdown, fileShutdown, updateShutdown, accessShutdown, this.diagnostics.drain(), ...(this.pendingReadiness ? [this.pendingReadiness] : [])]).then(() => this.auditLog.drain()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Shutdown deadline exceeded.")), 15_000); })
       ]);
-    } finally { if (timer) clearTimeout(timer); }
+    } finally { if (timer) clearTimeout(timer); this.quarantine.stop(); }
   }
 
   private completedReadiness?: { at: number; value: { ready: boolean; checks: Record<string, boolean> } };
   async readiness(waitMs = 5_000): Promise<{ ready: boolean; checks: Record<string, boolean> }> {
+    if (this.quarantine.size) return { ready: false, checks: { accepting: this.acceptingCommands && this.availableCommandSlots > 0, audit: this.auditLog.available, terminationConfirmed: false } };
     if (this.stopping || !this.auditLog.available) return { ready: false, checks: { accepting: false, audit: this.auditLog.available } };
     if (this.config.jobs?.enabled && !this.jobs.snapshot().storageAvailable) return { ready: false, checks: { accepting: true, audit: true, backgroundJobs: false } };
     if (this.completedReadiness && performance.now() - this.completedReadiness.at < 2000) return this.completedReadiness.value;
@@ -203,7 +207,7 @@ export class CommandExecutor {
     return { ready: Object.values(checks).every(Boolean), checks };
   }
 
-  get availableCommandSlots(): number { return this.stopping || !this.auditLog.available ? 0 : this.config.maxParallelCommands - this.activeCommands - this.reservedCommands; }
+  get availableCommandSlots(): number { return this.stopping || !this.auditLog.available ? 0 : this.config.maxParallelCommands - this.activeCommands - this.reservedCommands - this.quarantine.size; }
   reserveJobSlot(): (() => void) | undefined {
     if (this.availableCommandSlots <= 0) return undefined;
     this.reservedCommands++;
@@ -255,6 +259,7 @@ export class CommandExecutor {
       background?.releaseSlot();
       if (this.stopping || signal?.aborted) throw new AppError("COMMAND_CANCELLED", "The command was cancelled or the service is stopping.");
       if (this.availableCommandSlots <= 0) {
+        if (this.quarantine.size) throw new AppError("COMMAND_TERMINATION_UNCONFIRMED", "Capacity is reserved for commands whose termination is unconfirmed.", "Inspect diagnostics and service logs; an administrator may need to stop privileged descendants. Capacity recovers after exit and stream closure are confirmed.");
         throw new AppError(
           "COMMAND_CONCURRENCY_LIMIT",
           "The maximum number of parallel commands is already running.",
@@ -300,7 +305,7 @@ export class CommandExecutor {
     this.activeCommands += 1;
     try {
       let result: CommandResult;
-      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8", executionMode, background); }
+      try { result = await this.runProcess(shell, request.command, cwd, timeoutMs, signal, request.outputEncoding ?? "utf8", executionMode, background, attempted.auditId); }
       finally { this.activeCommands -= 1; }
       background?.finalizing();
       await this.writeAuditEvent(
@@ -324,11 +329,17 @@ export class CommandExecutor {
         throw error;
       }
 
+      if (error instanceof CommandExecutionError) {
+        this.executionEvidence.set(attempted.auditId, error.evidence);
+        while (this.executionEvidence.size > 100) this.executionEvidence.delete(this.executionEvidence.keys().next().value!);
+        console.error(JSON.stringify({ event: "command_bridge.execution_failure", auditId: attempted.auditId, ...(attempted.job ? { jobId: attempted.job.jobId } : {}), code: error.code, ...error.evidence }));
+      }
       await this.writeAuditEvent(
         this.followUpAuditEvent(attempted, "failed", {
           executionMode,
           shell,
           cwd,
+          ...(error instanceof CommandExecutionError ? { timedOut: error.evidence.timedOut, truncated: error.evidence.truncated, durationMs: error.evidence.durationMs } : {}),
           errorCode: auditErrorCode(error, "COMMAND_EXECUTION_FAILED")
         })
       );
@@ -380,8 +391,9 @@ export class CommandExecutor {
     return this.config.transport === "http" ? "http-bearer" : "stdio";
   }
 
+  private readonly executionEvidence = new Map<string, ExecutionEvidence>();
   private recordDiagnostic(event: CommandAuditEvent, phase: RecentDiagnosticRequest["phase"] = event.phase, errorCode = event.errorCode): void {
-    this.recentDiagnostics.record({ auditId:event.auditId, startedAt:this.diagnosticStartTimes.get(event) ?? this.recentDiagnostics.list(event.auditId,1)[0]?.startedAt ?? event.timestamp, phase, durationMs:event.durationMs, exitCode:event.exitCode, timedOut:event.timedOut, errorCode });
+    this.recentDiagnostics.record({ auditId:event.auditId, startedAt:this.diagnosticStartTimes.get(event) ?? this.recentDiagnostics.list(event.auditId,1)[0]?.startedAt ?? event.timestamp, phase, durationMs:event.durationMs, exitCode:event.exitCode, timedOut:event.timedOut, errorCode, ...(this.executionEvidence.has(event.auditId) ? { execution: this.executionEvidence.get(event.auditId) } : {}) });
   }
 
   private async writeAuditEvent(event: CommandAuditEvent): Promise<void> {
@@ -411,7 +423,8 @@ export class CommandExecutor {
     signal?: AbortSignal,
     outputEncoding: OutputEncoding = "utf8",
     executionMode = this.config.executionMode,
-    background?: BackgroundExecution
+    background?: BackgroundExecution,
+    auditId: string = randomUUID()
   ): Promise<CommandResult> {
     let invocation: ShellInvocation;
     const environment = buildChildEnvironment(this.config.passthroughEnv);
@@ -473,26 +486,35 @@ export class CommandExecutor {
       let closeDeadline: NodeJS.Timeout | undefined;
       let cancellation = false;
       let storedOutputBytes = 0;
+      let outputBytes = 0;
+      let outputChars = 0;
+      let trigger: ExecutionEvidence["trigger"] = null;
+      const evidence = (error?: unknown): ExecutionEvidence => ({
+        trigger, timeoutMs, outputLimit: background ? 5 * 1024 * 1024 : this.config.maxOutputChars,
+        outputChars, outputBytes, timedOut, truncated, cancelled: cancellation, durationMs: Math.max(0, Date.now() - startedAt),
+        stage: error instanceof ProcessTerminationError ? error.stage : "confirmed",
+        reason: error instanceof ProcessTerminationError ? error.reason : null
+      });
       const finishFailure = (error: Error) => {
         if (settled) return;
         settled = true;
         cleanup();
-        child.stdout.destroy();
-        child.stderr.destroy();
+        if (!terminationConfirmed(child)) this.quarantine.hold(auditId, () => terminationConfirmed(child));
         child.unref();
-        this.stopping = true;
-        reject(error);
+        reject(new CommandExecutionError(error instanceof AppError ? error.code : "COMMAND_TERMINATION_FAILED", error.message, evidence(error.cause ?? error), error));
       };
-      const terminate = () => {
+      const terminate = (reason: NonNullable<ExecutionEvidence["trigger"]>) => {
+        trigger ??= reason;
         if (!termination) {
+          console.error(JSON.stringify({ event: "command_bridge.termination_requested", auditId, ...evidence(), stage: "requested" }));
           termination = terminateProcessTree(child);
           void termination.then(() => {
-            if (!settled) closeDeadline = setTimeout(() => finishFailure(new AppError("COMMAND_TERMINATION_FAILED", "Command streams did not close after termination.")), 500);
+            if (!settled) closeDeadline = setTimeout(() => finishFailure(new AppError("COMMAND_TERMINATION_FAILED", "Command streams did not close after termination.", undefined, { cause: new ProcessTerminationError("streams", "streams-open") })), 500);
           }, () => undefined);
           void termination.catch(error => finishFailure(new AppError("COMMAND_TERMINATION_FAILED", "Could not confirm command termination.", undefined, { cause: error })));
         }
       };
-      const cancel = () => { cancellation = true; terminate(); };
+      const cancel = () => { cancellation = true; terminate(this.stopping ? "service-shutdown" : "client-cancel"); };
       const cleanup = () => {
         clearTimeout(timeout);
         if (closeDeadline) clearTimeout(closeDeadline);
@@ -501,7 +523,7 @@ export class CommandExecutor {
       };
       const timeout = setTimeout(() => {
         timedOut = true;
-        terminate();
+        terminate("timeout");
       }, timeoutMs);
       this.running.add(cancel);
       signal?.addEventListener("abort", cancel, { once: true });
@@ -509,6 +531,7 @@ export class CommandExecutor {
 
       const appendOutput = (current: string, text: string): string => {
         if (!text) return current;
+        outputChars = Math.min(Number.MAX_SAFE_INTEGER, outputChars + text.length);
         if (background) {
           const remainingBytes = 10 * 1024 * 1024 - storedOutputBytes;
           const remainingChars = 5 * 1024 * 1024 - stdout.length - stderr.length;
@@ -529,14 +552,14 @@ export class CommandExecutor {
         if (remaining <= 0) {
           if (!truncated) {
             truncated = true;
-            if (!background) terminate();
+            if (!background) terminate("output-limit");
           }
           return current;
         }
 
         if (text.length > remaining) {
           truncated = true;
-          if (!background) terminate();
+          if (!background) terminate("output-limit");
           const prefix = text.slice(0, remaining);
           // Do not return half of a UTF-16 surrogate pair at the character cap.
           return current + prefix.replace(/[\uD800-\uDBFF]$/, "");
@@ -549,16 +572,17 @@ export class CommandExecutor {
         if (outputFailure || settled || (chunk === undefined && (timedOut || truncated || cancellation))) return "";
         try { return decoder.decode(chunk, { stream: chunk !== undefined }); }
         catch {
+          trigger ??= "output-decode-failure";
           outputFailure = outputDecodingError();
           // EOF can precede the process close callback. An incomplete final
           // character needs no additional taskkill; the normal deadline still
           // bounds a process that closes its pipes without exiting.
-          if (chunk !== undefined) terminate();
+          if (chunk !== undefined) terminate("output-decode-failure");
           return "";
         }
       };
-      child.stdout.on("data", (chunk: Buffer) => { stdout = appendOutput(stdout, decode(stdoutDecoder, chunk)); background?.activity(chunk.length, truncated); });
-      child.stderr.on("data", (chunk: Buffer) => { stderr = appendOutput(stderr, decode(stderrDecoder, chunk)); background?.activity(chunk.length, truncated); });
+      child.stdout.on("data", (chunk: Buffer) => { outputBytes = Math.min(Number.MAX_SAFE_INTEGER, outputBytes + chunk.length); stdout = appendOutput(stdout, decode(stdoutDecoder, chunk)); if (!settled) background?.activity(chunk.length, truncated); });
+      child.stderr.on("data", (chunk: Buffer) => { outputBytes = Math.min(Number.MAX_SAFE_INTEGER, outputBytes + chunk.length); stderr = appendOutput(stderr, decode(stderrDecoder, chunk)); if (!settled) background?.activity(chunk.length, truncated); });
       child.stdout.once("end", () => { stdout = appendOutput(stdout, decode(stdoutDecoder)); });
       child.stderr.once("end", () => { stderr = appendOutput(stderr, decode(stderrDecoder)); });
 
@@ -586,8 +610,12 @@ export class CommandExecutor {
         }
         settled = true;
         cleanup();
-        if (cancellation) { reject(new AppError("COMMAND_CANCELLED", "The command was cancelled.")); return; }
-        if (outputFailure) { reject(outputFailure); return; }
+        if (cancellation) { reject(new CommandExecutionError("COMMAND_CANCELLED", "The command was cancelled.", evidence())); return; }
+        if (outputFailure) { reject(new CommandExecutionError(outputFailure.code, outputFailure.message, evidence(), outputFailure)); return; }
+        if (trigger) {
+          this.executionEvidence.set(auditId, evidence());
+          while (this.executionEvidence.size > 100) this.executionEvidence.delete(this.executionEvidence.keys().next().value!);
+        }
         resolve({
           ok: exitCode === 0 && !timedOut && (!truncated || !!background),
           shell,
@@ -727,10 +755,10 @@ export async function terminateProcessTree(child: ChildProcess): Promise<void> {
       if (process.platform === "win32" && windowsToolFinished && processAndPipesClosed()) done();
     };
     child.once("close", onClose);
-    timers.push(setTimeout(() => done(new Error("Process termination deadline exceeded.")), 5_000));
+    timers.push(setTimeout(() => done(new ProcessTerminationError("deadline", "deadline-exceeded")), 5_000));
     if (process.platform === "win32") {
       const killer = spawn(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"), ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
-      killer.once("error", error => done(error));
+      killer.once("error", error => done(new ProcessTerminationError("signal", "other", error)));
       killer.once("close", () => {
         windowsToolFinished = true;
         // taskkill may finish before Node observes a natural exit. Wait within
@@ -741,17 +769,19 @@ export async function terminateProcessTree(child: ChildProcess): Promise<void> {
       timers.push(setTimeout(() => killer.kill(), 4_000));
     } else {
       const send = (signal: NodeJS.Signals) => {
+        if (ended) return;
         try { process.kill(-pid, signal); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") done(error as Error); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") done(new ProcessTerminationError("signal", ["EPERM", "EACCES"].includes((error as NodeJS.ErrnoException).code ?? "") ? (error as NodeJS.ErrnoException).code as "EPERM" | "EACCES" : "other", error)); }
       };
       send("SIGTERM");
+      if (ended) return;
       timers.push(setTimeout(() => send("SIGKILL"), 2_000));
       const check = () => {
         if (ended) return;
         try { process.kill(-pid, 0); timers.push(setTimeout(check, 50)); }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code === "ESRCH") done();
-          else done(error as Error);
+          else done(new ProcessTerminationError("group-check", ["EPERM", "EACCES"].includes((error as NodeJS.ErrnoException).code ?? "") ? (error as NodeJS.ErrnoException).code as "EPERM" | "EACCES" : "other", error));
         }
       };
       check();

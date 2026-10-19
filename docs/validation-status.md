@@ -1,5 +1,15 @@
 # Validation status
 
+## 6.5.0 validation (2026-10-19)
+
+MINOR: compatible command quarantine/recovery evidence and managed jobs-default migration. GitHub main was checked at 14280baa38c3fe9988183014b39a7bc1a6ffc94c before implementation; that source had no later fix.
+
+Final full native Windows Node 20.15.1: 261 tests, 215 passed, 46 platform skips, zero failures/cancellations (208 seconds). Final Ubuntu WSL Node 24.18.0: 261 tests, 229 passed, 32 platform skips, zero failures/cancellations (140 seconds). Regression coverage is confined to dedicated test files and fixtures. Linux exercises injected signal/group EPERM, group deadlines, open streams, output-limit/timeout/cancel/shutdown triggers, held capacity, recovery, exact failed Audit flags and durable background evidence after reload. A real root-owned finite child is started in a private subprocess which then drops its UID/GID; it proves the actual Unix permission boundary and later recovery without changing accounts or adding sudo rules. It does not prove Oracle sudo/Docker behavior.
+
+Managed configuration tests cover missing defaults, explicit false, custom settings, byte/BOM/newline preservation, repeated migration, exclusive candidate output, actual installer update and original-byte rollback. Existing platform storage/ACL and SELinux checks remain mandatory. Synchronous output-limit termination is retained; background output drains after truncation and a finite background command completes beyond the synchronous maximum.
+
+PowerShell 5.1, Bash/launchers, Node scripts and WinSW XML syntax, root versions and unchanged dependency entries, unchanged README bootstrap commands/links, and git diff checks are verified separately. Hosted Windows/Linux service smoke tests, install-channel publication, Oracle Linux SELinux Enforcing, actual reboot, real sudo/root Docker cancellation and a production 20-minute build are not executed by this local batch. No production deployment or 26pv build was performed. Root descendants may still need administrator intervention; no privileged termination helper or general sudo permission is added.
+
 ## 6.4.1 validation (2026-10-14)
 
 PATCH: CI 38523008111 passed both general suites but its real Linux service installation rejected missing background Audit lifecycle events. Optional metadata had become the first serialized JSON property, which the fixed journal reader correctly excluded because its established prefix was absent. Serialization now retains schemaVersion/event first without changing the reader scope or waiving lifecycle checks. An actual packaged-reader regression verifies both attempted/completed job records. Running status also retains the originally planned safe raw output-byte progress counter, with a zero default for earlier saved records.

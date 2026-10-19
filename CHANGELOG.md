@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.5.0 — 2026-10-19
+
+MINOR: add compatible termination quarantine/recovery diagnostics and managed-upgrade background-job defaults; preserve explicit configuration and existing synchronous execution contracts.
+
+- Separate shutdown from failed command termination, reserve unconfirmed capacity and recover only after process/stream/group confirmation. Report degraded diagnostics, explicit capacity errors and block MCP updates while quarantined.
+- Preserve original termination triggers, classified causes, effective limits, output counts and true failed Audit timeout/truncation/duration; emit safe structured service evidence. Never install a general privileged killer or new sudo permission.
+- Managed install/update fills absent job settings with enabled/private storage/30-minute and one-hour budgets, retains explicit true/false and custom settings, and uses existing backup/rollback and platform storage validation. npm/development remain opt-in.
+- Keep synchronous output-limit termination; background output truncates without killing the command. Add dedicated regression tests and operational recovery/migration guidance.
+
 ## 6.4.1 — 2026-10-14
 
 PATCH: preserve the native Audit event prefix when serializing optional background-job or transfer metadata.

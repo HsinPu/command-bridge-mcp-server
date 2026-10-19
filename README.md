@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.4.1-blue)
+![Version](https://img.shields.io/badge/version-6.5.0-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Changelog](CHANGELOG.md)
 
@@ -215,9 +215,9 @@ Example requests for a connected client:
 
 ## Background command jobs
 
-6.4.0 adds general background jobs for builds, tests and other finite commands. Submit with `command_bridge_start_job`, then query/list/read output/cancel with the corresponding job tools. Accepted jobs continue after client disconnect; they use the same command policies, service identity and shared parallel limits. New service installations enable jobs; older configurations remain disabled until an administrator provisions private storage and enables them.
+6.4.0 adds general background jobs for builds, tests and other finite commands. Submit with `command_bridge_start_job`, then query/list/read output/cancel with the corresponding job tools. Accepted jobs continue after client disconnect; they use the same command policies, service identity and shared parallel limits. Managed installation and update enable jobs when the setting is absent and provision private storage; explicit true/false settings are preserved. npm and development configurations remain opt-in.
 
-Jobs default to 30 minutes with a one-hour host maximum. Running jobs expose status; output is available after terminal Audit and safe storage succeed. Restart interrupts jobs without automatically rerunning them. Cancellation does not guarantee Docker or another external daemon stops its work. Shared tokens can access all jobs in the service. See [background jobs](docs/background-jobs.md) for tools, retry IDs, setup, output limits and security boundaries.
+Jobs default to 30 minutes with a one-hour host maximum. Running jobs expose status; output is available after terminal Audit and safe storage succeed. Restart interrupts jobs without automatically rerunning them. Cancellation does not guarantee Docker or another external daemon stops its work. Shared tokens can access all jobs in the service. Synchronous output limits still terminate commands; use background jobs for verbose or long builds. Unconfirmed termination reserves its command slot and appears as degraded diagnostics until cleanup is confirmed. See [background jobs](docs/background-jobs.md) for tools, retry IDs, setup, output limits and recovery.
 
 ## Command restrictions and security boundaries
 

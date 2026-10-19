@@ -215,7 +215,7 @@ npm start
 
 ## 通用背景工作（6.4.0 起）
 
-- 新增 start_job/get_job/list_jobs/read_job_output/cancel_job 五個 command_bridge MCP 工具；保留同步指令介面與時限。新服務安裝預設啟用，舊設定缺欄位與開發環境維持停用；須由管理員明確啟用並準備私有儲存。
+- 新增 start_job/get_job/list_jobs/read_job_output/cancel_job 五個 command_bridge MCP 工具；保留同步指令介面與時限。6.5.0 起受管理安裝／更新補齊缺少的 jobs 預設並準備私有儲存，保留明確 true／false；npm 與開發環境維持停用。設定遷移須可重複執行，沿用原始位元組與權限備份及失敗回復。
 - 背景工作預設 30 分鐘、上限 60 分鐘，可由管理員設定至一天；提交超限明確拒絕。與同步指令共用名額，啟動保留及釋放各一次，執行前重驗政策、實際 cwd、自我保護及模式；模式與提交時不同拒絕重用。
 - 受管理服務帳號與 sudo 不變；UUID requestId 去重只在紀錄保存期間有效。斷線不取消已接受工作；重啟未完成紀錄標記 interrupted，不自動重跑、不憑保存 PID 殺程序。停止仍限 15 秒。
 - job metadata 沿用 Audit schemaVersion 1；每工作 attempted 與唯一終結事件。終結 Audit 與安全保存成功前不公開 stdout/stderr，執行中僅回報 metadata。輸出有編碼、5 Mi 字元／10 MiB 序列化容量限制，超限持續排空而不殺正常工作；總配額 100 MiB，保留 24 小時，分頁回應小於 64 KiB。
@@ -223,3 +223,5 @@ npm start
 - MCP 更新遇到未完成背景工作拒絕。管理員重啟／更新可中斷工作；取消程序不代表 Docker 或其他外部服務工作停止。共用 Token 不提供不同對話隔離；既有 guarded／自我保護不升級為完整 root／任意腳本沙箱。
 
 - 6.4.1 起，Audit 序列化固定以 schemaVersion／event 作為 JSON 前綴，job／fileTransfer 選用 metadata 置於固定欄位之後；需測試實際 Linux 包裝 reader 能讀取完整背景工作 lifecycle，不以記憶體 Audit 模擬取代原生篩選驗證。
+
+- 6.5.0 起，單一工作終止失敗不得設定服務 stopping；未確認工作占用隔離名額，僅確認程序退出、串流關閉及 Linux 群組消失才自動回收。不得以 ESRCH 以外的查詢錯誤當成不存在、不憑保存 PID 重送訊號。保留真實 failed Audit 旗標及安全的終止原因／階段／計數診斷；不新增通用 sudo killer。同步輸出超限仍終止，背景輸出超限持續排空。測試案例放專用測試檔，驗證結果放驗證紀錄，不放 README 或正式程式的測試情境／故障注入分支。

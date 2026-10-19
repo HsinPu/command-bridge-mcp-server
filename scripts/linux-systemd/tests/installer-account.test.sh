@@ -107,6 +107,8 @@ if ( RUN_AS_INSTALLER=0 ENABLE_UNRESTRICTED=1 select_service_identity ) > "$work
   echo 'Unrestricted mode incorrectly accepted without opt-in identity.' >&2; exit 1
 fi
 TEMP_DIR=$work
+source scripts/linux-systemd/tests/job-runtime.test-helper.sh
+prepare_job_migration_runtime
 ensure_installer_state
 [[ -d "$INSTALLER_STATE_DIR" && ! -e "$INSTALLER_STATE_DIR/CommandBridgeMCP" ]]
 mkdir "$work/outside"

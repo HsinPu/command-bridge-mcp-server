@@ -48,6 +48,9 @@ prepare() {
   done
   printf 'COMMAND_BRIDGE_EXECUTION_MODE=unrestricted\nCOMMAND_BRIDGE_BEARER_TOKEN=fixture-preserved-token\n' > "$work/config/command-bridge.env"
   cp "$work/config/command-bridge.env" "$work/expected.env"
+  TEMP_DIR="$work/temporary"
+  source scripts/linux-systemd/tests/job-runtime.test-helper.sh
+  if [[ "$scenario" != uninstall ]]; then prepare_job_migration_runtime; fi
   mkdir -p "$work/temporary/source/packaging/linux" "$work/temporary/source/scripts/diagnostics" "$work/temporary/source/scripts/managed-update" "$work/temporary/source/packaging/systemd" "$work/temporary/source/packaging"
   for target in packaging/linux/diagnostic-reader scripts/diagnostics/read-linux.mjs packaging/linux/update-request scripts/managed-update/state.mjs packaging/systemd/command-bridge-update.service packaging/policy.example.json; do
     printf 'candidate\n' > "$work/temporary/source/$target"

@@ -14,7 +14,7 @@ export class DiagnosticsService {
   private stopping=false;
   private readonly startedAt=new Date().toISOString();
   private readonly sources:Record<string,Source>;
-  constructor(private readonly config:AppConfig,private readonly audit:BoundedAuditLog,private readonly runtime:()=>{accepting:boolean;mode:string;activeCommands:number;maxParallelCommands:number;recentRequests:RecentDiagnosticRequest[];backgroundJobs?:{enabled:boolean;storageAvailable:boolean;queued:number;active:number}},providers?:{host:DiagnosticProvider;storage?:DiagnosticProvider},private readonly deadlineMs=5000) {
+  constructor(private readonly config:AppConfig,private readonly audit:BoundedAuditLog,private readonly runtime:()=>{accepting:boolean;mode:string;activeCommands:number;maxParallelCommands:number;quarantinedCommands?:number;recentRequests:RecentDiagnosticRequest[];backgroundJobs?:{enabled:boolean;storageAvailable:boolean;queued:number;active:number}},providers?:{host:DiagnosticProvider;storage?:DiagnosticProvider},private readonly deadlineMs=5000) {
     const modulePath=fileURLToPath(import.meta.url);
     const managedRoot=process.platform==="win32"?resolve(process.env.ProgramFiles??"C:\\Program Files","CommandBridgeMCP")+sep:"/usr/local/lib/command-bridge/";
     const managed=process.platform==="win32"?modulePath.toLowerCase().startsWith(managedRoot.toLowerCase()):modulePath.startsWith(managedRoot);

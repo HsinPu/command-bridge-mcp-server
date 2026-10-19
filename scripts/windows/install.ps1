@@ -847,6 +847,13 @@ try {
     }
   } finally { $env:DOTENV_CONFIG_PATH = $previousDotenv }
   if (-not $Update) { New-SecureConfiguration }
+  $jobMigrationFile = Join-Path $TempRoot 'migrated-job-config.env'
+  Invoke-External (Join-Path $nodeRoot 'node.exe') @((Join-Path $sourceRoot 'dist\cli\jobConfigurationMigration.js'), $ConfigFile, $jobMigrationFile, (Join-Path $ConfigRoot 'jobs'))
+  $jobBytes = [IO.File]::ReadAllBytes($jobMigrationFile)
+  if ([Convert]::ToBase64String($jobBytes) -cne [Convert]::ToBase64String([IO.File]::ReadAllBytes($ConfigFile))) {
+    [IO.File]::WriteAllBytes($ConfigFile, $jobBytes)
+    Write-Log 'Added missing managed background job defaults; explicit settings were preserved.'
+  }
   Install-ClientSetup $nodeRoot $sourceRoot
   $policyPath = Join-Path $ConfigRoot 'policy.json'
   if (-not (Test-Path -LiteralPath $policyPath)) { Copy-Item -LiteralPath (Join-Path $sourceRoot 'packaging\policy.example.json') -Destination $policyPath }

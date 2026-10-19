@@ -168,6 +168,50 @@ test("background output caps keep draining without killing the finite process", 
   } finally { await f.close(); }
 });
 
+test("background command completes beyond the synchronous host maximum", async () => {
+  const f = await fixture();
+  try {
+    const job = await f.executor.jobs.start({ requestId: randomUUID(), command: command('setTimeout(()=>process.stdout.write("finished"),1500)'), timeoutMs: 15000 });
+    const result = await finished(f.executor, job.jobId);
+    assert.equal(result.state, "completed");
+    assert.equal(result.timedOut, false);
+    assert.equal(result.exitCode, 0);
+    assert.equal((await f.executor.jobs.output(job.jobId)).text, "finished");
+    assert.equal(f.executor.availableCommandSlots, 1);
+  } finally { await f.close(); }
+});
+
+test("unconfirmed background termination retains real flags and evidence across reload", { skip: windows }, async t => {
+  const f = await fixture();
+  let restored: CommandExecutor | undefined;
+  const originalKill = process.kill.bind(process);
+  const kill = t.mock.method(process, "kill", (pid: number, signal?: NodeJS.Signals | number) => {
+    if (pid < 0 && signal !== 0) throw Object.assign(new Error("private termination detail"), { code: "EPERM" });
+    return originalKill(pid, signal);
+  });
+  t.mock.method(console, "error", () => undefined);
+  try {
+    const job = await f.executor.jobs.start({ requestId: randomUUID(), command: "sleep 2", timeoutMs: 1000 });
+    const failed = await finished(f.executor, job.jobId);
+    assert.equal(failed.state, "failed");
+    assert.equal(failed.terminationStatus, "unknown");
+    assert.equal(failed.timedOut, true);
+    assert.equal(failed.execution?.reason, "EPERM");
+    assert.equal(failed.execution?.trigger, "timeout");
+    assert.equal(failed.outputAvailable, false);
+    assert.equal(f.audit.events.at(-1)?.timedOut, true);
+    assert.equal(f.executor.availableCommandSlots, 0);
+    await new Promise(r => setTimeout(r, 1500));
+    assert.equal(f.executor.availableCommandSlots, 1);
+    await f.executor.shutdown();
+    restored = new CommandExecutor(f.config, f.audit);
+    const retained = await restored.jobs.get(job.jobId);
+    assert.equal(retained.timedOut, true);
+    assert.deepEqual(retained.execution, failed.execution);
+    assert.equal(retained.terminationStatus, "unknown");
+  } finally { kill.mock.restore(); await restored?.shutdown(); await f.close(); }
+});
+
 test("MCP background submission survives disconnect and rejects update while active", async () => {
   const f = await fixture({ transport: "http", bearerToken: "private-job-test-token-".repeat(3), httpPort: 0 });
   const server = await startHttpTransport(f.config, f.executor);

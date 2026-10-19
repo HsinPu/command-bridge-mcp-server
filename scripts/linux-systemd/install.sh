@@ -1305,7 +1305,12 @@ install_configuration() {
     # Every install selects the mode from its explicit option, even on reinstall.
     save_file_backup "${CONFIG_FILE}" "${TEMP_DIR}/recovery/previous-config.env" || fail "Configuration backup failed; the original configuration was preserved."
     CONFIG_BACKUP="${TEMP_DIR}/recovery/previous-config.env"
-    # Updates preserve the complete configuration, including comments and quoting.
+    CONFIG_CHANGED=1
+    local migration_status
+    migration_status=$("${TEMP_DIR}/node-runtime/bin/node" "${TEMP_DIR}/source/dist/cli/jobConfigurationMigration.js" "${CONFIG_FILE}" "${CONFIG_FILE}.jobs-new" /var/lib/command-bridge-jobs) || fail "Background job migration failed; configuration will be restored."
+    mv -- "${CONFIG_FILE}.jobs-new" "${CONFIG_FILE}"
+    if [[ "$migration_status" == migrated ]]; then log "Added missing managed background job defaults; explicit settings were preserved."; fi
+    # Updates preserve existing values, comments and quoting; only absent managed job defaults are added.
     if [[ "${UPDATE_ONLY}" == 1 ]]; then return 0; fi
     CONFIG_CHANGED=1
     chown root:root "${CONFIG_FILE}"
@@ -1664,7 +1669,7 @@ print_codex_setup() {
 }
 
 prepare_background_jobs() {
-  # Missing old settings remain disabled. Never rewrite an existing job tree's
+  # Never rewrite an existing job tree's
   # ownership, walk service-writable children as root, or follow a link.
   local root=/var/lib/command-bridge-jobs uid gid settings leaf
   settings=$("${TEMP_DIR}/node-runtime/bin/node" -e 'import(process.argv[1]).then(async m=>{const s=m.jobStorageSettings((await import(process.argv[3])).readFileSync(process.argv[2]));console.log(s.enabled);console.log(s.root??"");})' "${TEMP_DIR}/source/dist/cli/connectionSetup.js" "${CONFIG_FILE}" node:fs) || fail "Invalid background job configuration."

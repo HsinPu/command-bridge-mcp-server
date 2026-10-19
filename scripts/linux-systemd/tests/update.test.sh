@@ -20,6 +20,8 @@ sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '{"sourceSha":"%s"}\n' "$sha" > "$CURRENT_LINK/install-info.json"
 printf '{}\n' > "$CONFIG_DIR/policy.json"
 TEMP_DIR="$work/temp"
+source scripts/linux-systemd/tests/job-runtime.test-helper.sh
+prepare_job_migration_runtime
 install() { local -a args=(); while (($#)); do case "$1" in -o|-g) shift 2;; *) args+=("$1"); shift;; esac; done; command install "${args[@]}"; }
 chown() { :; }
 getent() { printf 'alice:x:10001:10002::%s:/bin/bash\n' "$work/home"; }
@@ -29,7 +31,7 @@ expect_failure() { if ( "$@" ); then echo 'Expected failure' >&2; exit 1; fi; }
 UPDATE_ONLY=1; EXPECTED_INSTALLED_SHA="$sha"
 for mode in allowlist guarded unrestricted; do
  for entry_prefix in '' '/usr/bin/env -- '; do
-  printf '# preserve all fields and quoting\nexport COMMAND_BRIDGE_EXECUTION_MODE="%s" # mode\nCOMMAND_BRIDGE_BEARER_TOKEN=fixture-only\n' "$mode" > "$CONFIG_FILE"
+  printf '# preserve all fields and quoting\nexport COMMAND_BRIDGE_EXECUTION_MODE="%s" # mode\nCOMMAND_BRIDGE_BEARER_TOKEN=fixture-only\nCOMMAND_BRIDGE_JOBS_ENABLED=false\n' "$mode" > "$CONFIG_FILE"
   cp "$CONFIG_FILE" "$work/before"
   unit 10001
   sed -i "s|^ExecStart=|ExecStart=$entry_prefix|" "$UNIT_FILE"
@@ -42,6 +44,19 @@ for mode in allowlist guarded unrestricted; do
   cmp "$CONFIG_FILE" "$work/before"
  done
 done
+# Missing settings migrate during update; rollback restores original bytes.
+printf 'COMMAND_BRIDGE_EXECUTION_MODE=allowlist\nCOMMAND_BRIDGE_BEARER_TOKEN=fixture-only\n' > "$CONFIG_FILE"
+cp "$CONFIG_FILE" "$work/before-migration"
+install_configuration
+head -c "$(wc -c < "$work/before-migration")" "$CONFIG_FILE" > "$work/preserved-prefix"
+cmp "$work/before-migration" "$work/preserved-prefix"
+grep -Fxq COMMAND_BRIDGE_JOBS_ENABLED=true "$CONFIG_FILE"
+restore_configuration
+cmp "$CONFIG_FILE" "$work/before-migration"
+install_configuration
+cp "$CONFIG_FILE" "$work/after-migration"
+install_configuration
+cmp "$CONFIG_FILE" "$work/after-migration"
 unit command-bridge; RUN_AS_INSTALLER=0
 prepare_update; [[ "$RUN_AS_INSTALLER" == 0 ]]; select_service_identity; assert_new_installation_paths
 EXPECTED_INSTALLED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

@@ -12,6 +12,8 @@ source "$work/install.sh"
 trap - EXIT ERR
 trap 'rm -rf --one-file-system -- "$work"' EXIT
 TEMP_DIR=$work
+source scripts/linux-systemd/tests/job-runtime.test-helper.sh
+prepare_job_migration_runtime
 RUN_AS_INSTALLER=1; EXISTING_INSTALLER_MODE=1; ENABLE_UNRESTRICTED=0; ENABLE_GUARDED=1
 UPDATE_ONLY=0; REFRESH_NETWORK=0; ENABLE_UPLOAD=0; ENABLE_DOWNLOAD=0
 mkdir -p "$CONFIG_DIR" "$TEMP_DIR/source/packaging"
@@ -31,7 +33,7 @@ import {writeFileSync} from 'node:fs';
 const [file,bom,ending,final]=process.argv.slice(2), nl=ending==='lf'?'\n':'\r\n';
 const text=(bom==='1'?'\uFEFF':'')+'COMMAND_BRIDGE_EXECUTION_MODE=allowlist'+nl+
   '# 中文🙂 preserved'+nl+'COMMAND_BRIDGE_ALLOWED_ROOTS=/工作/中文'+nl+
-  'COMMAND_BRIDGE_BEARER_TOKEN=fixture-only'+nl+'# 最後一行'+(final==='1'?nl:'');
+  'COMMAND_BRIDGE_JOBS_ENABLED=false'+nl+'COMMAND_BRIDGE_BEARER_TOKEN=fixture-only'+nl+'# 最後一行'+(final==='1'?nl:'');
 writeFileSync(file,text);writeFileSync(file+'.expected',text.replace('EXECUTION_MODE=allowlist','EXECUTION_MODE=guarded'));
 JS
         CONFIG_BACKUP=""; CONFIG_CHANGED=0
@@ -59,7 +61,13 @@ done
 : > "$CONFIG_FILE"
 CONFIG_BACKUP=""; CONFIG_CHANGED=0
 install_configuration > "$work/output"
-printf 'COMMAND_BRIDGE_EXECUTION_MODE=guarded\n' > "$CONFIG_FILE.expected"
+cat > "$CONFIG_FILE.expected" <<'ENV'
+COMMAND_BRIDGE_JOBS_ENABLED=true
+COMMAND_BRIDGE_JOBS_ROOT='/var/lib/command-bridge-jobs'
+COMMAND_BRIDGE_JOBS_DEFAULT_TIMEOUT_MS=1800000
+COMMAND_BRIDGE_JOBS_MAX_TIMEOUT_MS=3600000
+COMMAND_BRIDGE_EXECUTION_MODE=guarded
+ENV
 cmp "$CONFIG_FILE" "$CONFIG_FILE.expected"
 restore_configuration
 [[ ! -s "$CONFIG_FILE" ]] || { printf 'Empty configuration did not roll back exactly.\n' >&2; exit 1; }

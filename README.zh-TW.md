@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.4.1-blue)
+![Version](https://img.shields.io/badge/version-6.5.0-blue)
 
 [English](README.md) · [一鍵安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [一鍵解除安裝](#一鍵解除安裝) · [更新紀錄](CHANGELOG.md)
 
@@ -215,9 +215,9 @@ Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" update
 
 ## 通用背景工作
 
-6.4.0 新增適用於建置、測試及其他有限時間指令的背景工作。使用 `command_bridge_start_job` 提交，再由對應工作工具查詢、列出、讀取輸出及取消。已接受工作在用戶端斷線後繼續執行，沿用相同指令政策、服務帳號及共用並行名額。新服務安裝預設啟用，舊設定需管理員準備私有儲存並明確開啟。
+6.4.0 新增適用於建置、測試及其他有限時間指令的背景工作。使用 `command_bridge_start_job` 提交，再由對應工作工具查詢、列出、讀取輸出及取消。已接受工作在用戶端斷線後繼續執行，沿用相同指令政策、服務帳號及共用並行名額。受管理安裝／更新會在欄位缺少時啟用並準備私有儲存，明確設定 true／false 則保留；npm 與開發環境仍需自行啟用。
 
-預設執行 30 分鐘，主機上限預設一小時。執行中可查狀態，終結稽核與安全保存成功後才可讀取輸出；服務重啟會中斷，不自動重跑。取消不保證 Docker 等外部服務的工作停止。共用 Token 可以存取同一服務的所有工作。工具、重試 ID、設定及安全限制詳見[背景工作指南](docs/background-jobs.md)。
+預設執行 30 分鐘，主機上限預設一小時。執行中可查狀態，終結稽核與安全保存成功後才可讀取輸出；服務重啟會中斷，不自動重跑。取消不保證 Docker 等外部服務的工作停止。共用 Token 可以存取同一服務的所有工作。同步指令仍會因輸出超限終止，大量輸出或長時間建置請使用背景工作。終止未確認時保留該名額，診斷顯示 degraded；確認清理後才釋放。工具、重試 ID、設定及恢復方式詳見[背景工作指南](docs/background-jobs.md)。
 
 ## 指令限制與安全邊界
 

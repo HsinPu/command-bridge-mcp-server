@@ -6,6 +6,7 @@ import { AppError } from "../errors/AppError.js";
 import { createAuditEvent, type CommandAuditEvent } from "./auditLog.js";
 import type { CommandExecutor, CommandRequest, CommandResult } from "./commandExecutor.js";
 import { JobStore } from "./jobStore.js";
+import { CommandExecutionError, executionEvidenceSchema } from "./commandTermination.js";
 
 export interface BackgroundExecution {
   attempted: CommandAuditEvent;
@@ -23,6 +24,7 @@ export const jobRequestSchema = z.object({
 type JobRequest = z.infer<typeof jobRequestSchema>;
 const states = ["queued", "starting", "running", "finalizing", "completed", "failed", "cancelled", "timed_out", "interrupted"] as const;
 const recordSchema = z.object({
+  execution: executionEvidenceSchema.optional(),
   schemaVersion: z.literal(1), jobId: z.string().uuid(), requestId: z.string().uuid(), fingerprint: z.string().regex(/^[a-f0-9]{64}$/), binding: z.string().regex(/^[a-f0-9]{64}$/),
   state: z.enum(states), mode: z.enum(["allowlist", "guarded", "unrestricted"]),
   createdAt: z.number().int().nonnegative(), startedAt: z.number().int().nonnegative().nullable(), endedAt: z.number().int().nonnegative().nullable(),
@@ -96,9 +98,10 @@ export class BackgroundJobService {
       createdAt: new Date(record.createdAt).toISOString(), startedAt: record.startedAt === null ? null : new Date(record.startedAt).toISOString(),
       endedAt: record.endedAt === null ? null : new Date(record.endedAt).toISOString(), auditId: record.auditId, auditStatus: record.auditStatus,
       outputAvailable: !publishing && record.auditStatus === "confirmed" && record.result !== null,
-      exitCode: record.result?.exitCode ?? null, timedOut: record.result?.timedOut ?? false, truncated: record.result?.truncated ?? this.active.get(record.jobId)?.truncated ?? false, outputBytes: record.outputBytes,
+      exitCode: record.result?.exitCode ?? null, timedOut: record.result?.timedOut ?? record.execution?.timedOut ?? false, truncated: record.result?.truncated ?? record.execution?.truncated ?? this.active.get(record.jobId)?.truncated ?? false, outputBytes: record.outputBytes,
+      ...(record.execution ? { execution: record.execution } : {}),
       terminationStatus: record.terminationStatus, errorCode: record.errorCode,
-      durationMs: record.result?.durationMs ?? (record.startedAt === null ? 0 : Math.max(0, (record.endedAt ?? Date.now()) - record.startedAt)),
+      durationMs: record.result?.durationMs ?? record.execution?.durationMs ?? (record.startedAt === null ? 0 : Math.max(0, (record.endedAt ?? Date.now()) - record.startedAt)),
       lastActivityAt: this.active.get(record.jobId)?.activityAt ?? null };
   }
   start(input: JobRequest, signal?: AbortSignal) {
@@ -189,6 +192,7 @@ export class BackgroundJobService {
       record.result = result; record.state = result.timedOut ? "timed_out" : result.ok ? "completed" : "failed"; record.auditStatus = "confirmed";
       if (result.timedOut) record.terminationStatus = "confirmed";
     } catch (error) {
+      if (error instanceof CommandExecutionError) record.execution = error.evidence;
       record.errorCode = error instanceof AppError ? error.code : "JOB_EXECUTION_FAILED";
       record.state = active.controller.signal.aborted ? "cancelled" : "failed";
       record.result = null;
