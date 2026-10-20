@@ -167,7 +167,9 @@ npm start
 
 ## README 與發布驗收
 
+- 每次任務檢查根目錄 README 的結構、標題、格式、連結與現況；保留有效內容，主動修正過時資訊。README 以目前使用流程呈現，歷史修正與測試結果分別放 CHANGELOG／驗證紀錄。
 - 沿用已確認的完整 GitHub 專案介紹：定位、徽章、導覽、使用情境、功能、架構圖、需求、連線、工具範例、安全邊界、Audit、文件與 Issues；不縮成只有下載指令。
+- 技術、設定、參與開發及授權資訊須符合實作；區分程式預設、README 安裝選項、帳號權限、已發布頻道與原始碼版本。不虛構 LICENSE 或尚未提供的功能。
 - 英文 `README.md`／繁中 `README.zh-TW.md` 互相連結，功能、版本與指令同步；兩平台各一行安裝、一行卸載，主流程不要求先 clone、裝 Git／Node 或填 codex-url。主指令明確 guarded，需自由 Shell 的用戶重裝要明確選參數。
 - 說明服務啟動／開機啟用、自動 IP、loopback 回退、既有設定保留，以及含 Token 的 Codex setup。HTTPS、防火牆及遠端可達性不自動保證；詳細遷移／回復／purge 放平台指南。
 - Linux sudo 範例使用 `/usr/local/bin/command-bridge` 完整路徑，避免 `secure_path` 缺少 local bin；不修改主機 sudo PATH。Codex setup 的 `tool_timeout_sec=480` 涵蓋標準同步與 Audit 預算，客製長指令需另外調整用戶端。

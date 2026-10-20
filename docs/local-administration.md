@@ -1,4 +1,4 @@
-# Local installation information / 本機安裝與連線資訊 (6.5.3)
+# Local installation information / 本機安裝與連線資訊 (6.5.4)
 
 These commands run in a host terminal and use the service installation's bundled Runtime. They do not start MCP, load its full policy/configuration, depend on Audit, contact GitHub, restart services, or write settings. npm/stdio installations return `SERVICE_INSTALLATION_REQUIRED` (or the npm entry's equivalent message); their existing no-argument MCP startup and version query remain unchanged.
 

@@ -1,12 +1,20 @@
 # Validation status
 
+## 6.5.4 README maintenance (2026-10-20)
+
+PATCH under the existing project rule for documentation batches. Refresh both READMEs with current capabilities, configuration, account/mode boundaries, local administration, background jobs, updates, development and support. Synchronize current-version references and project guidance; correct only comments in the environment template and stale descriptions in the linked security policy. No runtime, installer, test implementation or CI changes.
+
+Native Windows Node 20.15.1 full npm test passed 217/263, with 46 platform/elevation skips, zero failures/cancellations (215 seconds). Built version is 6.5.4. Both READMEs have matching heading levels, 13 source-registered tools and environment-setting names; 110 relative links/anchors passed validation. All eight one-line bootstrap commands are byte-for-byte unchanged. Package/lock changes are limited to application root versions, dependency entries and parsed environment-template values are unchanged, and UTF-8/LF and git diff checks passed. Test cases and detailed results remain outside the READMEs. Linux runtime and elevated service lifecycle checks were not repeated for this documentation batch.
+
+At task start, GitHub main and channel.txt were rechecked at f5b3feb6cc7b4e271c71280bdfa53a3806d80925 / 6.5.3; CI #95 / 39357789856 completed successfully with all six jobs. Those are the prior published version's results. This local 6.5.4 batch has not been pushed or run through hosted CI; no install-channel publication or production deployment is claimed. Oracle Enforcing, actual reboot and production Docker/26pv execution remain unverified.
+
 ## 6.5.3 documentation maintenance (2026-10-20)
 
 PATCH under the existing project rule for documentation batches. Consolidate AGENTS.md, create project MEMORY.md, synchronize current-version references and clarify verified versus unverified evidence. No runtime, installer, test implementation, CI gate or README bootstrap command changes.
 
 Native Windows Node 20.15.1 full npm test passed 217/263, with 46 platform/elevation skips, zero failures/cancellations (226 seconds). The first run had one unchanged npm-prune fixture exceed its 15-second limit; its isolated rerun passed in 2.4 seconds, followed by the successful full rerun without code, assertion or deadline changes. Package/lock root versions, unchanged third-party dependencies, built version 6.5.3, all 13 documented MCP tools, 110 relative document links, UTF-8/LF formatting and git diff checks passed. Both README files differ only in their version badges, preserving all install/uninstall commands. Linux runtime and elevated service lifecycle checks were not repeated for this documentation-only batch.
 
-On 2026-10-20 GitHub was rechecked: main remains 6002d9470c9da1c00c03e71c11811e7ceefd3eb3, CI #94 / 39204679318 completed successfully with all six jobs, and channel.txt contains that full source SHA and 6.5.2. These are prior-release results; this local 6.5.3 documentation batch has not been pushed or validated by hosted CI. Oracle Enforcing, actual reboot and production Docker/26pv execution remain unverified.
+At the original commit, GitHub main and channel were verified at 6002d9470c9da1c00c03e71c11811e7ceefd3eb3 / 6.5.2 with all six CI #94 jobs successful; 6.5.3 had not yet been pushed. The 6.5.3 batch was subsequently pushed as f5b3feb6cc7b4e271c71280bdfa53a3806d80925: CI #95 / 39357789856 passed all six jobs and channel.txt published that exact SHA with 6.5.3 (rechecked 2026-10-20). Oracle Enforcing, actual reboot and production Docker/26pv execution remain unverified.
 
 ## 6.5.2 validation (2026-10-19)
 

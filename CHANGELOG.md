@@ -1,5 +1,14 @@
 # Changelog
 
+## 6.5.4 — 2026-10-20
+
+PATCH: refresh user documentation under the project's documentation-versioning rule; no runtime behavior, command policy, installer or CI changes.
+
+- Synchronize English and Traditional Chinese READMEs around current capabilities: background jobs, all 13 tools, three execution modes, configuration, local administration, updates, and deployment paths. Preserve all four one-line installation/uninstall entries in each language.
+- Correct the Linux service-account explanation and Audit flow diagram, replace placeholder Codex settings with a representative configuration, and move historical repair details to existing guides/changelog references.
+- Add development, support and factual license information; expand guide navigation and clarify source-version versus published-channel availability.
+- Correct stale policy-path/jobs comments in the environment template and fixed-helper scope in the linked security policy; update project guidance and record the verified 6.5.3 CI/channel baseline.
+
 ## 6.5.3 — 2026-10-20
 
 PATCH: maintain verified project guidance and memory under the existing documentation-versioning rule; no runtime, policy, installer or CI changes.

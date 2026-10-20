@@ -8,6 +8,7 @@
 - 本專案既有規則要求所有交付批次升版，純文件／本記憶修改也為 PATCH；一般「純文件免升版」在此不適用。只改 package／lock 根版本，不改第三方依賴版本。
 - 完成驗證後自動本機 commit，message 記錄版本；使用者明確要求才 push。commit、push、CI 通過與安裝頻道發布分開回報。
 - README 保留完整的中英文 GitHub 介紹，安裝／卸載各平台維持一行。測試案例只在專用 `.test.ts`／測試腳本／拋棄式 fixture，驗證結果放驗證紀錄，不放 README 或正式程式故障注入分支。
+- README 依現行使用流程整理，不堆疊舊版修正歷史；程式預設 allowlist 與 README guarded、Linux 安裝者帳號與專用帳號、原始碼版本與 install-channel 發布須分開說明。同步檢查連結的設定範本／安全文件，避免殘留舊政策路徑或錯誤的 jobs 遷移說法；未提供 LICENSE 時不得自行宣告授權。
 
 ## 已確認的發布基準
 
@@ -15,13 +16,13 @@
 
 | 項目 | 已驗證結果 |
 | --- | --- |
-| 已發布版本 | 6.5.2 |
-| main 與 channel 的完整應用來源 SHA | `6002d9470c9da1c00c03e71c11811e7ceefd3eb3` |
-| CI | [#94／39204679318](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/39204679318)，completed／success |
+| 已發布版本 | 6.5.3 |
+| GitHub main 與 channel 的完整應用來源 SHA | `f5b3feb6cc7b4e271c71280bdfa53a3806d80925` |
+| CI | [#95／39357789856](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/39357789856)，completed／success |
 | 六項工作 | Ubuntu／Windows 一般測試、兩平台 service smoke、Linux layout smoke、publish-channel 全部 success |
-| 安裝頻道 | [channel.txt](https://github.com/HsinPu/command-bridge-mcp-server/blob/install-channel/channel.txt)，第一行完整來源 SHA、第二行 6.5.2 |
+| 安裝頻道 | [channel.txt](https://github.com/HsinPu/command-bridge-mcp-server/blob/install-channel/channel.txt)，第一行完整來源 SHA、第二行 6.5.3 |
 
-這是 6.5.2 的發布證據，不代表後續文件版本已 push／經過 CI。channel 分支自己的 commit 與檔案內應用來源 SHA 是不同用途，不能混比。實際 Oracle Linux Enforcing、主機重開機、26pv 更新或正式 20 分鐘 Docker build／daemon 取消，仍未由這些結果驗證。
+這是 6.5.3 的發布證據，不代表後續文件版本已 push／經過 CI。channel 分支自己的 commit 與檔案內應用來源 SHA 是不同用途，不能混比。實際 Oracle Linux Enforcing、主機重開機、26pv 更新或正式 20 分鐘 Docker build／daemon 取消，仍未由這些結果驗證。
 
 ## 終止失敗與長工作（6.5.0）
 
