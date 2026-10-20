@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.5.5 — 2026-10-20
+
+PATCH: concise README rewrite under the project's documentation-versioning rule; no runtime or deployment behavior changes.
+
+- Reduce both READMEs to a compact introduction, unchanged one-line installation/uninstall entries, Codex connection steps, grouped MCP tools, key security/Audit boundaries and guide links.
+- Keep detailed configuration, administration, migration and troubleshooting in the existing guides; record the user's concise-documentation preference in AGENTS.md and MEMORY.md.
+- Synchronize current version references without changing third-party dependencies or the published install channel.
+
 ## 6.5.4 — 2026-10-20
 
 PATCH: refresh user documentation under the project's documentation-versioning rule; no runtime behavior, command policy, installer or CI changes.

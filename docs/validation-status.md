@@ -1,5 +1,11 @@
 # Validation status
 
+## 6.5.5 concise README rewrite (2026-10-20)
+
+PATCH for documentation only. Both READMEs shrink from 371 to 140 lines (62%), retaining the core introduction, installation/uninstall commands, connection steps, 13 tools, essential security/Audit limits and links to detailed guides. Record the user's concise README preference and synchronize current-version references; no runtime, dependency, installer or CI changes.
+
+Native Windows Node 20.15.1 build and built version query passed at 6.5.5. The existing install-assets suite passed 11/14, with three Linux-only skips and zero failures/cancellations. Document checks confirm matching bilingual heading levels, all 13 registered tool names, unchanged eight single-line bootstrap commands, valid relative links/anchors, UTF-8/LF, root-only package/lock version changes and git diff checks. Installation/uninstall section anchors are preserved. No new test cases were added. The full npm suite, Linux runtime, hosted CI and service lifecycle were not rerun for this documentation-only batch; previous 6.5.4 full-suite results below remain historical. This batch is local only; no push, channel publication or production update is claimed.
+
 ## 6.5.4 README maintenance (2026-10-20)
 
 PATCH under the existing project rule for documentation batches. Refresh both READMEs with current capabilities, configuration, account/mode boundaries, local administration, background jobs, updates, development and support. Synchronize current-version references and project guidance; correct only comments in the environment template and stale descriptions in the linked security policy. No runtime, installer, test implementation or CI changes.
