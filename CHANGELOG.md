@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.5.3 — 2026-10-20
+
+PATCH: maintain verified project guidance and memory under the existing documentation-versioning rule; no runtime, policy, installer or CI changes.
+
+- Consolidate AGENTS.md by current architecture and workflow, include all 13 MCP tools, and make automatic local commits versus explicitly requested pushes clear.
+- Create project MEMORY.md with verified termination/quarantine, managed-job migration, platform recovery and CI-budget lessons; distinguish confirmed causes from incident hypotheses and unverified production behavior.
+- Record the successful 6.5.2 six-job CI and exact channel source, correct stale current-version references, and synchronize bilingual README badges without changing install/uninstall commands.
+
 ## 6.5.2 — 2026-10-19
 
 PATCH: give complete service integration jobs sufficient aggregate CI time without changing runtime deadlines or publication requirements.

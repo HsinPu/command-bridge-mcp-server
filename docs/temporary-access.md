@@ -1,4 +1,4 @@
-# Temporary command access / 臨時指令授權 (6.5.2)
+# Temporary command access / 臨時指令授權 (6.5.3)
 
 Only an administrator on a service-installed host can run the local open/status/close commands. The grant applies to this entire service and every authenticated client during the window, not one Codex conversation. It changes command execution from the configured `allowlist` or `guarded` mode to `unrestricted` for a bounded period. It does not add sudo rights, enable file transfers, change working roots, skip Audit or edit permanent configuration. npm/stdio installations do not expose this feature.
 

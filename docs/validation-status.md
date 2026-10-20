@@ -1,10 +1,18 @@
 # Validation status
 
+## 6.5.3 documentation maintenance (2026-10-20)
+
+PATCH under the existing project rule for documentation batches. Consolidate AGENTS.md, create project MEMORY.md, synchronize current-version references and clarify verified versus unverified evidence. No runtime, installer, test implementation, CI gate or README bootstrap command changes.
+
+Native Windows Node 20.15.1 full npm test passed 217/263, with 46 platform/elevation skips, zero failures/cancellations (226 seconds). The first run had one unchanged npm-prune fixture exceed its 15-second limit; its isolated rerun passed in 2.4 seconds, followed by the successful full rerun without code, assertion or deadline changes. Package/lock root versions, unchanged third-party dependencies, built version 6.5.3, all 13 documented MCP tools, 110 relative document links, UTF-8/LF formatting and git diff checks passed. Both README files differ only in their version badges, preserving all install/uninstall commands. Linux runtime and elevated service lifecycle checks were not repeated for this documentation-only batch.
+
+On 2026-10-20 GitHub was rechecked: main remains 6002d9470c9da1c00c03e71c11811e7ceefd3eb3, CI #94 / 39204679318 completed successfully with all six jobs, and channel.txt contains that full source SHA and 6.5.2. These are prior-release results; this local 6.5.3 documentation batch has not been pushed or validated by hosted CI. Oracle Enforcing, actual reboot and production Docker/26pv execution remain unverified.
+
 ## 6.5.2 validation (2026-10-19)
 
 PATCH: both CI 39199964697 service jobs were canceled at their 45-minute aggregate job budget. Their latest source-suite summaries had zero failures and successful service verification continued up to cancellation; the Linux lifecycle had reached uninstall, with its later 1.x migration step still required. Historical successful CI 38525077448 took 42.8 minutes for Linux and 38.4 for Windows. Only the service-smoke job budget changes to 75 minutes; all steps, assertions, publication dependencies and runtime execution/Audit/termination deadlines remain in force. CI 39201494450 has already passed both general suites and the corrected layout gate; its service jobs were still pending when this follow-up was prepared.
 
-Full native Windows Node 20.15.1 passed 217/263 with 46 platform skips and no failures/cancellations (221 seconds). Ubuntu WSL Node 24.18.0 passed 231/263 with 32 skips and no failures/cancellations (143 seconds). Exact workflow comparison confirmed only the service job budget changed; steps/dependencies, dependency locks and runtime files are preserved. Version/README command/link and git diff checks passed. Hosted service/channel validation for this corrective SHA remains pending; Oracle Enforcing, actual reboot and production Docker/26pv execution are not verified.
+Full native Windows Node 20.15.1 passed 217/263 with 46 platform skips and no failures/cancellations (221 seconds). Ubuntu WSL Node 24.18.0 passed 231/263 with 32 skips and no failures/cancellations (143 seconds). Exact workflow comparison confirmed only the service job budget changed; steps/dependencies, dependency locks and runtime files are preserved. Version/README command/link and git diff checks passed. Hosted service/channel validation was pending at commit time; CI #94 / 39204679318 subsequently passed all six jobs and published source 6002d9470c9da1c00c03e71c11811e7ceefd3eb3 with version 6.5.2 (rechecked 2026-10-20). Oracle Enforcing, actual reboot and production Docker/26pv execution are not verified.
 
 ## 6.5.1 validation (2026-10-19)
 
@@ -34,7 +42,7 @@ MINOR: general finite background command jobs with unchanged synchronous limits 
 
 All Bash scripts/launchers, Windows PowerShell 5.1 script parsing, WinSW XML, Node script syntax, package/lock root versions, unchanged third-party lock entries, README bootstrap commands/document links and git diff checks are required before commit. Hosted CI/channel publication is pending at this commit; its final result and exact source SHA must be checked after push. Oracle Linux Enforcing, actual host reboot, a real 20-minute Docker build and external-daemon cancellation have not been tested locally. Old configurations remain opt-in, and preserved output may contain secrets.
 
-The current package is 6.3.0, adding configurable Audit waiting while preserving protected local info/setup, Windows recovery and Linux service behavior. Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
+Historical results below retain their tested versions. Configuration, Token and logs/work are retained; v0.4.0 is unchanged. Public installation availability still requires every cross-platform general/service/layout gate and an exact channel SHA.
 
 ## 6.3.0 validation (2026-10-14)
 

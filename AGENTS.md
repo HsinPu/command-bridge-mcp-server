@@ -1,37 +1,45 @@
 # 專案工作指南
 
-## 專案概況
+## 任務與知識維護
 
-CommandBridge MCP 是跨平台的 MCP Server，讓 MCP 用戶端透過本機 stdio 或 Streamable HTTP，在 Linux／Windows 主機執行受政策限制的作業系統指令。
+- 每次任務開始先讀取根目錄 `AGENTS.md` 與 `MEMORY.md`；缺少時依實際專案建立。
+- `AGENTS.md` 保存架構、開發規範與工作流程；`MEMORY.md` 保存已驗證的問題、解法、決策與限制。操作說明放 `docs/`，逐版變更放 `CHANGELOG.md`，詳細驗證結果放 `docs/validation-status.md`。
+- 完成任務前檢查兩份指引；有新證據或過時內容才更新，合併重複資訊，不把推論寫成已確認根因。版本、分支、CI 與 channel 屬時效資訊，使用前重新核對。
+- 不記錄 Token、秘密、原始環境或未遮罩的私人日誌。測試案例與故障注入只放專用測試檔／拋棄式 fixture，不放 README 或正式程式的測試分支。
+- 本專案沿用既有的「每批調整皆升版」規則，包含純文件與記憶檔案；此專案規則優先於一般純文件免升版原則。
 
-- 技術：TypeScript、Node.js、ES modules、MCP SDK、Express、Zod。
-- 2026-09-22 初次檢視時版本為 0.3.0（pre-1.0）；目前版本以 package.json 為準。
-- Node.js 需求為 >=20；目前 CI 使用 24.18.0，涵蓋 Ubuntu 與 Windows。
-- MCP 工具：command_bridge_get_system_info、command_bridge_run_command、command_bridge_list_audit_events，以及 3.1.0 新增的 command_bridge_upload_file、command_bridge_download_file，以及 4.4.0 新增的 command_bridge_update、command_bridge_get_update_status，以及 4.5.0 新增的 command_bridge_get_diagnostics。
-- 預設使用 stdio 與 allowlist 執行模式；HTTP 模式需要至少 32 字元的 Bearer Token。
+## 專案概況與架構
 
-## 程式結構
+CommandBridge MCP 讓用戶端透過本機 stdio 或 Streamable HTTP，在 Linux／Windows 執行受政策限制的指令、有限背景工作及檔案傳輸。
 
-| 路徑 | 用途 |
+- 技術：TypeScript、Node.js >=20、ES modules、MCP SDK、Express、Zod；CI 固定 Node.js 24.18.0，涵蓋 Ubuntu 與 Windows。
+- 應用版本以 `package.json` 為唯一來源，由 `scripts/build.mjs` 產生 Server 版本；不要維護另一份應用版本常數。歷史版本與已驗證發布見 CHANGELOG／MEMORY。
+- 程式預設 stdio、allowlist；HTTP 必須有至少 32 字元的 Bearer Token，保留 Host 驗證。HTTP 本身不提供 TLS，也不自動設定防火牆。
+- MCP 工具共 13 個，以 `src/tools/commandBridgeTools.ts` 為準：
+  - 系統／同步／稽核：`command_bridge_get_system_info`、`command_bridge_run_command`、`command_bridge_list_audit_events`。
+  - 傳輸：`command_bridge_upload_file`、`command_bridge_download_file`。
+  - 更新／診斷：`command_bridge_update`、`command_bridge_get_update_status`、`command_bridge_get_diagnostics`。
+  - 背景工作：`command_bridge_start_job`、`command_bridge_get_job`、`command_bridge_list_jobs`、`command_bridge_read_job_output`、`command_bridge_cancel_job`。
+
+| 路徑 | 責任 |
 | --- | --- |
-| src/cli/ | 6.1.0 本機 info/setup、連線描述與固定服務狀態查詢；不載入 MCP/Audit |
-| src/index.ts | 啟動入口與傳輸方式選擇 |
-| src/server.ts | 建立 MCP Server |
-| src/config/env.ts | 環境變數驗證、預設值與設定載入 |
-| src/transport/httpTransport.ts | HTTP 路由、Bearer Token 驗證、MCP transport |
-| src/tools/commandBridgeTools.ts | MCP 工具註冊、輸入輸出 schema 與錯誤回應 |
-| src/services/commandPolicy.ts | Shell、指令白名單與工作目錄政策 |
-| src/services/selfProtection.ts | 執行前的直接自改誤操作攔截；不解譯任意 Shell 或提供完整沙箱 |
-| src/services/guardedPolicy.ts | guarded 的直接刪除／系統修改誤操作攔截與受限制語法檢查 |
-| src/services/commandExecutor.ts | 程序執行、並行數、逾時、輸出限制與 Audit lifecycle |
-| src/services/auditLog.ts | Audit 事件、秘密遮罩與平台讀寫實作 |
-| src/services/systemInfoService.ts | 主機資訊與有效政策 |
-| scripts/linux-systemd/、packaging/systemd/、packaging/linux/ | Linux 安裝、解除安裝、systemd 與 Audit reader |
-| scripts/windows/、packaging/windows/ | Windows 安裝、解除安裝、WinSW 與 Event Log 腳本 |
-| docs/ | Linux 與 Windows 部署指南 |
-| .github/workflows/ci.yml | 跨平台測試與部署資產檢查 |
+| `src/index.ts`、`src/server.ts` | 啟動、傳輸選擇與建立 MCP Server |
+| `src/config/env.ts`、`src/transport/httpTransport.ts` | 設定驗證、預設值、HTTP／Host／Bearer 驗證與 readiness |
+| `src/tools/commandBridgeTools.ts` | 工具註冊、schema、錯誤格式 |
+| `src/cli/` | 本機 info/setup/access、連線描述、服務查詢與安裝設定遷移 |
+| `src/services/commandPolicy.ts`、`commandProfiles.ts` | 字面參數政策、固定程式、Shell 與真實 cwd 檢查 |
+| `src/services/selfProtection.ts`、`guardedPolicy.ts` | 可辨識的直接自改、刪除及系統修改誤操作攔截 |
+| `src/services/commandExecutor.ts`、`commandTermination.ts` | 共用執行名額、逾時、輸出、程序終止、隔離與安全證據 |
+| `src/services/backgroundJobs.ts`、`jobStore.ts` | 背景佇列、去重、狀態與受保護保存 |
+| `src/services/auditLog.ts`、`boundedAuditLog.ts`、`fileAuditLog.ts` | Audit lifecycle、遮罩、操作預算與平台後端 |
+| `src/services/diagnosticsService.ts`、`diagnosticTypes.ts`、`diagnosticProbe.ts` | 不依賴 Audit 成功的有界診斷 |
+| `src/services/fileTransferService.ts`、`temporaryAccess.ts`、`managedUpdate.ts` | 私有檔案傳輸、短期授權與固定更新協調 |
+| `scripts/linux-systemd/`、`packaging/systemd/`、`packaging/linux/` | Linux 安裝、卸載、回復、systemd 與固定 helper |
+| `scripts/windows/`、`packaging/windows/` | Windows 安裝、卸載、回復、WinSW 與 Event Log |
+| `scripts/tests/`、平台的 `tests/`、`src/**/*.test.ts` | 獨立測試、私有 fixture 與整合驗證 |
+| `docs/`、`.github/workflows/ci.yml` | 操作／驗證紀錄、跨平台與服務發布門檻 |
 
-## 常用指令
+## 開發與驗證流程
 
 ```sh
 npm ci
@@ -41,187 +49,127 @@ npm run dev
 npm start
 ```
 
-- npm test 會先建置，再由 scripts/test.mjs 自動探索 dist/ 內所有 .test.js。
-- npm run dev 會先建置以準備 Windows 原生目錄鎖資產，再使用 tsx 執行 src/index.ts；npm start 執行建置後的 dist/index.js。
-- 本機設定範本為 .env.example；.env、node_modules/、dist/ 已列入 .gitignore。
-- CI 另檢查 Linux Shell 語法、PowerShell 語法、WinSW XML 與 systemd unit。
+- `npm test` 先建置，再由 `scripts/test.mjs` 探索 `dist/` 全部 `.test.js`，以 `--test-concurrency=1` 逐檔執行。不得依 CPU 數量放大並行或提供略過來源測試的安裝選項。
+- `npm run dev` 的 predev 會建置 Windows 原生目錄鎖資產，再由 tsx 執行來源；`npm start` 執行 `dist/index.js`。`.env.example` 是設定範本；`.env`、`node_modules/`、`dist/` 與日誌不提交。
+- 先完成編輯與升版，再執行完整測試；測試執行期間不要改動共用的來源、package 或 dist，以免混用版本。
+- 程式／測試／部署調整執行 `npm test` 與相關平台檢查。純文件調整驗證版本一致性、連結、未變動的安裝指令與 `git diff --check`，不新增形式化測試；涉及版本建置時可重跑既有測試。
+- Shell 腳本逐檔執行語法檢查，另檢查固定 Linux launcher；PowerShell 以原生 5.1 parser 檢查，驗證 WinSW XML 與 systemd unit。遵守 `.gitattributes`：TS／JSON／Markdown／Shell 為 LF；正式 PS1 保持 ASCII，非 ASCII 須 UTF-8 BOM。
+- 正常程序測試同時檢查 `ok`、`exitCode`、`timedOut`、`truncated` 與固定結果；`finally` 關閉 executor。故障只輸出固定階段、旗標、耗時與分類，避免洩漏命令、秘密或私人路徑。
+- 回復驗證須證明指定部署 SHA 的新服務已啟動／切換，且指定故障與階段證據同時存在，再驗證舊 SHA、服務、ready、真實 MCP／Audit、Token 與資料回復；提前下載／建置失敗不能算回復成功。故障只修改拋棄式來源，來源建置與版本查詢不得觸發。
+- 完成報告分開列出本機、WSL、hosted CI、channel 與現場驗證。服務啟用／重啟不等於真實重開機；Ubuntu／WSL 不等於 Oracle Linux SELinux Enforcing 或正式 Docker build 驗證。
 
-## Git 提交規則（必須遵守）
+## Git 與版本管理（必須遵守）
 
-- 每次完成一批任何調整，都必須在完成升版、CHANGELOG 與必要驗證後建立 Git commit，不必等待使用者再次要求。此規則包含程式、測試、安裝／部署設定及所有文件修改。
-- 提交本批已確認的變更，不將其他來源或尚未完成的變更混入；完成後回報 commit SHA 及驗證結果。若提交受阻，明確說明原因，不宣稱已提交。
+- 每批任何調整都必須升版、更新 CHANGELOG、完成必要驗證後自動建立本機 commit，無須再次詢問。只提交本次已確認變更，不混入其他來源的修改。
+- **不得自動 push**；只有使用者明確要求時才 push。若要求監控 CI，須追到該完整 SHA 的結果；失敗依證據修正、重新驗證與提交，不放寬發布條件。
+- Commit message 包含本批版本與具體摘要。回報 commit SHA、驗證結果及是否已 push；受阻不得宣稱完成。
+- 一批指一次完整交付，編輯、除錯與本批測試修正合併升版一次；後續獨立交付再升版。
 
-## 版本更新規則（必須遵守）
+| 等級 | 判斷 | 具體調整 |
+| --- | --- | --- |
+| MAJOR | 破壞有效的既有介面／設定／平台，需要使用者遷移；例如移除工具、必要欄位或無相容處理的設定 | 大版 +1，其餘歸零：1.4.2 → 2.0.0；CHANGELOG 必須寫遷移方法 |
+| MINOR | 新增向下相容功能；例如新增工具、有相容預設值的選用設定 | 中版 +1，PATCH 歸零：1.4.2 → 1.5.0 |
+| PATCH | 修復、效能、內部重構、相容維護或純文件／記憶／註解／排版 | 小版 +1：1.4.2 → 1.4.3 |
 
-每次完成一批任何調整，都必須在同一批變更中更新版本號，不得沿用修改前的版本。此規則包含 src/、測試程式、安裝／解除安裝腳本、部署設定、建置／CI 設定、依賴更新，以及 AGENTS.md、README、驗證紀錄等文件、註解與排版修改。純文件修改也必須升版，沒有免升版例外。
+先判斷破壞相容性，再判斷新增功能，其餘 PATCH；混合變更取最高等級，0.x 同樣適用。拒絕原本非法輸入通常 PATCH，但拒絕已支援的合法用法須 MAJOR；依賴套件自身升大版不代表本專案必須升大版。
 
-「一批」指一次交付的完整修改；同一任務內的編輯、除錯與測試修正合併升版一次，不必每次存檔升版。後續獨立交付的任何修改必須再次升版。提交前必須確認該批已同步更新版本與 CHANGELOG。
+每批升版步驟：
 
-### 大、中、小版本的判斷
+1. 讀取 `package.json`，依對外影響決定新版本，不以行數判斷。
+2. 同步 package 的 version、lockfile 頂層及 `packages[""]` version；禁止全檔取代造成第三方依賴、tarball 或 integrity 異動。
+3. 同步中英文 README 徽章、平台指南、目前版本標題／範例；歷史紀錄、引進版本與 Node／WinSW 獨立版本不改。建置版本仍由 package 產生。
+4. CHANGELOG 新增日期、等級理由與具體內容；搜尋舊版本字串逐項確認，驗證、檢查 diff 後 commit。
+5. 回報「舊版本 → 新版本」、等級理由與驗證。升版／commit 不代表推送、tag、Release 或 channel 已發布。
 
-版本格式為 MAJOR.MINOR.PATCH（大版.中版.小版）。先判斷是否破壞相容性，再判斷是否新增功能，其餘使用小版；同一批包含多種類型時，採最高等級。
+## 權限、指令與程序生命週期
 
-| 等級 | 何時調整 | 調整方式 | 本專案範例 |
-| --- | --- | --- | --- |
-| 大版 MAJOR | 既有用戶端、設定或部署方式無法繼續使用，需要使用者遷移 | 大版 +1，中版及小版歸零；例如 1.4.2 → 2.0.0 | 移除／重新命名 MCP 工具或必要回傳欄位、加入必填輸入、移除環境變數且無相容處理、移除平台支援、提高最低 Node.js 版本導致原支援環境不可用 |
-| 中版 MINOR | 新增功能且保留既有用法 | 中版 +1，小版歸零；例如 1.4.2 → 1.5.0 | 新增 MCP 工具、新增有相容預設值的選用參數、增加可選傳輸或 Audit 功能 |
-| 小版 PATCH | 修復問題、改善效能、內部重構或維護，沒有新增功能或破壞既有有效用法 | 小版 +1；例如 1.4.2 → 1.4.3 | 修復空白根目錄驗證、修正逾時清理、相容的依賴更新、補測試、修正 CI 或安裝腳本 |
+- allowlist 僅接受「指令名＋字面參數」，固定原生程式與精確 argv 政策，不交給 Shell 二次解析；PowerShell Cmdlet 走固定包裝與序列化參數。自訂政策具 schemaVersion，拒絕缺失／重複／無效政策、Shell／腳本宿主目標；`COMMAND_BRIDGE_ALLOWED_COMMANDS` 只是啟用清單，仍須有效政策。政策及父目錄不得讓服務帳號寫入，不因政策錯誤轉 unrestricted。
+- cwd 空白項目在 resolve 前拒絕，再以 realpath 處理 symlink／junction 越界；這不是檔案系統沙箱。
+- guarded 攔截可辨識的直接刪除與系統修改，保留其他指令及既有 sudo；curl／wget 黏合輸出參數、PowerShell 命名／冒號路徑須正確辨識，無法判定則拒絕。不宣稱能檢查任意腳本、程式內部或完整 root sudo。
+- 所有模式在 attempted Audit 後、一般政策／子程序前套用直接自改及管理命令攔截；錯誤保留規則與 Audit ID。不得新增通用提權代理，也不得把誤操作防護宣稱為安全沙箱。見 [自我保護](docs/self-protection.md) 與 [guarded](docs/guarded-mode.md)。
+- stdout／stderr 各自嚴格串流解碼；預設 UTF-8，選用 utf16le／big5／gbk／gb18030。正常結束時無效／不完整輸出不回傳；逾時或截斷不補替代字元。檔案編碼獨立，不猜測、全面轉碼或用亂碼／截斷內容覆寫文件。Windows cmd 與 PowerShell 固定入口／環境邊界見 [文字編碼](docs/text-encoding.md)。
+- 同步預設 15 秒、上限 300 秒；請求超限依同步契約限制。預設 stdout＋stderr 共用 50,000 字元，超限仍觸發終止；長工作改用背景 API，不自動重跑或只調高輸出上限。
+- Linux 先對程序群組送 SIGTERM，2 秒後仍需要時送 SIGKILL；Windows 等待 `taskkill /T /F` 並核對結果。現有 5 秒終止確認預算不因 CI 耗時延長；程序退出、兩個串流關閉及 Linux 群組消失都須確認，不能只看 leader 或終止工具回傳。
+- 單一工作終止失敗不得設定服務 `stopping`。未確認工作占用隔離名額；僅確認完成後回收，Linux 查詢只有 ESRCH 代表不存在，EPERM／EACCES 不算。不得憑保存 PID 重送訊號或宣稱 root 後代／Docker daemon 已停止。
+- 隔離使診斷呈現 degraded、ready 失敗；剩餘名額仍可使用，滿額回傳 `COMMAND_TERMINATION_UNCONFIRMED` 與恢復條件。服務 shutdown 才進 stopping，拒絕新作業、終止程序、完成可寫入的 Audit，總等待仍限 15 秒。
+- 已確認程序結束即釋放一般名額，不因終結 Audit 排隊繼續占用；未確認則轉隔離保留。服務允許接收與當下有空名額是不同條件，不得因暫時滿額把背景佇列當停機取消。
+- 每個請求與名額各完成／釋放一次；保留最初終止觸發原因、有效限制、實際 timedOut／truncated／cancelled、計數、時間、階段與分類錯誤。failed Audit 不可用預設 false 掩蓋執行狀態；日誌不得輸出 raw cause、Token、命令、cwd、環境或輸出內容。
 
-- 本專案即使仍為 0.x，也遵守上述明確分級：0.3.0 的修正升為 0.3.1、新功能升為 0.4.0、破壞相容性的修改升為 1.0.0，不以 pre-1.0 為由降低等級。
-- 安全修正若只是拒絕原本就不應接受的非法輸入，通常升小版；若使已支援的合法用法失效或要求設定遷移，則升大版。
-- 依賴本身升大版不代表本專案一定升大版；以本專案對外行為和支援環境的實際影響判斷。
-- 只有文件、註解、排版或工作規則調整，且不影響程式對外行為時，升 PATCH；例如 1.0.1 → 1.0.2。
+## Audit、readiness、診斷與傳輸
 
-### 每次升版的具體步驟
+- 每次嘗試先成功寫 attempted，再允許作業；唯一終結為 blocked／completed／failed。終結 Audit 失敗不得回傳已擷取輸出，未完成實際 I/O 要持續追蹤，不得重複終結或重複啟動過期排隊工作。
+- `COMMAND_BRIDGE_AUDIT_TIMEOUT_MS` 預設 30000，只接受 1000–60000 整數毫秒；舊設定缺欄位採預設，明確值保留。排隊＋後端共享一次預算，helper 取剩餘時間，未完成操作上限 64；真正故障後拒絕新作業，排除問題並重啟才恢復，不自動解除故障。
+- Audit 保留共用介面、schemaVersion 1 與遮罩；JSON 固定以 schemaVersion／event 起始，選用 job／fileTransfer metadata 放後面，保持原生 reader 可讀。Audit 不含 stdout／stderr 或未遮罩秘密；list 預設 50、上限 1000，與診斷的 100 筆上限不同。
+- backend 為 auto／journal／eventlog／file；HTTP auto 使用平台原生日誌，stdio auto 使用使用者私有 JSONL。安裝預設為 Linux 專用帳號 journal、安裝者帳號 file、Windows eventlog。檔案每份 10 MiB、保留 5 份；Windows 腳本依應用位置解析，不依 cwd。
+- `/health` 僅存活；Bearer 保護的 `/ready` 回應限 5 秒，共用尚未完成檢查、短暫快取，不因回應逾時提前停用尚未達 Audit 預算的後端。安裝成功須真實 MCP `hostname` 與對應 Audit lifecycle，不能只看 health。
+- 診斷不依賴 Audit 成功，限固定 schema、5 秒／64 KiB、2 秒完成快取、最近最多 100 筆記憶體摘要。不得回傳命令、cwd、stdout／stderr、Token、完整內部路徑或 raw error；重啟摘要清空，不代替歷史 Audit。底層未結束時共用實際工作，不能反覆新增 helper。
+- 僅 Audit 故障且其他依賴全已確認時允許唯讀診斷啟動，ready 仍失敗、新作業仍拒絕；不得當成安裝成功。Linux 診斷 reader 使用 root 管理的固定無參數入口及 numeric UID／NOSETENV 精確 sudo 規則，Windows 使用固定受保護腳本，不增加一般提權。見 [診斷指南](docs/diagnostics.md)。
+- 檔案傳輸在所有模式均獨立預設關閉；限私有目錄的安全單層檔名、一般檔案、5 MiB，不覆寫、不執行、不經 Shell／sudo／URL 抓取。Linux 固定 directory descriptor；Windows ACL 與原生目錄鎖，不能保護就拒絕。
+- 傳輸實際 I/O 限 15 秒，與 Audit 等待分開。逾時未結束不得釋放名額；下載終結失敗不回傳內容，上傳已發布時說明可能存在，不能假稱已回復。見 [傳輸指南](docs/file-transfer.md)。
 
-1. 讀取 package.json 的目前版本，檢查整批修改的相容性影響，依上表決定新版本。不可只因修改行數少就一律升小版。
-2. 同步更新所有代表本專案目前版本的位置：
-   - package.json 的 version。
-   - package-lock.json 頂層 version 及 packages[""] 的 version；不要批次替換第三方依賴的版本。
-   - MCP Server 版本由 scripts/build.mjs 從 package.json 產生，不維護另一個應用版本常數。
-   - 安裝器從來源 package.json 取得版本，以完整來源 SHA 區別部署內容，不要求版本等於 tag。
-   - README.md、README.zh-TW.md、docs/ 與測試中的目前版本範例。固定 bootstrap 入口不隨版本變動，歷史紀錄與舊版範例保留。
-3. 在根目錄 CHANGELOG.md 新增該版本的紀錄（檔案不存在則建立），包含日期、升版等級與理由、具體變更；大版必須寫明不相容之處及使用者如何遷移。
-4. 搜尋舊版本字串，逐筆確認是否仍有需要同步的目前版本參照；不要改動 Node.js、WinSW 等獨立元件版本，除非本次確實更新該元件。
-5. 執行 npm test 及與修改相關的平台／腳本檢查，確認版本一致性。若環境限制導致無法驗證，明確記錄未執行項目與原因，不得宣稱通過。
-6. 交付說明必須寫出「舊版本 → 新版本」、選擇此等級的具體理由及驗證結果。更新版本號不代表已發布；Git tag、Release 或套件發布依使用者要求執行，尚未發布的下載連結需標明狀態。
+## 背景工作與設定遷移
 
-## README 撰寫規範（使用者已確認）
+- 五個背景工具保留同步介面，共用執行身分、sudo、並行名額及政策；啟動前重驗有效模式、cwd 與自我保護，排隊後授權到期／模式變更不得沿用舊授權。
+- 預設 30 分鐘、上限 60 分鐘，管理員可設定至一天；背景請求超出上限明確拒絕。UUID requestId 只在紀錄保存期間去重；斷線不取消已接受工作，重啟未完成工作標記 interrupted，不重播、不憑保存 PID 殺程序。
+- attempted／唯一終結 Audit 與安全保存成功前不公開 stdout／stderr；執行中僅 metadata。輸出 5 Mi 字元／10 MiB 序列化上限，超限持續排空、不因輸出量終止。總配額 100 MiB、保留 24 小時、分頁小於 64 KiB。共用 Token 不提供對話隔離。
+- 6.5.0 起受管理安裝／更新補齊缺少的 jobs 啟用、絕對路徑及時限，保留明確 true／false、既有自訂值與無關位元組；npm／開發環境缺旗標仍停用。啟用不能只有旗標，還須建立／驗證可用私有儲存與標籤，遷移可重複並先備份、失敗回復。
+- Linux 固定 `/var/lib/command-bridge-jobs` 父目錄 root:root 0755、數值 UID 子目錄 0700；Windows `ProgramData\CommandBridgeMCP\jobs` 僅 SYSTEM／Administrators／LocalService。拒絕連結、不安全所有權／ACL 或其他實例紀錄，不遞迴變更工作資料權限；自訂目錄由管理員準備。
+- 移除舊專用帳號前，只將其 jobs 葉目錄 metadata 封存為 root 私有，避免 UID 重用；一般卸載保留紀錄，purge 先預檢。MCP 更新遇到未完成工作或隔離名額拒絕；管理員更新／重啟仍可中斷。見 [背景工作指南](docs/background-jobs.md)。
 
-2026-09-22 使用者確認 commit 6115f3d 的中英文 README 呈現方式。後續更新以這種面向 GitHub 訪客的完整專案介紹為基準，隨實際功能調整內容。
+## 管理命令與臨時授權
 
-- README.md 使用英文，README.zh-TW.md 使用繁體中文，提供互相切換的連結；功能、限制、版本與操作指令必須同步。
-- README 應包含清楚的專案定位、狀態徽章、導覽、使用情境、主要功能、運作架構圖、安裝需求、Codex 連線方式、MCP 工具與使用範例、安全邊界、Audit Log、文件及問題回報入口。
-- 「只提供一鍵安裝和一鍵解除安裝」是指安裝／卸載的操作入口保持簡單，不是刪除其他專案介紹。不要再次把 README 縮減成只有下載指令的短文件。
-- Windows 與 Linux 各提供一行可複製的安裝指令及一行解除安裝指令；主流程不要求使用者先 clone、安裝 Git／Node.js，或手動填入 --codex-url。
-- 說明安裝後會啟動服務、設定開機啟動、自動帶入適用的 IP，並印出含 Token 的 Codex 連線設定。區分新安裝與既有設定保留、區網位址與 loopback 回退，避免宣稱所有環境都能直接遠端連線。
-- 在 README 保留必要的權限、網路、Token 和資料保留說明；詳細設定、疑難排解、升級回復與完整清除方式放在 docs/ 平台指南，從 README 連結過去。
-- 功能描述必須符合實作，不將白名單宣稱為完整沙箱、絕對防止危險操作或刪除，也不將 Audit Log 宣稱為不可竄改。自動 IP 的 HTTP 連線只適用可信任區網／VPN；HTTPS 與防火牆不會自動建立。
-- README 使用 main 上的固定 bootstrap 入口；bootstrap 只能依 install-channel/channel.txt 下載同一完整 SHA 的來源，禁止退回浮動 main。僅通過跨平台 CI 與服務驗證的 main push 可更新 channel；發布須序列化並防止舊執行結果覆寫新來源。不要求發布 tag，保留既有 v0.4.0 tag。
-- 純介紹或排版修改時，仍須升 PATCH 並更新 CHANGELOG；確認四個一行指令沒有意外變動、相對文件連結有效、中英文內容一致，並執行 git diff --check。不需為排版新增程式測試。
+- `--version`／`-V` 在載入設定、SDK、Audit 或 listener 前回應；Linux `/usr/local/bin/command-bridge` 跟隨啟用 release，Windows 使用安裝根目錄 `command-bridge.cmd` 與內附 Runtime，不改 PATH。版本不代表健康或 GitHub 最新版。
+- `info [--json]`／`setup` 限主機終端，不啟動 MCP、Audit、GitHub 或寫設定。`setup --show-token` 須明確要求且核對 root／提升管理員，不自動提權；不可讀設定時回固定的部分摘要與權限原因，不假稱設定不存在。
+- `client-setup.json` schemaVersion 1、不含 Token、服務唯讀；安裝與 CLI 共用解析。重裝／更新保留名稱與 HTTPS URL，只有明確參數才修改；缺舊描述須提示無法還原舊自訂值，格式錯誤不得默默重設。固定連線名預設 `cb_<hostname>`。
+- MCP 各模式拒絕可辨識的直接 info/setup/access 管理命令、常見字面 sudo／Shell 包裝及固定 helper；保留版本、update check 與固定 MCP 更新工具。CLI 查詢限 5 秒／64 KiB，部署切換要求重試；見 [本機管理指南](docs/local-administration.md)。
+- `access open/status/close` 僅管理員終端，預設 5、範圍 1–60 整數分鐘；不改永久模式、不加 sudo 或開啟傳輸。root／管理員原子發布的唯讀 lease 綁定服務啟動 UUID，到期、關閉、重啟、異常或時鐘回退恢復基準，已啟動程序沿用原時限。
+- 開啟需先 Audit；讀 lease 限 5 秒且共用實際工作，逾時不得延遲授權，Audit 等待後再次確認到期。HTTP /access 只有受驗證狀態，不能修改；CLI 使用本機挑戰／HMAC 簽署驗證，不外送原始 Token、拒絕非本機位址。見 [臨時授權](docs/temporary-access.md)。
+- CLI `update`／`update --check` 使用本機受保護 bootstrap 和 CI 完整 SHA，同 SHA 不重建／重啟；npm 仍由 npm 更新。update 保留設定、模式、身分與連線，禁止附帶切換參數；安裝者帳號模式須原登入者 sudo，不自動提權。
+- 固定 MCP 更新在受管理服務預設開啟，由 Linux root oneshot／Windows SYSTEM 工作執行；只接受固定 request，不接受任意來源、Shell、版本或安裝參數。狀態／Audit 在部署外，接受任務不代表成功，須核對終結狀態及來源 SHA。npm／stdio 不建立特權 worker；見 [MCP 更新](docs/mcp-update.md)。
 
-## 修改時應維持的行為
+## 受管理安裝、遷移與回復
 
-- 6.3.0 起，COMMAND_BRIDGE_AUDIT_TIMEOUT_MS 預設 30000，僅接受 1000–60000 整數毫秒；舊安裝缺少欄位採新預設，明確設定保留。排隊與後端共用每次操作的單一預算，原生及檔案 helper 使用剩餘預算，不啟動過期排隊作業。逾時後停止新作業且追蹤實際 I/O，不自動恢復或重複終結事件。/ready 回應仍限五秒且共用未完成檢查，可短暫快取已完成結果；回應逾時不得提前停用尚未達 Audit 時限的後端。啟動／安裝驗證與 access 確認依設定預算等待；授權檔讀取仍限五秒並保留實際工作，Audit 後重新確認授權與到期，不能延遲授權。傳輸實際 I/O 仍限十五秒，Audit 等待分開；更新控制時限與指令時限維持原規則。診斷五秒／64 KiB 與停機十五秒不變。Codex setup 採 tool_timeout_sec=480，涵蓋標準五分鐘指令及兩次 Audit；客製長指令須自行調整用戶端。6.3.0 的可設定 Audit 時限取代以下歷史五秒 Audit 規則，不作為磁碟或權限故障已修復的證據。
+- README 的固定 main bootstrap 只讀 `install-channel/channel.txt`，整次安裝鎖定同一完整 SHA；無資訊、格式錯誤或下載失敗停止，不回退浮動 main，不要求 tag，保留既有 v0.4.0。記錄應用版本、SHA 與 Runtime，以版本＋SHA 區分部署。
+- Node／WinSW 版本及 checksum 獨立固定，仍現場建置與測試。`npm prune --omit=dev --no-save` 不得改來源 manifests；安裝／更新／卸載共享平台鎖，鎖內再次核對來源身分。
+- 備份須先完成內容及 metadata 驗證才標可回復；分清原本存在、備份完整、實際改動，不能以備份缺失推定應刪原檔。切換後通過 ready、真實 MCP／Audit、診斷與 CLI，才清除升級備份。
+- 回復逐項驗證位元組、所有權／ACL／SELinux、layout、CLI、helper 與服務；不完整不重啟、不刪必要資料，保存於私有 recovery 並拒絕後續略過。Bash 條件呼叫不能吞掉失敗，Windows 不可把 stderr 一律當非零退出。
+- 解除安裝優先使用安全且相容的本機卸載器；缺完整 layout／recovery 預檢或資產時，在任何服務變更前使用同一 CI SHA 的完整後備，後備失敗保留原部署。
+- 保留既有 Token、連線及無關設定；自動 IP 僅新裝或明確 refresh-network 重選，失敗精確回復。Linux 重裝模式依當次參數，CLI update 則保留模式，兩者不可混淆。
 
-- 6.2.0 起，受管理服務提供管理員終端限定的 access open/status/close；預設 5 分鐘、僅接受 1–60 整數分鐘，不修改永久模式、不新增 sudo 權限或開啟傳輸。root／提升後管理員寫入固定、原子發布且服務唯讀的 access-lease.json；授權綁定服務啟動 UUID。到期、關閉、重啟、紀錄異常及時鐘回退恢復基準；已啟動程序沿用原逾時。讀取有上限並共用未完成工作，逾時後不得延遲授權。開啟前 Audit 成功；指令以實際模式執行與記錄，Audit 等待後須再檢查到期。HTTP /access 僅提供受 Host 與 Bearer／專用 HMAC 驗證保護的固定狀態，不接受修改；CLI 用既有 Token 的挑戰證明與簽署回應驗證本機服務，不外送原始 Token，拒絕非本機 IP／非 localhost DNS。MCP 攔截可辨識的管理命令、helper 與授權檔自改；不得宣稱隔離任意腳本或完整 root sudo。真實 CI 須驗證兩平台管理命令、到期、重啟恢復、MCP／Audit 與設定保留；不以 restart 宣稱實際重開機。詳見 docs/temporary-access.md。
+### Linux 固定配置與權限
 
-- 6.1.5 起，Windows 既有連線描述的原子替換須用 `[NullString]::Value` 傳遞真正空備份路徑，不得用 PowerShell 5.1 會轉成空字串的 `$null`；每次 ACL 寫入須由快照建立新的 descriptor，明確套用 Access／Owner／Group，不重用可能已清除 dirty flags 的 .NET ACL 物件；設定與連線描述回復亦同。保留相同檔案系統暫存、固定管理員／LocalService ACL 與精確回復。私有實際檔案測試涵蓋新建、內容與 ACL 替換、BOM／換行回復、真實分享鎖拒絕與暫存清除；回復不完整仍不得重啟。CI 摘要排除成功測試標題內的錯誤碼，固定終結錯誤識別與關鍵字提示分開，不把測試提及 Audit 失敗當成實際 Audit 根因。
+| 項目 | 位置／名稱 |
+| --- | --- |
+| 服務 | `command-bridge.service` |
+| 程式／Runtime／release | `/usr/local/lib/command-bridge` |
+| CLI | `/usr/local/bin/command-bridge` |
+| 設定 | `/etc/command-bridge` |
+| 工作資料 | `/var/lib/command-bridge` |
+| 安裝者狀態與檔案 Audit | `/var/lib/command-bridge-installer` |
+| jobs／更新／回復紀錄 | `/var/lib/command-bridge-jobs`、`/var/lib/command-bridge-update`、`/var/lib/command-bridge-recovery` |
 
-- 6.1.4 起，Windows 無效 Audit 輸入測試須檢查實際 StrictMode 例外類型與固定結果，不能依賴可能被長路徑換行或翻譯的 stderr；涵蓋長路徑、空白及單引號。回復故障階段不符時只公開有上限的分類／數字摘要，支援 PowerShell 5.1 的 BOM UTF-16LE 私有日誌；原始日誌、設定、Token 與指令不得公開。指定錯誤與部署 SHA 階段證據缺一仍失敗，不以本機 fixture 通過推定 hosted 服務或 channel 通過。
+- 預設專用 `command-bridge` 帳號；`--run-as-installer` 使用驗證過的原 sudo 登入者，只保留政策讀取群組，不新增一般 sudo 授權，`sudo -n` 依主機原政策。專用更新／診斷／Audit reader 僅限固定、最小範圍授權。
+- README 主指令明確 `--run-as-installer --guarded`；安裝器未指定模式為 allowlist，`--guarded` 與 `--unrestricted` 互斥，unrestricted 需安裝者模式。繼承環境或舊模式不可覆寫本次選擇；切換失敗回復原服務／設定。
+- 不刪登入帳號或 home，不用 `userdel -r`。新服務驗證成功後，才依系統 UID、home、nologin、群組與無活動程序等條件移除舊專用帳號；保留 GID、不強殺程序、不遞迴 chown。清理失敗須明確回報。
+- 新舊根目錄、父目錄、連結實際目標及 `.migration-backup` 先完整預檢；拒絕可由非管理員修改、掛載越界或多份獨立部署，固定服務入口精確辨識，不接受額外 argv／環境／Shell 包裝／重複 ExecStart。
+- 遷移至新檔案系統先暫存複製，舊部署留到新服務驗證通過。成功後 `/opt/command-bridge`、`/opt/command-bridge-mcp-server` 及受管理程式備份／相容連結須完全移除，不留程式別名；設定與資料的 `/etc`／`/var/lib` 相容連結依既有規則保留。
+- 1.x 遷移只調整管理的政策／工作根路徑與經驗證的新預設，保留其他設定、Token、資料；舊 MCP worker 不可跨舊實體根搬遷，須在服務變更前拒絕，由管理員終端完成一次遷移。
+- 只有首次新根啟動失敗、無啟用指標、無已安裝／註冊的新舊主服務與 updater，且所有預檢通過時，才可重用符合 SHA／版本／Runtime 的檔案。not-found 失敗快取不等於活動服務；不猜測修復不完整的活動部署。
+- 新建／重用 Runtime、程式、設定及 helper 修復並驗證主機 SELinux 標籤，不留 `/tmp` context。Oracle 8.10 不支援 `restorecon -x`，使用 `find -P -xdev`；Enforcing／Permissive 缺工具或驗證失敗不得啟用，不關閉 SELinux、不新增 allow rule、不遞迴重標使用者資料。
+- 主服務、更新 worker／finalizer 以受驗證的固定 `/usr/bin/env --` 進入絕對內附 Node，沿用主機既有 transition；驗證 launcher 原始／解析路徑、管理員所有權與既有標籤，不自動重標系統 launcher。Unix UID 不等於 SSH SELinux domain。
+- 一般卸載先預檢全部新舊根與備份，移除可驗證程式、單元與 helper 授權，保留設定、Token、log、工作／jobs／更新／回復紀錄及 client 描述。purge 先安全預檢，仍不刪登入帳號／home。詳見 [Linux 指南](docs/linux-systemd.md)。
 
-- 6.1.3 起，Linux 安裝與卸載共用新舊固定服務入口的精確辨識，拒絕額外 argv、環境覆寫、Shell 包裝及重複 ExecStart；舊卸載器無法辨識新入口時，須在任何服務變更前使用同一 CI SHA 的完整後備，後備不相容或下載失敗仍保留原部署。首次啟動失敗的程式檔僅能在新根目錄、兩個啟用指標皆不存在、無已安裝／已註冊的主服務、舊服務及 updater、且既有所有權／掛載／回復預檢通過時重用；not-found 的 systemd 失敗快取不等於活動服務。已有指標、舊根目錄或註冊服務的不完整部署不得猜測修復。重用 Runtime 須為受管理實體檔案，release 的 SHA／版本／Runtime metadata 須符合本次來源；仍執行全部建置與 MCP／Audit 驗證，保留 Token 與資料。真實 CI 須要求首次故障的啟動證據並驗證重試，不以單元測試宣稱 Oracle Enforcing 或 channel 已可用。
+### Windows 相容與回復
 
-- 6.1.2 起，Linux 主服務兩帳號模式及獨立更新 worker／finalizer 須以固定 `/usr/bin/env --` 再執行絕對內附 Node 路徑，沿用主機既有 SELinux 服務 transition，不把 Unix UID 等同於 SSH 登入的 SELinux domain。保留 UID／群組、PID、argv、環境、退出碼、訊號、sudo 與正式時限；切換前驗證系統啟動器原始／解析路徑的管理員所有權、不可由非管理員寫入及既有 SELinux 標籤，不自動重標系統檔案或新增 allow rule。真實私有程序須驗證身分／PID／終止與失敗傳遞；Enforcing smoke 須分開重現舊 direct-entry 203/EXEC 並驗證兩種帳號及 MCP／Audit。未實測 Oracle Enforcing 時明確記錄，不以一般測試推定現場已修復。
+- 服務與固定路徑保留 `CommandBridgeMCP`，以 LocalService 執行；不用 Linux 短名連帶改 GitHub／npm／Windows／工具名。
+- PowerShell 5.1 StrictMode、原生退出碼、固定 Management 模組、過濾環境及子程序原始輸出須保持相容；原生 stderr 可為正常診斷，僅呼叫期間調整偏好並 finally 還原，真正失敗仍拒絕。
+- 受保護檔案原子替換用 `[NullString]::Value`；從快照建立新 ACL descriptor 並明確寫 Access／Owner／Group，不重用 dirty flags 已清除的物件。回復保留 BOM／換行／原始 bytes／ACL，失敗不得重啟。詳見 [Windows 指南](docs/windows-service.md) 與 MEMORY。
 
-- 6.1.1 起，兩平台安裝來源測試須逐檔執行，不依 CPU 數量開啟大量並行程序；保留個別指令、傳輸、Audit 及停機時限與全部安全斷言，不提供略過測試的部署參數。Linux 正常管線測試只依賴安裝器已要求存在的工具；成功同時檢查 ok、exitCode、timedOut、truncated 及固定輸出，失敗只補固定階段、旗標及耗時，避免公開指令／秘密／路徑。排程回歸須以私有實際程序驗證互斥與非零失敗傳遞；來源測試通過不得推定 hosted service／channel 或現場資源正常。
+## README 與發布驗收
 
-- 6.1.0 起，受管理服務的 `info [--json]`／`setup` 僅供主機終端使用，透過固定位置與內附 Runtime 查詢，不啟動 MCP、依賴 Audit、連 GitHub 或寫入設定。一般輸出不得含 Token；`setup --show-token` 須明確要求並核對有效 root／提升後管理員身分，不自動提權。名稱／HTTPS 查詢覆寫只影響輸出；一般帳號不可讀設定時提供固定 schema 的部分摘要與權限問題，不把缺權限當成資料不存在。
-- `client-setup.json` 為 schemaVersion 1、無 Token、服務帳號唯讀的受保護描述；安裝器及 CLI 共用解析與 formatter。重裝／更新保留既有名稱及 HTTPS URL，僅明確安裝參數更新；wildcard 提供位址只在安裝／明確刷新時選擇。缺失舊描述須提示不能回復先前自訂值，格式錯誤不能默默重設。切換前完成備份、失敗驗證位元組／權限／SELinux 回復；不完整回復保留私有資料並拒絕重啟。一般卸載保留，purge 先完成安全預檢。
-- MCP 所有模式須在 attempted Audit 後、一般政策／子程序前，拒絕可辨識的直接 info/setup、常見字面 sudo／Shell 包裝及固定管理 helper，回傳 `LOCAL_ADMIN_COMMAND_BLOCKED`、規則及 Audit ID。不以此宣稱任意腳本隔離；既有 version、update check 及固定 MCP 更新工具維持原行為。查詢總上限 5 秒／64 KiB，原生服務探測須限時；偵測部署切換後要求重試，安裝成功前以真實 CLI 驗證摘要與隱藏設定，捕捉輸出留在私有交易目錄。
-
-- 6.0.5 起，Windows 安裝器原生程序 helper 須相容更新 worker 重導向串流；stderr 診斷不得自動等同失敗，仍須保留日誌及核對真正退出碼。僅在原生呼叫期間調整錯誤偏好並於 finally 還原，以 global LASTEXITCODE 避免區域遮蔽及沿用舊成功值；啟動失敗、非零退出及其他 PowerShell／MCP／Audit 驗證仍拒絕。需用私有實際巢狀程序測試 .exe／.cmd、診斷輸出、真失敗與缺失程式，不延長正式時限。
-
-- 6.0.4 起，CI 更新故障摘要依實際平台的安裝器與 bootstrap 原始碼分類，不得拿 Linux 訊息分類 Windows。僅輸出有上限的數字位置／計數、固定階段與錯誤詞彙，私有 worker 日誌、Token、指令及路徑不得公開；需有分類／秘密排除行為測試。此摘要不改 MCP diagnostics schema，也不能將安裝成功推定為自我更新或 channel 已通過。
-
-- 6.0.3 起，私有 Linux 卸載／purge 回復測試須以安裝器建置 PATH `/usr/bin:/bin` 驗證，不依賴 host sbin 帳號管理工具；僅在私有 fixture 模擬不存在的身分，任何非預期刪除呼叫須失敗。不得為此放寬正式帳號／回復預檢或略過來源測試；失敗只輸出固定案例、行號與 exit 分類，提前建置失敗仍不得當作回復成功證據。
-
-- 6.0.2 起，Windows PowerShell Shell 原始來源由獨立的私有子程序環境值傳給固定 ASCII 入口，執行前清除；保留中文／引號／20,000 字元與退出碼，預設明確載入固定內建 Management 模組，保留授權自訂模組路徑。內部環境鍵須忽略大小寫清除，原生 allowlist 與 Linux 不套用此入口。不得以放寬腳本政策或指令／Audit 時限處理 CI 故障；診斷只輸出固定階段與結果分類。
-
-- 6.0.1 起，dotenv UTF-8 預檢須使用與 dotenv/config 相同的命令列選項優先順序、最後有效值與空白環境預設。Windows taskkill 結束後仍須在原 5 秒上限內確認程序與兩個擷取串流結束；不得以 leader 已退出或工具先回傳推定成功。Windows Shell 使用固定 PowerShell 與預設內建模組路徑，保留明確允許的模組路徑傳遞；檔案 Audit 使用過濾環境、.NET ACL API 與停用模組自動載入，不放寬 Audit／指令時限。Linux 空檔重裝仍須寫入本次模式並可精確回復。
-
-- 6.0.0 起，以 UTF-8 為主要文件格式，`command_bridge_run_command` 的選用 `outputEncoding` 可指定 utf8／utf16le／big5／gbk／gb18030；不得猜測編碼或自動轉換檔案。stdout／stderr 使用各自嚴格串流解碼器，正常結束的非法或不完整輸出不回傳，記錄唯一 failed Audit 並釋放名額；逾時／截斷不補入替代字元。Windows cmd 使用固定 UTF-8 主控台包裝程式及原始串流轉送，原生 allowlist 仍直接傳 argv。Windows PowerShell 5.1 的 stdout 編碼不代表文件編碼，檔案操作須明確指定，不能以亂碼或截斷輸出覆寫全文。設定與政策 UTF-8 預檢、Windows 原始位元組備份／回復、兩平台 BOM／換行保留與檔案傳輸雜湊都須有行為驗證。正式 PS1 保持 ASCII，含非 ASCII 時需 UTF-8 BOM；不全面轉碼工作資料、不宣稱任意外部程式寫檔可自動防護。詳見 docs/text-encoding.md。
-
-- 5.0.1 起，Linux 備份完成複製、內容與 metadata 驗證後才發布可用狀態；原本存在、完整備份與實際修改須分開記錄，不得以備份缺失推定應刪除原檔。回復需逐項檢查檔案、權限、SELinux、CLI／layout 與 systemd 結果，Bash 條件呼叫不可吞掉失敗。回復不完整時不得重啟，保留 root 私有的必要資料於 `/var/lib/command-bridge-recovery`，後續安裝拒絕略過未完成回復。一般卸載保留、完整安全預檢後 purge 才移除；舊卸載器缺少 recovery 預檢時使用同一 CI SHA 的完整後備。暫存清理與更新 worker 不得刪掉必要回復資料。
-- 5.0.1 起，指令 stdout／stderr 及固定 helper 使用獨立 UTF-8 串流解碼器，維持字元／原始位元組限制、逾時及 Audit 終結規則。Windows cmd 的 verbatim 引數只適用於 Shell 模式，不得套用到原生 allowlist argv。Host 設定與安裝探測共用正規化，hostname 比對忽略選用 port；保留 Bearer／Host 拒絕行為，不將 Host 政策宣稱為來源 IP 防火牆。
-
-- 4.5.0 起，`command_bridge_get_diagnostics` 預設開啟，使用既有 Bearer／Host 驗證，但不依賴 Audit 成功。僅回傳固定 schema 的版本／服務／儲存狀態、首次 Audit 故障與最多 100 筆記憶體指令摘要；禁止回傳指令文字、cwd、stdout／stderr、Token、設定、原始錯誤／日誌或完整內部路徑。限制總回應 64 KiB／5 秒、完成結果快取 2 秒；底層 I/O 未結束時必須共用實際工作，不能因回應逾時反覆新增 helper。
-- 診斷讀取器只能使用固定來源，Linux 兩帳號模式都使用 root 管理的無參數 reader 與精確 numeric UID／NOSETENV sudoers；Windows 使用受保護的固定腳本，不增加通用提權。安裝需保存／回復資產、驗證 SELinux／ACL 並通過真實 MCP 診斷及 Audit，卸載移除讀取器授權。
-- 只有 Audit 故障且所有非 Audit 依賴已確認成功時，可保留唯讀診斷啟動；`/ready` 必須失敗，新的指令、傳輸及更新仍維持 Audit 先寫入規則。其他設定、政策或依賴錯誤拒絕啟動；診斷模式不得作為安裝成功或自動恢復 Audit 的依據。詳見 docs/diagnostics.md。
-
-- 4.2.0 起支援 `--version`／`-V`，必須在載入設定、SDK、Audit 與 listener 前回應。Linux `/usr/local/bin/command-bridge` 的版本查詢跟隨啟用 release；4.3.0 另支援 update／check；安裝不可覆寫同名外部入口，需標籤檢查、驗證、失敗回復，卸載只移除管理的連結。Windows 安裝根目錄的 `command-bridge.cmd` 使用內附 Runtime 與選定 release，不修改 PATH。npm 保留長名稱並提供短名稱；無參數啟動 MCP 的既有行為不變。版本查詢不代表服務健康或 GitHub 最新版本。
-
-- 4.1.16 起，程序執行結束即釋放指令名額；終結 Audit 成功前不得回傳輸出。共用 Audit 讀寫的排隊及 I/O 回應等待最多 5 秒，未完成操作上限 64；失敗後停止新作業，排除儲存故障並重啟才恢復。逾時不代表底層 I/O 已取消，必須追蹤實際操作，禁止啟動過期排隊寫入或重複終結事件；停機仍在 15 秒上限內等待。Readiness 需限時並共用尚未結束的檢查。不能宣稱此修正已確認現場 Docker 卡住的原因。
-
-- 4.1.1 起，guarded 需辨識 curl／wget 黏合輸出參數及 PowerShell Path／LiteralPath／Destination／FilePath 命名與冒號形式，不依參數順序猜測目的地。無法確定的參數明確拒絕；系統來源複製到一般工作目錄應可通過 guarded 路徑檢查。回歸測試使用無破壞性程式／不存在的程式路徑，不能以實際寫入系統位置驗證拒絕。
-
-- 4.1.0 新增可選 guarded 模式，allowlist 預設與 unrestricted 原有行為保持不變。guarded 攔截可辨識的刪除、系統位置寫入及常見系統管理修改；保留其他一般指令與既有 sudo。不能宣稱會解譯任意程式／外部腳本，或保證不刪檔／不改系統。語法不支援須明確拒絕；guarded 錯誤附規則及 Audit ID。Linux --guarded 與 --unrestricted 互斥；Windows -ExecutionMode 明確選擇才切換既有模式，保存完整回復備份。詳見 docs/guarded-mode.md。
-
-- 4.0.0 起，指令執行前檢查可辨識的直接自改操作，在建立子程序前拒絕並記錄 attempted／blocked、SELF_MODIFICATION_BLOCKED。allowlist、guarded 與 unrestricted 均適用；保留原本 sudo，不新增提權代理或唯讀隔離。攔截是防止誤操作，不是安全沙箱；不可宣稱能阻止腳本、變數、程式內部或外部 root 服務的間接修改。詳見 docs/self-protection.md。
-
-- 3.1.0 檔案傳輸授權獨立於 allowlist／guarded／unrestricted，預設皆關閉。只支援受保護傳輸目錄內的安全單層檔名、一般檔案與最多 5 MiB，不覆寫、不執行内容、不透過 Shell／sudo／網址抓取。Linux 固定目錄 descriptor；Windows 驗證 ACL 並持有原生目錄鎖，無法保護時拒絕。詳見 docs/file-transfer.md。
-- 檔案 Audit 沿用 schemaVersion 1 的選用 fileTransfer metadata，不記錄內容。初始失敗不操作；終結失敗不回傳下載內容，上傳已發布時明確回報可能存在，不宣稱回復。逾時後實際 I/O 未結束前不得釋放名額。
-
-- 維持 Linux／Windows 相容性；涉及 Shell、路徑、程序終止或服務部署時需分別考慮兩個平台。
-- 預設採 allowlist；不要在未獲使用者要求時放寬為 unrestricted。
-- 每次指令嘗試先寫入 attempted，再寫入唯一一筆 blocked、completed 或 failed 終結事件。
-- 首次 Audit 寫入失敗時不啟動指令；終結 Audit 寫入失敗時不回傳已擷取的輸出。
-- Audit 不應包含 stdout、stderr 或未遮罩秘密；修改遮罩與執行流程時應檢查相關測試。
-- HTTP listener 本身不提供 TLS；自動 IP 連線用於可信任區網／VPN，也可透過私有 HTTPS 路由存取受驗證端點。
-- 更動使用方式或部署行為時，同步檢查 README.md、README.zh-TW.md 與相關 docs/ 文件。
-
-## Linux 服務與安裝路徑命名（2.0.0 起）
-
-- Linux 的正式 systemd 單元為 `command-bridge.service`；主要部署、設定與工作資料目錄4.6.0 起分別為 `/usr/local/lib/command-bridge`、`/etc/command-bridge`、`/var/lib/command-bridge`。預設服務帳號為 `command-bridge`；明確使用 `--run-as-installer` 時，服務改以原始 sudo 登入者帳號執行，檔案 Audit／狀態使用 `/var/lib/command-bridge-installer`。後續文件、測試與操作指令應以這些名稱為準。
-- 安裝者帳號模式不應自動新增一般 sudo 授權；只有 `--unrestricted` 明確啟用時才允許自由 Shell 指令，需用 `sudo -n` 依主機既有免密政策執行。預設 allowlist、Bearer Token 驗證與 Audit 先寫入後執行的規則保持不變。模式切換失敗須回復舊設定、服務及 Audit reader；卸載與 purge 不得刪除登入者帳號或其 home。
-- 2.2.1 起，`--run-as-installer` 不建立專用 `command-bridge` 使用者，只保留政策讀取群組。新服務通過真實 MCP／Audit 並完成切換後，偵測舊版本留下的本機系統帳號，驗證 UID、home、nologin Shell、群組與無活動程序後才移除。不得強制殺程序、刪除同名一般登入帳號、使用 `userdel -r` 或遞迴變更工作資料所有權。保留群組原 GID；清理失敗須回報且保留已驗證的新服務，切換驗證失敗則保留舊帳號供回復。預設專用帳號模式仍建立所需使用者；測試須涵蓋兩種模式。
-- 縮短名稱只涵蓋 Linux 服務與主機上的安裝配置；GitHub 倉庫及固定 bootstrap 網址、npm 套件名稱、Windows 的 `CommandBridgeMCP` 服務與路徑，以及三個 MCP 工具名稱維持原樣，不應為了統一字面名稱而連帶改動。
-- 從 1.x 升級時，安裝器須先驗證舊設定，再切換服務；保留 Bearer Token、政策與工作資料，只調整既有設定中由安裝器管理的 `COMMAND_BRIDGE_POLICY_FILE` 與 `COMMAND_BRIDGE_ALLOWED_ROOTS` 路徑。5.0.0 起成功後完全移除 `/opt` 舊程式目錄及連結，只保留 `/etc`、`/var/lib` 的設定／資料相容連結；舊 systemd 單元移除。失敗則恢復原目錄、設定、版本與舊服務。
-- 以後修改 Linux 安裝／卸載或路徑時，須檢查新安裝、1.x 遷移、失敗回復、資料與 Token 保留、真實 MCP／Audit 驗證，以及一般解除安裝和 `--purge`。僅驗證 systemd 啟用與服務重啟時，不宣稱已完成實際主機重開機測試。
-- 2.0.2 起，Linux 部署不得保留 `/tmp` 的 SELinux context；須依主機政策修復並驗證新建及重用的 Runtime／程式、設定、服務與 Audit 資產標籤。2.0.3 起需相容 Oracle Linux 8.10 不支援 `restorecon -x` 的情況，以 `find -P -xdev` 控制遍歷範圍。Enforcing／Permissive 缺工具或驗證失敗時停止啟用，回復後也須驗證才重啟。不得關閉 SELinux、自動放寬政策或遞迴重標使用者工作資料；WSL Disabled 與模擬測試不代表 Oracle Linux Enforcing 驗證通過。
-
-## Linux 安裝模式選擇（3.0.0 起）
-
-- Linux 每次安裝／重裝依本次參數寫入執行模式：未加 `--guarded` 或 `--unrestricted` 為 `allowlist`；4.1.0 起加 `--guarded` 為 `guarded`；明確搭配 `--run-as-installer --unrestricted` 才為 `unrestricted`。既有或繼承環境的執行模式不得覆蓋本次選擇。其他設定與 Token 保留，切換驗證失敗須回復原設定和服務。
-- 4.1.2 起中英文 README 主指令明確選擇 guarded（Linux --guarded、Windows -ExecutionMode guarded）；未指定模式的程式／安裝器預設維持原規則；文件須提醒需自由 Shell 的舊用戶每次重裝都要明確加參數。測試涵蓋新裝、雙向切換、重裝、缺失模式欄位、設定保留與失敗回復。
-
-## 初步檢查紀錄（2026-09-22）
-
-初次觀察已在 1.0.0 實作中處理；以下不代表完整安全稽核認證。
-
-1. **已修正：空白根目錄。** 在 resolve() 前拒絕空項目，執行時以 realpath 檢查 symlink／junction 越界，附行為測試。
-2. **已替換：Shell 白名單執行。** allowlist 僅接受字面參數與精確 argv 政策；原生程式直接啟動，PowerShell Cmdlet 透過固定包裝程式。自訂政策只允許受管理的原生執行檔，政策檔及其所在目錄不可讓服務帳號寫入。unrestricted 必須明確啟用，不因政策錯誤自動切換。
-
-後續完成修正或驗證時，更新以上紀錄，避免把歷史觀察當作目前狀態。
-
-## 管理命令更新（4.3.0 起）
-
-- 服務安裝的 `command-bridge update`／`update --check` 使用本機保存的 bootstrap，固定已通過 CI 的完整 SHA。check 不變更部署；同 SHA 不重建或重啟，不以版本號相同取代 SHA 核對。npm 安裝仍透過 npm 更新。
-- update 與一鍵重裝區分：完整保留設定、模式及服務帳號，禁止附帶模式、網路與帳號變更參數；Linux 安裝者帳號必須經原登入者 sudo 更新。變更需要管理員終端，不自動提權；可辨識的 MCP 自我更新要阻擋，Token 只在明確要求設定輸出時顯示。
-- 沿用安裝鎖、實際服務／MCP／Audit 驗證與回復，鎖內核對先前讀到的來源 SHA。Windows 安裝、更新及卸載共用 mutex。更新資產需位於受保護部署，暫存清理及失敗回復都必須測試。
-
-- 4.3.1 起，建置後 npm prune 必須使用 --no-save 保留來源 manifests；不要為重裝放寬 clean-source 驗證。拋棄式 CI 可明確準備安全 CLI 父目錄，但正式安裝仍拒絕可由非管理員寫入的目錄。鎖回歸測試用獨立名稱，需驗證持有正式部署鎖時仍可建置測試。
-
-- 4.3.2 起，故障測試不得用整個替換啟動入口而破壞版本查詢。保留正式 CLI 引數處理，在指定部署 SHA 的服務啟動階段注入；來源建置及版本查詢不得產生啟動證據。缺少證據一律拒絕視為回復測試成功。
-
-- 4.3.3 起，健康故障注入在服務重試時只重用相同 SHA、stage 與 fault 的標記，維持指定故障訊息；不接受不符證據，案例開始前仍須確認標記不存在。回復驗證不可取消故障訊息與啟動證據的雙重斷言。
-
-## MCP 自我更新（4.4.0 起）
-
-- 新增 command_bridge_update 與 command_bridge_get_update_status，受管理服務預設 COMMAND_BRIDGE_MCP_UPDATE_ENABLED=true；更新會短暫中斷連線。接受任務不代表更新成功，須以任務終結狀態與來源 SHA 判定。
-- Linux 使用獨立 root oneshot command-bridge-update.service 與只允許目前服務 UID 執行無參數 request 的 sudoers；Windows 使用 SYSTEM 手動排程工作 CommandBridgeUpdate，LocalService 僅讀取／執行。這是既有無一般 sudo 授權規則的固定更新例外。
-- 不接受使用者來源、Shell、版本或安裝參數；只走 CI channel 與既有驗證回復。後端獨立讀取保存的停用設定；npm／stdio 不建立特權更新程序。
-- 更新狀態與 root Audit 保存在部署外；一般卸載移除工作與授權但保留紀錄，purge 才移除。測試必須包含真實服務更新、重連、失敗、設定保留及停用。
-
-## Linux 程式位置遷移（4.6.0 起）
-
-- 新安裝預設使用 `/usr/local/lib/command-bridge`；固定 bootstrap 與一行指令維持不變。安裝須辨識 `/opt/command-bridge`、`/opt/command-bridge-mcp-server` 的實體部署與相容連結，先檢查所有權、寫入權限、完整來源身分、活動指標與掛載。多份獨立部署不能猜測合併。
-- 遷移採目的檔案系統暫存複製，舊程式保留到新服務通過 readiness、真實 MCP／Audit、診斷與 CLI 驗證。失敗回復原程式、設定、單元、CLI 與更新／診斷資產後才重啟。5.0.0 起成功必須完全移除兩個 `/opt` 舊程式根目錄、受管理備份及 4.6.x 留下的連結，不建立相容別名；清理失敗不得宣稱安裝完成。設定、Token、log、工作資料與帳號模式沿用既有規則。
-- 卸載須在停止服務前檢查全部三個固定根目錄及受管理 `.migration-backup`，清除所有可驗證的程式殘留與相容連結；未知、可由非管理員修改或越界的內容不得刪除。4.6.2 起，缺少完整位置預檢的舊本機卸載器不得先執行移除，須直接交給同一 CI SHA 的完整後備卸載器；後備仍太舊時保留原部署並拒絕移除。一般卸載保留資料，purge 不得刪除登入帳號。
-- 固定更新與診斷讀取器必須跟隨新部署；不得增加可由 MCP 選擇的任意程式路徑。5.0.0 起，實體 `/opt` 部署由管理員終端完成一次搬遷；舊 MCP worker 因快取舊路徑，須在部署變更前拒絕搬遷並保存原 SHA／服務。兩帳號模式都須驗證該拒絕、終端成功搬遷、後續 MCP 更新最終 SHA／狀態及舊別名清理。發布須另通過 Linux layout service gate，不以單元測試、WSL Disabled 或服務重啟代替 Oracle Enforcing／實際重開機驗證。
-- 4.6.1 起，拋棄式 Linux 測試共用受環境限制的父目錄準備，涵蓋 `/opt`、`/usr/local`、`/usr/local/bin`、`/usr/local/lib`；不得為了 CI 放寬正式部署的所有權或寫入檢查。三個固定程式根目錄的 `.migration-backup` 也納入直接自改攔截，不以任意前綴匹配擴大保護範圍。新版本機卸載器缺少 `layout.sh` 時使用已驗證 SHA 後備，包含 help／dry-run；既有 helper、連結或父目錄不安全時仍須拒絕，不可把不安全當成缺失後略過檢查。
-- 4.6.2 起，相容連結須先檢查原路徑父目錄，不能只檢查解析後目標。bootstrap 也須檢查原路徑祖先與實際目標，執行已驗證的實際腳本／Runtime 路徑；卸載前檢查全部既有根目錄／備份的父目錄。舊版缺少完整預檢或 channel／下載／新版 helper 失敗時不得先停掉舊服務，須有兩帳號模式的真實服務保留及 MCP／Audit 驗證。
-- 5.0.0 起，Linux layout service 驗證須涵蓋一般具 sudo 權限的 CI 執行者；受保護的服務／測試帳號工作目錄使用固定 `sudo test` 檢查，不放寬正式目錄權限。失敗只輸出固定模式／階段與行號，不輸出原始指令、設定或 Token。重裝來源以已驗證 channel 為準；成功後兩個舊程式路徑必須不存在，不能把留下相容連結當作完成。
-
-## 通用背景工作（6.4.0 起）
-
-- 新增 start_job/get_job/list_jobs/read_job_output/cancel_job 五個 command_bridge MCP 工具；保留同步指令介面與時限。6.5.0 起受管理安裝／更新補齊缺少的 jobs 預設並準備私有儲存，保留明確 true／false；npm 與開發環境維持停用。設定遷移須可重複執行，沿用原始位元組與權限備份及失敗回復。
-- 背景工作預設 30 分鐘、上限 60 分鐘，可由管理員設定至一天；提交超限明確拒絕。與同步指令共用名額，啟動保留及釋放各一次，執行前重驗政策、實際 cwd、自我保護及模式；模式與提交時不同拒絕重用。
-- 受管理服務帳號與 sudo 不變；UUID requestId 去重只在紀錄保存期間有效。斷線不取消已接受工作；重啟未完成紀錄標記 interrupted，不自動重跑、不憑保存 PID 殺程序。停止仍限 15 秒。
-- job metadata 沿用 Audit schemaVersion 1；每工作 attempted 與唯一終結事件。終結 Audit 與安全保存成功前不公開 stdout/stderr，執行中僅回報 metadata。輸出有編碼、5 Mi 字元／10 MiB 序列化容量限制，超限持續排空而不殺正常工作；總配額 100 MiB，保留 24 小時，分頁回應小於 64 KiB。
-- Linux /var/lib/command-bridge-jobs 與 Windows ProgramData/CommandBridgeMCP/jobs 使用私有權限、平台 ACL／SELinux 與固定 UUID 檔名；Linux 管理父目錄 root:root 0755、各數值 UID 子目錄 0700，切換成功後刪除舊專用帳號前只封存其目錄 metadata 為 root 私有以防 UID 重用；拒絕連結、非預期檔案或其他實例紀錄。一般卸載保留，purge 先預檢再刪除；自訂位置由管理員自行管理。
-- MCP 更新遇到未完成背景工作拒絕。管理員重啟／更新可中斷工作；取消程序不代表 Docker 或其他外部服務工作停止。共用 Token 不提供不同對話隔離；既有 guarded／自我保護不升級為完整 root／任意腳本沙箱。
-
-- 6.4.1 起，Audit 序列化固定以 schemaVersion／event 作為 JSON 前綴，job／fileTransfer 選用 metadata 置於固定欄位之後；需測試實際 Linux 包裝 reader 能讀取完整背景工作 lifecycle，不以記憶體 Audit 模擬取代原生篩選驗證。
-
-- 6.5.0 起，單一工作終止失敗不得設定服務 stopping；未確認工作占用隔離名額，僅確認程序退出、串流關閉及 Linux 群組消失才自動回收。不得以 ESRCH 以外的查詢錯誤當成不存在、不憑保存 PID 重送訊號。保留真實 failed Audit 旗標及安全的終止原因／階段／計數診斷；不新增通用 sudo killer。同步輸出超限仍終止，背景輸出超限持續排空。測試案例放專用測試檔，驗證結果放驗證紀錄，不放 README 或正式程式的測試情境／故障注入分支。
+- 沿用已確認的完整 GitHub 專案介紹：定位、徽章、導覽、使用情境、功能、架構圖、需求、連線、工具範例、安全邊界、Audit、文件與 Issues；不縮成只有下載指令。
+- 英文 `README.md`／繁中 `README.zh-TW.md` 互相連結，功能、版本與指令同步；兩平台各一行安裝、一行卸載，主流程不要求先 clone、裝 Git／Node 或填 codex-url。主指令明確 guarded，需自由 Shell 的用戶重裝要明確選參數。
+- 說明服務啟動／開機啟用、自動 IP、loopback 回退、既有設定保留，以及含 Token 的 Codex setup。HTTPS、防火牆及遠端可達性不自動保證；詳細遷移／回復／purge 放平台指南。
+- Linux sudo 範例使用 `/usr/local/bin/command-bridge` 完整路徑，避免 `secure_path` 缺少 local bin；不修改主機 sudo PATH。Codex setup 的 `tool_timeout_sec=480` 涵蓋標準同步與 Audit 預算，客製長指令需另外調整用戶端。
+- 發布需要 Ubuntu／Windows 一般測試、兩平台真實 service smoke、Linux layout gate 全過；只有 main push 能序列化更新 channel，PR 無寫入權限，舊執行不可覆寫較新驗證來源。
+- service-smoke 總 job 預算 75 分鐘，Linux layout 45 分鐘；這是完整整合流程預算，不改正式指令／Audit／終止時限、不略過任何檢查。CI 完成後核對完整來源 SHA、版本、main 與 channel，不能只看 workflow 名稱或舊成功結果。
