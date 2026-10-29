@@ -1,5 +1,11 @@
 # Validation status
 
+## 6.5.6 temporary-access README correction (2026-10-29)
+
+Documentation-only PATCH: restore administrator-terminal access open/status/close instructions in both concise READMEs, add navigation links, clarify expiry/scope and unchanged sudo/transfer permissions, and record the lesson in project guidance. No runtime, permission, installer, dependency or CI changes.
+
+Native Windows Node 20.15.1 build and version query passed at 6.5.6. The existing install-assets suite passed 11/14, with three Linux-only skips and no failures/cancellations. Document checks passed for 101 relative links/anchors, bilingual heading parity, all 13 MCP tools, eight unchanged one-line bootstrap entries, UTF-8/LF and root-only package/lock version changes. Documented access arguments, the five-minute default and 1–60 integer boundary were checked against the actual CLI parser without executing administrator commands or opening a grant. The full npm suite, Linux runtime, elevated service lifecycle and hosted CI were not rerun for this documentation-only batch. No push, install-channel publication or production change is claimed.
+
 ## 6.5.5 concise README rewrite (2026-10-20)
 
 PATCH for documentation only. Both READMEs shrink from 371 to 140 lines (62%), retaining the core introduction, installation/uninstall commands, connection steps, 13 tools, essential security/Audit limits and links to detailed guides. Record the user's concise README preference and synchronize current-version references; no runtime, dependency, installer or CI changes.

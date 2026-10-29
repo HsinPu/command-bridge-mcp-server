@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.5.6 — 2026-10-29
+
+PATCH: restore missing temporary-access instructions in the concise READMEs; documentation maintenance only, with no runtime or permission changes.
+
+- Add Linux open/status/close commands and Windows administrator PowerShell usage to both READMEs, with the five-minute default, 1–60 minute range and automatic return to the configured mode.
+- Clarify host-administrator execution, service-wide client scope, existing-command behavior and unchanged sudo/file-transfer permissions; retain the detailed guide and unchanged installation/uninstall entries.
+- Record the documentation lesson in project guidance/memory and synchronize current application-version references.
+
 ## 6.5.5 — 2026-10-20
 
 PATCH: concise README rewrite under the project's documentation-versioning rule; no runtime or deployment behavior changes.

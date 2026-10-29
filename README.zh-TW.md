@@ -4,9 +4,9 @@
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.5.5-blue)
+![Version](https://img.shields.io/badge/version-6.5.6-blue)
 
-[English](README.md) · [安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [解除安裝](#一鍵解除安裝) · [操作指南](#操作指南)
+[English](README.md) · [安裝](#一鍵安裝) · [連線 Codex](#連線-codex) · [臨時授權](#臨時放寬指令權限) · [解除安裝](#一鍵解除安裝) · [操作指南](#操作指南)
 
 每台主機各自執行一個 [MCP](https://modelcontextprotocol.io/) 端點，透過本機 stdio 或 Streamable HTTP，讓用戶端查詢主機資訊、執行允許的指令及查看操作紀錄。
 
@@ -92,6 +92,26 @@ sudo /usr/local/bin/command-bridge update
 ```
 
 Windows 使用 `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` 搭配相同參數，套用更新須在管理員 PowerShell 執行。更新保留設定、驗證啟用結果，失敗則回復；受管理服務預設開啟固定 MCP 更新功能。詳見[本機管理](docs/local-administration.md)與 [MCP 更新](docs/mcp-update.md)。
+
+### 臨時放寬指令權限
+
+僅限主機管理員在終端執行，MCP 不能直接呼叫這些指令。
+
+| 操作 | Linux 指令 |
+| --- | --- |
+| 開啟五分鐘 | `sudo /usr/local/bin/command-bridge access open --minutes 5` |
+| 查看狀態 | `sudo /usr/local/bin/command-bridge access status` |
+| 提前關閉 | `sudo /usr/local/bin/command-bridge access close` |
+
+Windows 請在管理員 PowerShell 執行：
+
+```powershell
+& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" access open --minutes 5
+```
+
+Windows 查詢或關閉時，使用相同入口，參數改為 `access status` 或 `access close`。
+
+授權會讓**這台服務所有已驗證用戶端**暫時改用 `unrestricted`。預設五分鐘，只接受 1–60 整數分鐘；到期、關閉或服務重啟後，新指令恢復原模式，已執行指令不會因授權到期被終止。不新增 sudo 權限，也不開啟檔案傳輸。詳見[臨時授權指南](docs/temporary-access.md)。
 
 ## 權限與操作紀錄
 

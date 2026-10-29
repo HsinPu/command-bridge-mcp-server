@@ -173,5 +173,6 @@ npm start
 - 英文 `README.md`／繁中 `README.zh-TW.md` 互相連結，功能、版本與指令同步；兩平台各一行安裝、一行卸載，主流程不要求先 clone、裝 Git／Node 或填 codex-url。主指令明確 guarded，需自由 Shell 的用戶重裝要明確選參數。
 - 說明服務啟動／開機啟用、自動 IP、loopback 回退、既有設定保留，以及含 Token 的 Codex setup。HTTPS、防火牆及遠端可達性不自動保證；詳細遷移／回復／purge 放平台指南。
 - Linux sudo 範例使用 `/usr/local/bin/command-bridge` 完整路徑，避免 `secure_path` 缺少 local bin；不修改主機 sudo PATH。Codex setup 的 `tool_timeout_sec=480` 涵蓋標準同步與 Audit 預算，客製長指令需另外調整用戶端。
+- README 保留管理員臨時授權的 open／status／close 用法，不能只留指南連結；說明有效期、所有用戶端適用、到期／關閉／重啟恢復原模式及不新增 sudo 權限。Linux 用完整 sudo 路徑，Windows 用管理員 PowerShell。
 - 發布需要 Ubuntu／Windows 一般測試、兩平台真實 service smoke、Linux layout gate 全過；只有 main push 能序列化更新 channel，PR 無寫入權限，舊執行不可覆寫較新驗證來源。
 - service-smoke 總 job 預算 75 分鐘，Linux layout 45 分鐘；這是完整整合流程預算，不改正式指令／Audit／終止時限、不略過任何檢查。CI 完成後核對完整來源 SHA、版本、main 與 channel，不能只看 workflow 名稱或舊成功結果。

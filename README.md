@@ -4,9 +4,9 @@ Run commands and background jobs on Linux and Windows from Codex or another MCP 
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.5.5-blue)
+![Version](https://img.shields.io/badge/version-6.5.6-blue)
 
-[繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Uninstall](#one-command-uninstall) · [Guides](#guides)
+[繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Temporary access](#temporary-command-access) · [Uninstall](#one-command-uninstall) · [Guides](#guides)
 
 Each host runs its own [MCP](https://modelcontextprotocol.io/) endpoint. Connect through local stdio or Streamable HTTP to inspect the host, run permitted commands, and review operation records.
 
@@ -92,6 +92,26 @@ sudo /usr/local/bin/command-bridge update
 ```
 
 Windows uses `& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd"` with the same arguments; applying an update requires administrator PowerShell. Updates preserve settings and validate activation with rollback on failure. Fixed-purpose MCP updates are enabled by default on managed services. See [local administration](docs/local-administration.md) and [MCP updates](docs/mcp-update.md).
+
+### Temporary command access
+
+Run these from a host administrator terminal; MCP cannot directly invoke them.
+
+| Action | Linux command |
+| --- | --- |
+| Open for five minutes | `sudo /usr/local/bin/command-bridge access open --minutes 5` |
+| Check status | `sudo /usr/local/bin/command-bridge access status` |
+| Close early | `sudo /usr/local/bin/command-bridge access close` |
+
+Windows, in administrator PowerShell:
+
+```powershell
+& "$env:ProgramFiles\CommandBridgeMCP\command-bridge.cmd" access open --minutes 5
+```
+
+Use the same Windows launcher with `access status` or `access close` to check or close the grant.
+
+Access temporarily switches **all authenticated clients of this service** to `unrestricted`. The default is five minutes (integer range: 1–60). Expiry, close, or service restart restores the configured mode for new commands; expiry does not stop already running commands. It adds no sudo rights or file-transfer permissions. See [temporary access](docs/temporary-access.md).
 
 ## Permissions and Audit
 
