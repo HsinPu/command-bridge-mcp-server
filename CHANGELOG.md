@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.5.7 — 2026-11-23
+
+PATCH: fix Linux temporary-access lease labeling. Resolve the complete SELinux context from the host policy for the final file, then apply and verify it on the staged file before atomic publication. A failed label check leaves the previous record in place.
+
 ## 6.5.6 — 2026-10-29
 
 PATCH: restore missing temporary-access instructions in the concise READMEs; documentation maintenance only, with no runtime or permission changes.

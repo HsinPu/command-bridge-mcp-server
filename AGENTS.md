@@ -124,6 +124,7 @@ npm start
 - MCP 各模式拒絕可辨識的直接 info/setup/access 管理命令、常見字面 sudo／Shell 包裝及固定 helper；保留版本、update check 與固定 MCP 更新工具。CLI 查詢限 5 秒／64 KiB，部署切換要求重試；見 [本機管理指南](docs/local-administration.md)。
 - `access open/status/close` 僅管理員終端，預設 5、範圍 1–60 整數分鐘；不改永久模式、不加 sudo 或開啟傳輸。root／管理員原子發布的唯讀 lease 綁定服務啟動 UUID，到期、關閉、重啟、異常或時鐘回退恢復基準，已啟動程序沿用原時限。
 - 開啟需先 Audit；讀 lease 限 5 秒且共用實際工作，逾時不得延遲授權，Audit 等待後再次確認到期。HTTP /access 只有受驗證狀態，不能修改；CLI 使用本機挑戰／HMAC 簽署驗證，不外送原始 Token、拒絕非本機位址。見 [臨時授權](docs/temporary-access.md)。
+- Linux SELinux 授權檔必須以正式路徑查詢完整 context，在同目錄暫存檔套用並驗證後才原子替換。任何標籤失敗保留現有授權紀錄；不得切換 SELinux 模式或改寫政策。
 - CLI `update`／`update --check` 使用本機受保護 bootstrap 和 CI 完整 SHA，同 SHA 不重建／重啟；npm 仍由 npm 更新。update 保留設定、模式、身分與連線，禁止附帶切換參數；安裝者帳號模式須原登入者 sudo，不自動提權。
 - 固定 MCP 更新在受管理服務預設開啟，由 Linux root oneshot／Windows SYSTEM 工作執行；只接受固定 request，不接受任意來源、Shell、版本或安裝參數。狀態／Audit 在部署外，接受任務不代表成功，須核對終結狀態及來源 SHA。npm／stdio 不建立特權 worker；見 [MCP 更新](docs/mcp-update.md)。
 

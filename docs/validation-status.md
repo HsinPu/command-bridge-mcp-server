@@ -1,5 +1,9 @@
 # Validation status
 
+## 6.5.7 temporary-access SELinux labeling (2026-11-23)
+
+Windows Node 20.15.1 full suite passed 219 of 266 checks with 47 skipped and zero failures. Oracle Linux 9.1 WSL with Node 22.14.0 passed all 14 focused access checks, including real temporary-file publication, preservation of the previous record on label failure, and cleanup. SELinux is Disabled in WSL. The regression tests simulate policy lookup, relabeling, and label verification. The Oracle Linux tools accepted the regular-file policy lookup options. Oracle Linux Enforcing and the affected production host still require verification. Package/lock versions, both README version badges, all eight unchanged bootstrap commands, and `git diff --check` passed.
+
 ## 6.5.6 temporary-access README correction (2026-10-29)
 
 Documentation-only PATCH: restore administrator-terminal access open/status/close instructions in both concise READMEs, add navigation links, clarify expiry/scope and unchanged sudo/transfer permissions, and record the lesson in project guidance. No runtime, permission, installer, dependency or CI changes.

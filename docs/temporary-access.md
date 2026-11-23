@@ -1,4 +1,4 @@
-# Temporary command access / 臨時指令授權 (6.5.6)
+# Temporary command access / 臨時指令授權 (6.5.7)
 
 Only an administrator on a service-installed host can run the local open/status/close commands. The grant applies to this entire service and every authenticated client during the window, not one Codex conversation. It changes command execution from the configured `allowlist` or `guarded` mode to `unrestricted` for a bounded period. It does not add sudo rights, enable file transfers, change working roots, skip Audit or edit permanent configuration. npm/stdio installations do not expose this feature.
 
@@ -27,6 +27,10 @@ Omitting `--minutes` uses 5 minutes. Accept only integer minutes from 1 through 
 未指定分鐘數時使用 5 分鐘，只接受 1–60 的整數。再次由管理員執行 open 可重新授權；status 顯示原模式、有效模式、剩餘秒數與 UTC 到期時間。close 或到期後，新指令立即恢復原模式；已啟動的指令仍遵守原逾時，不因授權到期被強制中斷。服務重啟、更新、重新安裝或主機重開後，舊授權不能再次生效。
 
 ## Storage, expiry and Audit / 紀錄、到期與稽核
+
+On Linux with SELinux enabled, the CLI looks up the host policy's complete context for the final lease path. It applies and verifies that context on the staged file before replacing the lease. If labeling fails, the previous record stays in place. Use `access status` to confirm the effective mode after an error, especially after a failed close.
+
+Linux 啟用 SELinux 時，CLI 依正式授權檔路徑查詢主機政策，先套用並驗證暫存檔的完整標籤，再替換授權檔。標籤處理失敗會保留原紀錄；若關閉失敗，請用 `access status` 確認目前有效模式。
 
 The fixed `access-lease.json` sits alongside managed configuration: `/etc/command-bridge` or `%ProgramData%\CommandBridgeMCP`. Linux records are root-owned, readable by the policy-reader group and not writable by the service. Windows uses explicit Administrators/SYSTEM control with LocalService read access. Writes publish atomically; unsafe links/ownership/permissions are refused. The record contains bounded timestamps, UUIDs and the action, never a Token or shell template. Ordinary uninstall retains it with configuration; purge removes it with the safely validated configuration tree. No active service means no active grant.
 
