@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.5.8 — 2026-11-23
+
+PATCH: make the SELinux installer test recognize the host's canonical system launcher on Linux runners. Test rejection of an invalid target label when the launcher resolves to a separate executable.
+
 ## 6.5.7 — 2026-11-23
 
 PATCH: fix Linux temporary-access lease labeling. Resolve the complete SELinux context from the host policy for the final file, then apply and verify it on the staged file before atomic publication. A failed label check leaves the previous record in place.

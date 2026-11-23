@@ -1,5 +1,9 @@
 # Validation status
 
+## 6.5.8 Ubuntu SELinux fixture compatibility (2026-11-23)
+
+[CI #98](https://github.com/HsinPu/command-bridge-mcp-server/actions/runs/45119772022) failed in the Ubuntu installer fixture when the resolved system launcher lacked a mock label. The fixture now registers both paths and explicitly exercises rejection of a mislabeled resolved target. Oracle Linux 9.1 WSL passed the Bash syntax check and the complete fixture both with native path resolution and with a simulated launcher alias. Windows Node 20.15.1 passed 219 of 266 tests with 47 skipped and zero failures. WSL has SELinux Disabled. Production Enforcing verification remains separate.
+
 ## 6.5.7 temporary-access SELinux labeling (2026-11-23)
 
 Windows Node 20.15.1 full suite passed 219 of 266 checks with 47 skipped and zero failures. Oracle Linux 9.1 WSL with Node 22.14.0 passed all 14 focused access checks, including real temporary-file publication, preservation of the previous record on label failure, and cleanup. SELinux is Disabled in WSL. The regression tests simulate policy lookup, relabeling, and label verification. The Oracle Linux tools accepted the regular-file policy lookup options. Oracle Linux Enforcing and the affected production host still require verification. Package/lock versions, both README version badges, all eight unchanged bootstrap commands, and `git diff --check` passed.

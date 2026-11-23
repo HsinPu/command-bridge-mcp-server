@@ -4,7 +4,7 @@ Run commands and background jobs on Linux and Windows from Codex or another MCP 
 
 [![CI](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/HsinPu/command-bridge-mcp-server/actions/workflows/ci.yml)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-blue)
-![Version](https://img.shields.io/badge/version-6.5.7-blue)
+![Version](https://img.shields.io/badge/version-6.5.8-blue)
 
 [繁體中文](README.zh-TW.md) · [Install](#one-command-installation) · [Connect Codex](#connect-codex) · [Temporary access](#temporary-command-access) · [Uninstall](#one-command-uninstall) · [Guides](#guides)
 

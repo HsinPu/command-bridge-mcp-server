@@ -82,13 +82,26 @@ detect_selinux
 
 # The system launcher is verified, never relabeled or replaced by the installer.
 expect_failure assert_service_launcher
-printf '/usr/bin/env\n' >> "$LABEL_STATE"
+launcher_target=$(readlink -f /usr/bin/env)
+printf '%s\n' /usr/bin/env "$launcher_target" >> "$LABEL_STATE"
 assert_service_launcher
 MOCK_FAIL_VERIFY=/usr/bin/env; expect_failure assert_service_launcher
 MOCK_FAIL_VERIFY=''
+# Exercise the resolved target check even when env is not a symlink on this host.
+(
+  launcher_target=$(readlink -f /usr/bin/true)
+  readlink() {
+    if [[ "$*" == '-f /usr/bin/env' ]]; then printf '%s\n' "$launcher_target"
+    else command readlink "$@"; fi
+  }
+  printf '%s\n' "$launcher_target" >> "$LABEL_STATE"
+  assert_service_launcher
+  MOCK_FAIL_VERIFY="$launcher_target"; expect_failure assert_service_launcher
+  ! grep -Fxq "restore $launcher_target" "$LABEL_EVENTS"
+)
 stat() {
   if [[ "$3" == /usr/bin/env && "$2" == %u && "${MOCK_LAUNCHER_UNSAFE:-}" == owner ]]; then printf '9000\n'; return; fi
-  if [[ "$3" == /usr/bin/env && "$2" == %a && "${MOCK_LAUNCHER_UNSAFE:-}" == writable ]]; then printf '777\n'; return; fi
+  if [[ "$3" == "$launcher_target" && "$2" == %a && "${MOCK_LAUNCHER_UNSAFE:-}" == writable ]]; then printf '777\n'; return; fi
   command stat "$@"
 }
 MOCK_LAUNCHER_UNSAFE=owner; expect_failure assert_service_launcher
